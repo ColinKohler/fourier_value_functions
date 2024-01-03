@@ -1,0 +1,80 @@
+defaults:
+  - _self_
+  - task: peg_insertion 
+
+name: train_implicit_policy
+_target_: fail.workflow.implicit_workflow.ImplicitWorkflow
+
+obs_dim: ${task.obs_dim} 
+action_dim: ${task.action_dim}
+task_name: ${task.name}
+exp_name: 'default'
+
+obs_horizon: 2
+obs_key_points: 10
+n_action_steps: 1
+z_dim: ${task.zdim}
+encoder: ${task.so2_encoder}
+
+policy:
+  _target_: fail.policy.implicit_policy.ImplicitPolicy
+  action_dim: ${action_dim}
+  seq_len: ${eval:'${obs_horizon}*${obs_key_points}'}
+  z_dim: ${z_dim}
+  num_neg_act_samples: 1024
+  pred_n_iter: 3
+  pred_n_samples: 2048
+  dropout: 0.1
+
+dataloader:
+  batch_size: 256
+  num_workers: 1
+  shuffle: True
+  pin_memory: True
+  persistent_workers: False
+
+val_dataloader:
+  batch_size: 256
+  num_workers: 1
+  shuffle: False
+  pin_memory: True
+  persistent_workers: False
+
+optimizer:
+  _target_: torch.optim.AdamW
+  lr: 1e-4
+  betas: [0.95, 0.999]
+  eps: 1e-8
+  weight_decay: 1e-6
+
+training:
+  device: 'cuda:1'
+  seed: 0
+  resume: True
+  lr_warmup_steps: 500
+  num_epochs: 1000
+  checkpoint_every: 100
+  val_every: 1
+  tqdm_interval_sec: 1.0
+
+logging:
+  project: ${task_name}
+  resume: True
+  mode: online
+  name: ${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}
+  tags: ["${name}", "${task_name}", "${exp_name}"]
+  id: null
+  group: null
+
+multi_run:
+  run_dir: data/outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_${name}_${task_name}
+  wandb_name_base: ${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}
+
+hydra:
+  job:
+    override_dirname: ${name}
+  run:
+    dir: data/outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_${name}_${task_name}
+  sweep:
+    dir: data/outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_${name}_${task_name}
+    subdir: ${hydra.job.num}
