@@ -1,34 +1,33 @@
 defaults:
   - _self_
-  - task: peg_insertion_object_state
+  - task: pusht_lowdim 
 
 name: train_implicit_policy
-_target_: fail.workflow.implicit_workflow.ImplicitWorkflow
+_target_: irrep_actions.workflow.implicit_workflow.ImplicitWorkflow
 
-robot_state_dim: ${task.robot_state_dim}
-world_state_dim: ${task.object_state_dim}
+obs_dim: ${task.obs_dim}
 action_dim: ${task.action_dim}
-num_action_steps: 1
+keypoint_dim: ${task.keypoint_dim}
 task_name: ${task.name}
 exp_name: 'default'
 
+horizon: 2
 num_obs_steps: 2
-robot_state_step_len: 10
-robot_state_len: ${eval:'${num_obs_steps}*${robot_state_step_len}'}
-world_state_len: ${task.world_state_len}
+num_action_steps: 1
+num_latency_steps: 0
 z_dim: ${task.z_dim}
-encoder: ${task.encoder}
 
 policy:
-  _target_: fail.policy.implicit_policy.ImplicitPolicy
+  _target_: irrep_actions.policy.implicit_policy.ImplicitPolicy
+  obs_dim: ${obs_dim}
   action_dim: ${action_dim}
+  num_obs_steps: ${num_obs_steps}
   num_action_steps: ${num_action_steps}
-  robot_state_len: ${robot_state_len}
-  world_state_len: ${world_state_len}
+  horizon: ${horizon}
   z_dim: ${z_dim}
   num_neg_act_samples: 1024
   pred_n_iter: 3
-  pred_n_samples: 2048
+  pred_n_samples: 1024
   dropout: 0.1
 
 dataloader:
@@ -53,7 +52,7 @@ optimizer:
   weight_decay: 1e-6
 
 training:
-  device: 'cuda:0'
+  device: 'cpu'
   seed: 0
   resume: True
   lr_warmup_steps: 500

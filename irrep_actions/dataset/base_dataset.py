@@ -23,11 +23,14 @@ class BaseDataset(torch.utils.data.Dataset):
     ):
         super().__init__()
 
-        self.replay_buffer = ReplayBuffer()
-        self.replay_buffer.load_from_path(path)
+        self.replay_buffer = ReplayBuffer.copy_from_path(
+            path, keys=['keypoint', 'state', 'action']
+        )
 
         val_mask = get_val_mask(
-            n_episodes=self.replay_buffer.n_episodes, val_ratio=val_ratio, seed=seed
+            n_episodes=self.replay_buffer.n_episodes,
+            val_ratio=val_ratio,
+            seed=seed
         )
         self.train_mask = ~val_mask
 

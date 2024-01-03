@@ -2,7 +2,7 @@ import numpy as np
 from irrep_actions.dataset.base_dataset import BaseDataset
 
 
-class ObjectStateDataset(BaseDataset):
+class LowdimDataset(BaseDataset):
     def __init__(
         self,
         path,
@@ -22,9 +22,16 @@ class ObjectStateDataset(BaseDataset):
         )
 
     def _sample_to_data(self, sample):
+        keypoint = sample['keypoint']
+        state = sample['state']
+        agent_pos = state[:,:2]
+        obs = np.concatenate([
+            keypoint.reshape(keypoint.shape[0], -1),
+            agent_pos], axis=-1
+        )
+
         data = {
-            "robot_state": sample["robot_state"],  # T, D_r
-            "world_state": sample["object_state"],  # 1, D_o
+            'obs': obs, # T, D_o
             "action": sample["action"],  # T, D_a
         }
         return data
