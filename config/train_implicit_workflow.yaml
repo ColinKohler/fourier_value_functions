@@ -52,12 +52,12 @@ optimizer:
   weight_decay: 1e-6
 
 training:
-  device: 'cpu'
+  device: 'cuda:0'
   seed: 0
   resume: True
   lr_warmup_steps: 500
-  num_epochs: 1000
-  checkpoint_every: 100
+  num_epochs: 100
+  checkpoint_every: 10
   val_every: 1
   tqdm_interval_sec: 1.0
 

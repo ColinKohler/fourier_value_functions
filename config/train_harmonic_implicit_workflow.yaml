@@ -1,30 +1,35 @@
 defaults:
   - _self_
-  - task: peg_insertion 
+  - task: pusht_lowdim 
 
 name: train_harmonic_implicit_policy
-_target_: fail.workflow.implicit_workflow.ImplicitWorkflow
+_target_: irrep_actions.workflow.implicit_workflow.ImplicitWorkflow
 
 obs_dim: ${task.obs_dim} 
 action_dim: ${task.action_dim}
+keypoint_dim: ${task.keypoint_dim}
 task_name: ${task.name}
 exp_name: 'default'
+is_harmonic: True
 
-obs_horizon: 2
-obs_key_points: 10
-n_action_steps: 1
-z_dim: ${task.zdim}
-encoder: ${task.encoder}
+horizon: 2
+num_obs_steps: 2
+num_action_steps: 1
+num_latency_steps: 0
+z_dim: ${task.z_dim}
 
 policy:
-  _target_: fail.policy.harmonic_implicit_policy.HarmonicImplicitPolicy
+  _target_: irrep_actions.policy.harmonic_implicit_policy.HarmonicImplicitPolicy
+  obs_dim: ${obs_dim}
   action_dim: ${action_dim}
-  seq_len: ${eval:'${obs_horizon}*${obs_key_points}'}
-  lmax: 3
+  num_obs_steps: ${num_obs_steps}
+  num_action_steps: ${num_action_steps}
+  horizon: ${horizon}
+  lmax: 16
   z_dim: ${z_dim}
   num_neg_act_samples: 1024
   pred_n_iter: 3
-  pred_n_samples: 2048
+  pred_n_samples: 1024
   dropout: 0.1
 
 dataloader:
@@ -49,7 +54,7 @@ optimizer:
   weight_decay: 1e-6
 
 training:
-  device: 'cuda:1'
+  device: 'cuda:0'
   seed: 0
   resume: True
   lr_warmup_steps: 500

@@ -1,7 +1,6 @@
 import numpy as np
 from irrep_actions.dataset.base_dataset import BaseDataset
 
-
 class LowdimDataset(BaseDataset):
     def __init__(
         self,
@@ -9,6 +8,7 @@ class LowdimDataset(BaseDataset):
         horizon=1,
         pad_before=0,
         pad_after=0,
+        harmonic_action: bool = False,
         seed=0,
         val_ratio=0.0,
     ):

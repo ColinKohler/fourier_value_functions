@@ -15,41 +15,48 @@ from irrep_actions.policy.base_policy import BasePolicy
 class HarmonicImplicitPolicy(BasePolicy):
     def __init__(
         self,
+        obs_dim,
         action_dim,
-        seq_len,
+        num_obs_steps,
+        num_action_steps,
+        horizon,
         lmax,
         z_dim,
         num_neg_act_samples,
         pred_n_iter,
         pred_n_samples,
         dropout,
-        encoder,
+        #encoder,
     ):
-        super().__init__(action_dim, seq_len, z_dim)
+        super().__init__(obs_dim, action_dim, num_obs_steps, num_action_steps, horizon, z_dim)
         self.Lmax = lmax
         self.num_neg_act_samples = num_neg_act_samples
         self.pred_n_iter = pred_n_iter
         self.pred_n_samples = pred_n_samples
 
-        self.encoder = encoder
-        m_dim = z_dim * 2
+        in_action_channels = 1 * num_action_steps
+        in_obs_channels = obs_dim * num_obs_steps
+        in_channels = in_action_channels + in_obs_channels
+        mid_channels = 1024
+        out_channels = 2 * self.Lmax + 1
+
+        #self.encoder = encoder
         self.energy_mlp = MLP(
-            [z_dim + 1, m_dim, m_dim, m_dim, 2 * self.Lmax + 1],
+            [in_channels, mid_channels, mid_channels, mid_channels, out_channels],
             dropout=dropout,
             act_out=False,
         )
 
         self.apply(torch_utils.init_weights)
 
-    def forward(self, x, y, a):
-        batch_size = x.size(0)
-        z = self.encoder(x, y)
+    def forward(self, obs, action):
+        B, N, Ta, Da = action.shape
+        B, To, Do = obs.shape
 
-        z_a = torch.cat([z.unsqueeze(1).expand(-1, a.size(1), -1), a], dim=-1)
-        B, N, D = z_a.shape
-        z_a.reshape(B * N, D)
 
-        out = self.energy_mlp(z_a)
+        s = obs.reshape(B, 1, -1).expand(-1, N, -1)
+        s_a = torch.cat([s, action.reshape(B, N, -1)], dim=-1).reshape(B*N, -1)
+        out = self.energy_mlp(s_a)
 
         return out.view(B, N, -1)
 
@@ -145,47 +152,46 @@ class HarmonicImplicitPolicy(BasePolicy):
         # Load batch
         nobs = batch["obs"].float()
         naction = batch["action"].float()
-        ngoal = batch["goal"].float()
 
-        B = nobs.shape[0]
-        obs = nobs.flatten(1, 2)
-        # obs = torch.concat((ngoal[:,0,:].unsqueeze(1).repeat(1,20,1), obs), dim=-1)
-        obj_state = (
-            ngoal[:, 0, :].unsqueeze(1).repeat(1, self.seq_len, 1) - obs[:, :, :3]
-        )
+        Do = self.obs_dim
+        Da = self.action_dim
+        To = self.num_obs_steps
+        Ta = self.num_action_steps
+        B = naction.shape[0]
+
+        nobs = nobs[:, :To]
+        start = To - 1
+        end = start + Ta
+        naction = naction[:, start:end]
 
         # Add noise to positive samples
-        batch_size = naction.size(0)
         action_noise = torch.normal(
             mean=0,
             std=1e-4,
-            size=naction[:, -1].shape,
+            size=naction.shape,
             dtype=naction.dtype,
             device=naction.device,
         )
-        noisy_actions = naction[:, -1] + action_noise
+        noisy_actions = naction + action_noise
 
         # Sample negatives: (B, train_n_neg, Da)
         action_stats = self.get_action_stats()
         action_dist = torch.distributions.Uniform(
             low=action_stats["min"], high=action_stats["max"]
         )
-        negatives = (
-            action_dist.sample((batch_size, self.num_neg_act_samples))
-            .to(dtype=naction.dtype)
-            .view(B, -1, 2)
-        )
+        negatives = action_dist.sample((B, self.num_neg_act_samples, Ta)).to(dtype=naction.dtype)
+
 
         # Combine pos and neg samples: (B, train_n_neg+1, Da)
-        targets = torch.cat([noisy_actions.view(B, 1, 2), negatives], dim=1)
+        targets = torch.cat([noisy_actions.unsqueeze(1), negatives], dim=1)
 
         # Randomly permute the positive and negative samples
         permutation = torch.rand(targets.size(0), targets.size(1)).argsort(dim=1)
         targets = targets[torch.arange(targets.size(0)).unsqueeze(-1), permutation]
         ground_truth = (permutation == 0).nonzero()[:, 1].to(naction.device)
 
-        W = self.forward(obs, obj_state, targets[:, :, 0].unsqueeze(2))
-        energy = self.get_energy(W.view(-1, W.size(2)), targets[:, :, 1].view(-1, 1))
+        W = self.forward(nobs, targets[:, :, :, 0].unsqueeze(3))
+        energy = self.get_energy(W.view(-1, W.size(2)), targets[:, :, :, 1].view(-1, 1))
         energy = energy.view(B, self.num_neg_act_samples + 1)
         loss = F.cross_entropy(energy, ground_truth)
 

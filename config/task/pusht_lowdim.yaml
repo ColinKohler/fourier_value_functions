@@ -12,4 +12,5 @@ dataset:
   pad_before: ${eval:'${num_obs_steps}-1+${num_latency_steps}'}
   pad_after: ${eval:'${num_action_steps}-1'}
   seed: 0
+  harmonic_action: ${is_harmonic}
   val_ratio: 0.02
