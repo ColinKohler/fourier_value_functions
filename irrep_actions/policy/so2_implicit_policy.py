@@ -37,45 +37,52 @@ class SO2ImplicitPolicy(BasePolicy):
         self.pred_n_iter = pred_n_iter
         self.pred_n_samples = pred_n_samples
 
-        self.G = group.so2_group()
-        self.gspace = gspaces.no_base_space(self.G)
+        #self.G = group.so2_group()
+        #self.gspace = gspaces.no_base_space(self.G)
+        self.gspace = gspaces.rot2dOnR2(N=8)
         self.in_type = enn.FieldType(
             self.gspace,
-            [self.G.irrep(1)] * 21
+            [self.gspace.irrep(1)] * 21
         )
-        self.out_type = enn.FieldType(self.gspace, [self.G.irrep(0)])
 
-        self.energy_mlp = SO2MLP(
-            self.in_type,
-            self.out_type,
-            [1, z_dim, z_dim, z_dim, 1],
-            [self.Lmax, self.Lmax, self.Lmax, self.Lmax, self.Lmax],
-            dropout=dropout,
-            act_out=False,
+        #out_type = enn.FieldType(self.gspace, [self.G.irrep(0)])
+        out_type = enn.FieldType(self.gspace, [self.gspace.regular_repr])
+        mid_type = enn.FieldType(self.gspace, z_dim * [self.gspace.regular_repr])
+        self.energy_mlp = enn.SequentialModule(
+            enn.R2Conv(self.in_type, mid_type, kernel_size=1),
+            #nn.InnerBatchNorm(out_type),
+            enn.ReLU(mid_type, inplace=True),
+            enn.R2Conv(mid_type, mid_type, kernel_size=1),
+            #nn.InnerBatchNorm(out_type),
+            enn.ReLU(mid_type, inplace=True),
+            enn.R2Conv(mid_type, mid_type, kernel_size=1),
+            #nn.InnerBatchNorm(out_type),
+            enn.ReLU(mid_type, inplace=True),
+            enn.R2Conv(mid_type, out_type, kernel_size=1),
+            enn.GroupPooling(out_type)
         )
+        #self.energy_mlp = SO2MLP(
+        #    self.in_type,
+        #    out_type,
+        #    [1, z_dim, z_dim, z_dim, 1],
+        #    [self.Lmax, self.Lmax, self.Lmax, self.Lmax, self.Lmax],
+        #    dropout=dropout,
+        #    act_out=False,
+        #)
 
     def forward(self, obs, action):
         B, N, Ta, Da = action.shape
         B, To, Do = obs.shape
 
-        s = obs.reshape(B, 1, -1).expand(-1, N, -1)
-        s_a = self.in_type(torch.cat([s, action.reshape(B, N, -1)], dim=-1).reshape(B*N, -1))
+        s = obs.permute(0,2,1).reshape(B, 1, -1).expand(-1, N, -1)
+        #s_a = self.in_type(torch.cat([s, action.reshape(B, N, -1)], dim=-1).reshape(B*N, -1))
+        s_a = self.in_type(torch.cat([s, action.reshape(B, N, -1)], dim=-1).reshape(B*N, -1, 1, 1))
         out = self.energy_mlp(s_a)
 
         return out.tensor.reshape(B, N)
 
-    def get_action(self, robot_state, world_state, device):
-        nrobot_state = self.normalizer["robot_state"].normalize(np.stack(robot_state))
-        nworld_state = self.normalizer["world_state"].normalize(world_state)
-        # hole_noise = npr.uniform([-0.010, -0.010, 0.0], [0.010, 0.010, 0])
-        # hole_noise = 0
-
-        robot_state = nrobot_state.unsqueeze(0).flatten(1, 2)
-        world_state = nworld_state.view(1, 1, 3).repeat(1, self.robot_state_len, 1) - (
-            robot_state[:, :, :3]  # + hole_noise
-        ).to(device)
-        robot_state = robot_state.to(device)
-        world_state = world_state.to(device)
+    def get_action(self, obs, device):
+        nobs = self.normalizer["obs"].normalize(obs)
 
         # Sample actions: (1, num_samples, Da)
         action_stats = self.get_action_stats()
@@ -89,7 +96,7 @@ class SO2ImplicitPolicy(BasePolicy):
         zero = torch.tensor(0, device=device)
         resample_std = torch.tensor(3e-2, device=device)
         for i in range(self.pred_n_iter):
-            logits = self.forward(robot_state, world_state, samples)
+            logits = self.forward(obs, samples)
 
             prob = torch.softmax(logits, dim=-1)
 

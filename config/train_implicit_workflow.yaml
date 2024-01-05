@@ -10,12 +10,13 @@ action_dim: ${task.action_dim}
 keypoint_dim: ${task.keypoint_dim}
 task_name: ${task.name}
 exp_name: 'default'
+is_harmonic: False
 
 horizon: 2
 num_obs_steps: 2
 num_action_steps: 1
 num_latency_steps: 0
-z_dim: ${task.z_dim}
+z_dim: 256 
 
 policy:
   _target_: irrep_actions.policy.implicit_policy.ImplicitPolicy
@@ -31,14 +32,14 @@ policy:
   dropout: 0.1
 
 dataloader:
-  batch_size: 256
+  batch_size: 16
   num_workers: 1
   shuffle: True
   pin_memory: True
   persistent_workers: False
 
 val_dataloader:
-  batch_size: 256
+  batch_size: 16
   num_workers: 1
   shuffle: False
   pin_memory: True

@@ -48,6 +48,7 @@ class SO2MLP(nn.Module):
         self.G = group.so2_group()
         self.gspace = gspaces.no_base_space(self.G)
         self.in_type = in_type
+        self.out_type = out_type
 
         blocks = list()
         in_type = self.in_type
@@ -66,12 +67,9 @@ class SO2MLP(nn.Module):
                 blocks.append(enn.FieldDropout(act.in_type, dropout))
                 blocks.append(act)
             else:
-                t = self.G.bl_regular_representation(L=l)
-                #out_type = enn.FieldType(self.gspace, [t] * c)
-                out_type = out_type
                 blocks.append(enn.Linear(in_type, out_type))
             in_type = act.out_type
-        self.out_type = blocks[-1].out_type
+        #self.out_type = blocks[-1].out_type
         self.so2_mlp = enn.SequentialModule(*blocks)
 
     def forward(self, x):

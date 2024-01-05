@@ -54,18 +54,8 @@ class ImplicitPolicy(BasePolicy):
 
         return out.reshape(B, N)
 
-    def get_action(self, robot_state, world_state, device):
-        nrobot_state = self.normalizer["robot_state"].normalize(np.stack(robot_state))
-        nworld_state = self.normalizer["world_state"].normalize(world_state)
-        # hole_noise = npr.uniform([-0.010, -0.010, 0.0], [0.010, 0.010, 0])
-        # hole_noise = 0
-
-        robot_state = nrobot_state.unsqueeze(0).flatten(1, 2)
-        world_state = nworld_state.view(1, 1, 3).repeat(1, self.robot_state_len, 1) - (
-            robot_state[:, :, :3]  # + hole_noise
-        ).to(device)
-        robot_state = robot_state.to(device)
-        world_state = world_state.to(device)
+    def get_action(self, obs, device):
+        nobs = self.normalizer['obs'].normalize(obs)
 
         # Sample actions: (1, num_samples, Da)
         action_stats = self.get_action_stats()
@@ -79,7 +69,7 @@ class ImplicitPolicy(BasePolicy):
         zero = torch.tensor(0, device=device)
         resample_std = torch.tensor(3e-2, device=device)
         for i in range(self.pred_n_iter):
-            logits = self.forward(robot_state, world_state, samples)
+            logits = self.forward(nobs, samples)
 
             prob = torch.softmax(logits, dim=-1)
 

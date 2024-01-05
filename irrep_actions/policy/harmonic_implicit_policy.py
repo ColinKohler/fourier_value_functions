@@ -64,19 +64,10 @@ class HarmonicImplicitPolicy(BasePolicy):
         B = harmonics.circular_harmonics(self.Lmax, theta)
         return torch.bmm(W.view(-1, 1, self.Lmax * 2 + 1), B)
 
-    def get_action(self, obs, goal, device):
-        ngoal = self.normalizer["goal"].normalize(goal)
-        nobs = self.normalizer["obs"].normalize(np.stack(obs))
-        # goal_noise = npr.uniform([-0.010, -0.010, 0.0], [0.010, 0.010, 0])
-        goal_noise = 0
+    def get_action(self, obs, device):
+        nobs = self.normalizer["obs"].normalize(obs)
 
         policy_obs = nobs.unsqueeze(0).flatten(1, 2)
-        # policy_obs = torch.concat((ngoal.view(1,1,3).repeat(1,20,1), policy_obs), dim=-1)
-        policy_obs[:, :, :3] = ngoal.view(1, 1, 3).repeat(1, self.seq_len, 1) - (
-            policy_obs[:, :, :3] + goal_noise
-        )
-        policy_obs = policy_obs.to(device)
-
         # Sample actions: (1, num_samples, Da)
         action_stats = self.get_action_stats()
         # action_dist = torch.distributions.Uniform(
