@@ -10,7 +10,6 @@ from escnn import nn as enn
 from escnn import group
 
 from irrep_actions.model.layers import SO2MLP
-from irrep_actions.model.modules import SO2PoseForceEncoder
 from irrep_actions.utils.normalizer import LinearNormalizer
 from irrep_actions.utils import torch_utils
 from irrep_actions.utils import harmonics
@@ -20,66 +19,58 @@ from irrep_actions.policy.base_policy import BasePolicy
 class SO2HarmonicImplicitPolicy(BasePolicy):
     def __init__(
         self,
+        obs_dim,
         action_dim,
+        num_obs_steps,
+        num_action_steps,
+        horizon,
+        lmax,
+        z_dim,
         num_neg_act_samples,
         pred_n_iter,
         pred_n_samples,
-        seq_len,
-        z_dim,
         dropout,
-        encoder,
+        #encoder,
     ):
-        super().__init__(action_dim, seq_len, z_dim)
-        self.L = 3
-        self.G = group.so2_group()
-        self.gspace = gspaces.no_base_space(self.G)
-        self.in_type = enn.FieldType(
-            self.gspace,
-            [
-                self.G.irrep(1)
-                + self.G.irrep(0)
-                + self.G.irrep(1)
-                + self.G.irrep(0)
-                + self.G.irrep(1)
-                + self.G.irrep(0)
-            ],
-        )
-
+        super().__init__(obs_dim, action_dim, num_obs_steps, num_action_steps, horizon, z_dim)
+        self.Lmax = lmax
         self.num_neg_act_samples = num_neg_act_samples
         self.pred_n_iter = pred_n_iter
         self.pred_n_samples = pred_n_samples
 
-        self.encoder = encoder
-        # self.encoder = SO2PoseForceEncoder(self.in_type, self.L, z_dim, seq_len, dropout)
-        m_dim = z_dim * 2
-        t = self.G.bl_regular_representation(L=self.L)
-        self.mlp_in_type = enn.FieldType(self.gspace, [t] * z_dim + [self.G.irrep(0)])
+        self.G = group.so2_group()
+        self.gspace = gspaces.no_base_space(self.G)
+        self.in_type = enn.FieldType(
+            self.gspace,
+            [self.G.irrep(1)] * 20 + [self.G.irrep(0)]
+        )
+        self.out_type = self.G.bl_regular_representation(L=self.Lmax)
+
+        mid_channels = 256
+
+        #self.encoder = encoder
         self.energy_mlp = SO2MLP(
-            self.mlp_in_type,
-            self.encoder.out_type,
-            [z_dim + action_dim - 1, m_dim, m_dim, m_dim, 1],
-            [self.L, self.L, self.L, self.L, self.L],
+            self.in_type,
+            self.out_type,
+            [1, mid_channels, mid_channels, mid_channels, 1],
+            [self.Lmax, self.Lmax, self.Lmax, self.Lmax, self.Lmax],
+            dropout=dropout,
             act_out=False,
         )
 
-        # self.apply(torch_utils.init_weights)
+    def forward(self, obs, action):
+        B, N, Ta, Da = action.shape
+        B, To, Do = obs.shape
 
-    def forward(self, x, a):
-        batch_size = x.size(0)
-        z = self.encoder(x)
-
-        z_a = torch.cat([z.tensor.unsqueeze(1).expand(-1, a.size(1), -1), a], dim=-1)
-        B, N, D = z_a.shape
-        z_a = z_a.reshape(B * N, D)
-
-        z_a = self.mlp_in_type(z_a)
-        out = self.energy_mlp(z_a)
+        s = obs.reshape(B, 1, -1).expand(-1, N, -1)
+        s_a = self.in_type(torch.cat([s, action.reshape(B, N, -1)], dim=-1).reshape(B*N, -1))
+        out = self.energy_mlp(s_a)
 
         return out.tensor.view(B, N, -1)
 
     def get_energy(self, W, theta):
-        B = harmonics.circular_harmonics(self.L, theta)
-        return torch.bmm(W.view(-1, 1, (self.L * 2 + 1)), B)
+        B = harmonics.circular_harmonics(self.Lmax, theta)
+        return torch.bmm(W.view(-1, 1, self.Lmax * 2 + 1), B)
 
     def get_action(self, obs, goal, device):
         ngoal = self.normalizer["goal"].normalize(goal)
@@ -147,9 +138,9 @@ class SO2HarmonicImplicitPolicy(BasePolicy):
         idxs = torch.multinomial(prob, num_samples=1, replacement=True)
         # acts_n = samples[torch.arange(samples.size(0)).unsqueeze(-1), idxs].squeeze(1)
 
-        # print(idxs)
+        print(idxs)
         idxs = torch.argmax(prob)
-        # print(idxs)
+        print(idxs)
         acts_n = torch.tensor([radius[0, idxs.item()], theta[idxs.item(), 0]])
         action = self.normalizer["action"].unnormalize(acts_n).cpu().squeeze()
         # action[0] = 0.02
@@ -158,9 +149,9 @@ class SO2HarmonicImplicitPolicy(BasePolicy):
         x = action[0] * np.cos(action[1])
         y = action[0] * np.sin(action[1])
 
-        # print(acts_n)
-        # print(action)
-        # print([x.item(), y.item()])
+        print(acts_n)
+        print(action)
+        print([x.item(), y.item()])
         harmonics.plot_energy_circle(prob[0, :].detach().numpy())
 
         return [x, y]
@@ -169,47 +160,46 @@ class SO2HarmonicImplicitPolicy(BasePolicy):
         # Load batch
         nobs = batch["obs"].float()
         naction = batch["action"].float()
-        ngoal = batch["goal"].float()
 
-        B = nobs.shape[0]
-        obs = nobs.flatten(1, 2)
-        # obs = torch.concat((ngoal[:,0,:].unsqueeze(1).repeat(1,20,1), obs), dim=-1)
-        obs[:, :, :3] = (
-            ngoal[:, 0, :].unsqueeze(1).repeat(1, self.seq_len, 1) - obs[:, :, :3]
-        )
+        Do = self.obs_dim
+        Da = self.action_dim
+        To = self.num_obs_steps
+        Ta = self.num_action_steps
+        B = naction.shape[0]
+
+        nobs = nobs[:, :To]
+        start = To - 1
+        end = start + Ta
+        naction = naction[:, start:end]
 
         # Add noise to positive samples
-        batch_size = naction.size(0)
         action_noise = torch.normal(
             mean=0,
             std=1e-4,
-            size=naction[:, -1].shape,
+            size=naction.shape,
             dtype=naction.dtype,
             device=naction.device,
         )
-        noisy_actions = naction[:, -1] + action_noise
+        noisy_actions = naction + action_noise
 
         # Sample negatives: (B, train_n_neg, Da)
         action_stats = self.get_action_stats()
         action_dist = torch.distributions.Uniform(
             low=action_stats["min"], high=action_stats["max"]
         )
-        negatives = (
-            action_dist.sample((batch_size, self.num_neg_act_samples))
-            .to(dtype=naction.dtype)
-            .view(B, -1, 2)
-        )
+        negatives = action_dist.sample((B, self.num_neg_act_samples, Ta)).to(dtype=naction.dtype)
+
 
         # Combine pos and neg samples: (B, train_n_neg+1, Da)
-        targets = torch.cat([noisy_actions.view(B, 1, 2), negatives], dim=1)
+        targets = torch.cat([noisy_actions.unsqueeze(1), negatives], dim=1)
 
         # Randomly permute the positive and negative samples
         permutation = torch.rand(targets.size(0), targets.size(1)).argsort(dim=1)
         targets = targets[torch.arange(targets.size(0)).unsqueeze(-1), permutation]
         ground_truth = (permutation == 0).nonzero()[:, 1].to(naction.device)
 
-        W = self.forward(obs, targets[:, :, 0].unsqueeze(2))
-        energy = self.get_energy(W.view(-1, W.size(2)), targets[:, :, 1].view(-1, 1))
+        W = self.forward(nobs, targets[:, :, :, 0].unsqueeze(3))
+        energy = self.get_energy(W.view(-1, W.size(2)), targets[:, :, :, 1].view(-1, 1))
         energy = energy.view(B, self.num_neg_act_samples + 1)
         loss = F.cross_entropy(energy, ground_truth)
 

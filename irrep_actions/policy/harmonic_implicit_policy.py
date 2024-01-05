@@ -190,6 +190,8 @@ class HarmonicImplicitPolicy(BasePolicy):
         targets = targets[torch.arange(targets.size(0)).unsqueeze(-1), permutation]
         ground_truth = (permutation == 0).nonzero()[:, 1].to(naction.device)
 
+        #breakpoint()
+
         W = self.forward(nobs, targets[:, :, :, 0].unsqueeze(3))
         energy = self.get_energy(W.view(-1, W.size(2)), targets[:, :, :, 1].view(-1, 1))
         energy = energy.view(B, self.num_neg_act_samples + 1)

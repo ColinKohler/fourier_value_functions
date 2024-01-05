@@ -3,7 +3,6 @@ name: pusht_lowdim
 obs_dim: 20 # 9*2 keypoints + 2 state
 action_dim: 2
 keypoint_dim: 2
-z_dim: 64
 
 dataset:
   _target_: irrep_actions.dataset.lowdim_dataset.LowdimDataset

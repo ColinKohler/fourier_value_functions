@@ -41,7 +41,7 @@ class ResNet(nn.Module):
 
 class SO2MLP(nn.Module):
     def __init__(
-        self, in_type, out_type, channels, lmaxs, N=32, dropout=0.0, act_out=True
+        self, in_type, out_type, channels, lmaxs, N=8, dropout=0.0, act_out=True
     ):
         super().__init__()
 
@@ -67,7 +67,8 @@ class SO2MLP(nn.Module):
                 blocks.append(act)
             else:
                 t = self.G.bl_regular_representation(L=l)
-                out_type = enn.FieldType(self.gspace, [t] * c)
+                #out_type = enn.FieldType(self.gspace, [t] * c)
+                out_type = out_type
                 blocks.append(enn.Linear(in_type, out_type))
             in_type = act.out_type
         self.out_type = blocks[-1].out_type

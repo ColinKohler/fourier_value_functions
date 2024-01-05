@@ -2,7 +2,7 @@ defaults:
   - _self_
   - task: pusht_lowdim 
 
-name: train_so2_harmonic_implicit_policy
+name: train_so2_implicit_policy
 _target_: irrep_actions.workflow.implicit_workflow.ImplicitWorkflow
 
 obs_dim: ${task.obs_dim} 
@@ -10,17 +10,17 @@ action_dim: ${task.action_dim}
 keypoint_dim: ${task.keypoint_dim}
 task_name: ${task.name}
 exp_name: 'default'
-is_harmonic: True
+is_harmonic: False
 
 horizon: 2
 obs_horizon: 2
 num_obs_steps: 2
 num_action_steps: 1
 num_latency_steps: 0
-z_dim: ${task.z_dim}
+z_dim: 256
 
 policy:
-  _target_: irrep_actions.policy.so2_harmonic_implicit_policy.SO2HarmonicImplicitPolicy
+  _target_: irrep_actions.policy.so2_implicit_policy.SO2ImplicitPolicy
   obs_dim: ${obs_dim}
   action_dim: ${action_dim}
   num_obs_steps: ${num_obs_steps}
@@ -34,14 +34,14 @@ policy:
   dropout: 0.1
 
 dataloader:
-  batch_size: 64
+  batch_size: 16
   num_workers: 1
   shuffle: True
   pin_memory: True
   persistent_workers: False
 
 val_dataloader:
-  batch_size: 64
+  batch_size: 16
   num_workers: 1
   shuffle: False
   pin_memory: True
