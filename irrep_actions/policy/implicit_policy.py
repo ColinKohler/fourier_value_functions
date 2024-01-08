@@ -55,15 +55,20 @@ class ImplicitPolicy(BasePolicy):
         return out.reshape(B, N)
 
     def get_action(self, obs, device):
-        nobs = self.normalizer['obs'].normalize(obs)
+        nobs = self.normalizer['obs'].normalize(obs['obs'])
+        Do = self.obs_dim
+        Da = self.action_dim
+        To = self.num_obs_steps
+        Ta = self.num_action_steps
+        B = nobs.shape[0]
 
         # Sample actions: (1, num_samples, Da)
         action_stats = self.get_action_stats()
         action_dist = torch.distributions.Uniform(
             low=action_stats["min"], high=action_stats["max"]
         )
-        samples = action_dist.sample((1, self.pred_n_samples)).to(
-            dtype=policy_obs.dtype
+        samples = action_dist.sample((1, self.pred_n_samples, Ta)).to(
+            dtype=nobs.dtype
         )
 
         zero = torch.tensor(0, device=device)
@@ -82,7 +87,7 @@ class ImplicitPolicy(BasePolicy):
 
         idxs = torch.multinomial(prob, num_samples=1, replacement=True)
         acts_n = samples[torch.arange(samples.size(0)).unsqueeze(-1), idxs].squeeze(1)
-        action = self.normalizer["action"].unnormalize(acts_n).cpu().squeeze()
+        action = self.normalizer["action"].unnormalize(acts_n)
 
         return {'action' : action}
 
