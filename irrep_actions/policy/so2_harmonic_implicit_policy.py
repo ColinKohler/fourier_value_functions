@@ -38,30 +38,43 @@ class SO2HarmonicImplicitPolicy(BasePolicy):
         self.pred_n_iter = pred_n_iter
         self.pred_n_samples = pred_n_samples
 
-        #self.G = group.so2_group()
-        self.G = group.cyclic_group(8)
-        #self.gspace = gspaces.no_base_space(self.G)
-        self.gspace = gspaces.rot2dOnR2(N=8)
+        self.G = group.so2_group()
+        self.gspace = gspaces.no_base_space(self.G)
+        #self.G = group.cyclic_group(8)
+        #self.gspace = gspaces.rot2dOnR2(N=8)
         self.in_type = enn.FieldType(
             self.gspace,
             [self.gspace.irrep(1)] * 20 + [self.gspace.irrep(0)]
         )
 
+        #out_type = enn.FieldType(self.gspace, [self.gspace.irrep(l) for l in range(self.Lmax+1)])
+        #mid_type = enn.FieldType(self.gspace, z_dim * [self.gspace.regular_repr])
+        #self.energy_mlp = enn.SequentialModule(
+        #    enn.R2Conv(self.in_type, mid_type, kernel_size=1),
+        #    #nn.InnerBatchNorm(out_type),
+        #    enn.ReLU(mid_type, inplace=True),
+        #    enn.R2Conv(mid_type, mid_type, kernel_size=1),
+        #    #nn.InnerBatchNorm(out_type),
+        #    enn.ReLU(mid_type, inplace=True),
+        #    enn.R2Conv(mid_type, mid_type, kernel_size=1),
+        #    #nn.InnerBatchNorm(out_type),
+        #    enn.ReLU(mid_type, inplace=True),
+        #    enn.R2Conv(mid_type, out_type, kernel_size=1),
+        #)
+
         out_type = enn.FieldType(self.gspace, [self.gspace.irrep(l) for l in range(self.Lmax+1)])
-        #out_type = enn.FieldType(self.gspace, [self.gspace.regular_repr])
-        mid_type = enn.FieldType(self.gspace, z_dim * [self.gspace.regular_repr])
+        rho = self.G.spectral_regular_representation(*self.G.bl_regular_representation(L=self.Lmax).irreps, name=None)
+        mid_type = enn.FieldType(self.gspace, z_dim * [rho])
         self.energy_mlp = enn.SequentialModule(
-            enn.R2Conv(self.in_type, mid_type, kernel_size=1),
-            #nn.InnerBatchNorm(out_type),
-            enn.ReLU(mid_type, inplace=True),
-            enn.R2Conv(mid_type, mid_type, kernel_size=1),
-            #nn.InnerBatchNorm(out_type),
-            enn.ReLU(mid_type, inplace=True),
-            enn.R2Conv(mid_type, mid_type, kernel_size=1),
-            #nn.InnerBatchNorm(out_type),
-            enn.ReLU(mid_type, inplace=True),
-            enn.R2Conv(mid_type, out_type, kernel_size=1),
+            enn.Linear(self.in_type, mid_type),
+            enn.FourierPointwise(self.gspace, z_dim, self.G.bl_regular_representation(L=self.Lmax).irreps, type='regular', N=8),
+            enn.Linear(mid_type, mid_type),
+            enn.FourierPointwise(self.gspace, z_dim, self.G.bl_regular_representation(L=self.Lmax).irreps, type='regular', N=8),
+            enn.Linear(mid_type, mid_type),
+            enn.FourierPointwise(self.gspace, z_dim, self.G.bl_regular_representation(L=self.Lmax).irreps, type='regular', N=8),
+            enn.Linear(mid_type, out_type),
         )
+
         #self.energy_mlp = SO2MLP(
         #    self.in_type,
         #    self.out_type,
@@ -76,7 +89,8 @@ class SO2HarmonicImplicitPolicy(BasePolicy):
         B, To, Do = obs.shape
 
         s = obs.reshape(B, 1, -1).expand(-1, N, -1)
-        s_a = self.in_type(torch.cat([s, action.reshape(B, N, -1)], dim=-1).reshape(B*N, -1, 1, 1))
+        s_a = self.in_type(torch.cat([s, action.reshape(B, N, -1)], dim=-1).reshape(B*N, -1))
+        #s_a = self.in_type(torch.cat([s, action.reshape(B, N, -1)], dim=-1).reshape(B*N, -1, 1, 1))
         out = self.energy_mlp(s_a)
 
         return out.tensor.view(B, N, -1)
