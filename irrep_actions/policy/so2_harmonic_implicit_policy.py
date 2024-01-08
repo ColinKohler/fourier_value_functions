@@ -99,89 +99,46 @@ class SO2HarmonicImplicitPolicy(BasePolicy):
         B = harmonics.circular_harmonics(self.Lmax, theta)
         return torch.bmm(W.view(-1, 1, self.Lmax * 2 + 1), B)
 
-    def get_action(self, obs, goal, device):
-        ngoal = self.normalizer["goal"].normalize(goal)
-        nobs = self.normalizer["obs"].normalize(np.stack(obs))
-        # goal_noise = npr.uniform([-0.010, -0.010, 0.0], [0.010, 0.010, 0])
-        goal_noise = 0
-
-        policy_obs = nobs.unsqueeze(0).flatten(1, 2)
-        # policy_obs = torch.concat((ngoal.view(1,1,3).repeat(1,20,1), policy_obs), dim=-1)
-        policy_obs[:, :, :3] = ngoal.view(1, 1, 3).repeat(1, self.seq_len, 1) - (
-            policy_obs[:, :, :3] + goal_noise
-        )
-        policy_obs = policy_obs.to(device)
+    def get_action(self, obs, device):
+        nobs = self.normalizer["obs"].normalize(obs['obs'])
+        Do = self.obs_dim
+        Da = self.action_dim
+        To = self.num_obs_steps
+        Ta = self.num_action_steps
+        B = nobs.shape[0]
 
         # Sample actions: (1, num_samples, Da)
         action_stats = self.get_action_stats()
-        # action_dist = torch.distributions.Uniform(
-        #    low=action_stats["min"], high=action_stats["max"]
-        # )
-        # samples = action_dist.sample((1, self.pred_n_samples)).to(
-        #    dtype=policy_obs.dtype
-        # )
-
-        # zero = torch.tensor(0, device=device)
-        # resample_std = torch.tensor(3e-2, device=device)
-        # for i in range(self.pred_n_iter):
-        #    W = self.forward(policy_obs, samples[:,:,0].unsqueeze(2))
-        #    logits = self.get_energy(W.view(-1, W.size(2)), samples[:,:,1].view(-1, 1))
-        #    logits = logits.view(1, self.pred_n_samples)
-
-        #    # attn = self.encoder.transformer.getAttnMaps(policy_obs)
-        #    # torch_utils.plotAttnMaps(torch.arange(9).view(1,9), attn)
-
-        #    prob = torch.softmax(logits, dim=-1)
-
-        #    if i < (self.pred_n_iter - 1):
-        #        idxs = torch.multinomial(prob, self.pred_n_samples, replacement=True)
-        #        samples = samples[torch.arange(samples.size(0)).unsqueeze(-1), idxs]
-        #        samples += torch.normal(
-        #            zero, resample_std, size=samples.shape, device=device
-        #        )
-
-        num_disp = 1
-        num_rot = 360
-        # radius = torch.linspace(action_stats['min'][0].item(), action_stats['max'][0].item(), num_disp)
-        radius = torch.tensor([1]).view(1, 1).float()
-        radius = (
-            radius.view(1, -1, 1)
-            .repeat(
-                1,
-                1,
-                num_rot,
-            )
-            .view(1, -1, 1)
+        action_dist = torch.distributions.Uniform(
+           low=action_stats["min"], high=action_stats["max"]
         )
-        theta = torch.linspace(
-            action_stats["min"][1].item(), action_stats["max"][1].item(), num_rot
+        samples = action_dist.sample((B, self.pred_n_samples, 1)).to(
+           dtype=policy_obs.dtype
         )
-        theta = theta.view(1, -1, 1).repeat(1, 1, num_disp).view(-1, 1)
-        W = self.forward(policy_obs, radius)
-        logits = self.get_energy(W.view(-1, W.size(2)), theta)
-        logits = logits.view(1, -1)
-        prob = torch.softmax(logits, dim=-1)
 
-        idxs = torch.multinomial(prob, num_samples=1, replacement=True)
-        # acts_n = samples[torch.arange(samples.size(0)).unsqueeze(-1), idxs].squeeze(1)
+        zero = torch.tensor(0, device=device)
+        resample_std = torch.tensor(3e-2, device=device)
+        for i in range(self.pred_n_iter):
+           W = self.forward(policy_obs, samples[:,:,0].unsqueeze(2))
+           logits = self.get_energy(W.view(-1, W.size(2)), samples[:,:,1].view(-1, 1))
+           logits = logits.view(1, self.pred_n_samples, Ta)
 
-        print(idxs)
+           prob = torch.softmax(logits, dim=-1)
+
+           if i < (self.pred_n_iter - 1):
+               idxs = torch.multinomial(prob, self.pred_n_samples, replacement=True)
+               samples = samples[torch.arange(samples.size(0)).unsqueeze(-1), idxs]
+               samples += torch.normal(
+                   zero, resample_std, size=samples.shape, device=device
+               )
+
         idxs = torch.argmax(prob)
-        print(idxs)
         acts_n = torch.tensor([radius[0, idxs.item()], theta[idxs.item(), 0]])
-        action = self.normalizer["action"].unnormalize(acts_n).cpu().squeeze()
-        # action[0] = 0.02
-        # action[1] = np.pi
+        action = self.normalizer["action"].unnormalize(acts_n)
+        x = action[:, 0] * np.cos(action[:, 1])
+        y = action[:, 0] * np.sin(action[:, 1])
 
-        x = action[0] * np.cos(action[1])
-        y = action[0] * np.sin(action[1])
-
-        print(acts_n)
-        print(action)
-        print([x.item(), y.item()])
-        harmonics.plot_energy_circle(prob[0, :].detach().numpy())
-
-        return [x, y]
+        return {'action' : [x, y]}
 
     def compute_loss(self, batch):
         # Load batch
