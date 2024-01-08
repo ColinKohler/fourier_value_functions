@@ -18,6 +18,7 @@ num_obs_steps: 2
 num_action_steps: 1
 num_latency_steps: 0
 z_dim: 256
+lmax: 3
 
 policy:
   _target_: irrep_actions.policy.so2_implicit_policy.SO2ImplicitPolicy
@@ -26,7 +27,7 @@ policy:
   num_obs_steps: ${num_obs_steps}
   num_action_steps: ${num_action_steps}
   horizon: ${horizon}
-  lmax: 3
+  lmax: ${lmax}
   z_dim: ${z_dim}
   num_neg_act_samples: 1024
   pred_n_iter: 3
