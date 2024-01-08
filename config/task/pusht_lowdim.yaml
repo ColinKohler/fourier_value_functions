@@ -4,6 +4,24 @@ obs_dim: 20 # 9*2 keypoints + 2 state
 action_dim: 2
 keypoint_dim: 2
 
+env_runner:
+  _target_: irrep_actions.env_runner.pusht_keypoints_runner.PushTKeypointsRunner
+  keypoint_visible_rate: ${keypoint_visible_rate}
+  num_train: 6
+  num_train_vis: 2
+  train_start_seed: 0
+  num_test: 50
+  num_test_vis: 4
+  test_start_seed: 100000
+  max_steps: 300
+  num_obs_steps: ${num_obs_steps}
+  num_action_steps: ${num_action_steps}
+  num_latency_steps: ${num_latency_steps}
+  fps: 10
+  agent_keypoints: False
+  past_action: ${past_action}
+  num_envs: null
+
 dataset:
   _target_: irrep_actions.dataset.lowdim_dataset.LowdimDataset
   path: data/pusht/pusht_cchi_v7_replay.zarr
@@ -13,3 +31,4 @@ dataset:
   seed: 0
   harmonic_action: ${is_harmonic}
   val_ratio: 0.02
+  max_train_episodes: 90
