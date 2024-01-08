@@ -10,7 +10,7 @@ from pymunk.vec2d import Vec2d
 import shapely.geometry as sg
 import cv2
 import skimage.transform as st
-from diffusion_policy.env.pusht.pymunk_override import DrawOptions
+from irrep_actions.env.pusht.pymunk_override import DrawOptions
 
 
 def pymunk_to_shapely(body, shapes):
@@ -30,7 +30,7 @@ class PushTEnv(gym.Env):
     reward_range = (0., 1.)
 
     def __init__(self,
-            legacy=False, 
+            legacy=False,
             block_cog=None, damping=None,
             render_action=True,
             render_size=96,
@@ -83,7 +83,7 @@ class PushTEnv(gym.Env):
         self.render_buffer = None
         self.latest_action = None
         self.reset_to_state = reset_to_state
-    
+
     def reset(self):
         seed = self._seed
         self._setup()
@@ -91,7 +91,7 @@ class PushTEnv(gym.Env):
             self.block.center_of_gravity = self.block_cog
         if self.damping is not None:
             self.space.damping = self.damping
-        
+
         # use legacy RandomState for compatibility
         state = self.reset_to_state
         if state is None:
@@ -167,7 +167,7 @@ class PushTEnv(gym.Env):
         body.position = pose[:2].tolist()
         body.angle = pose[2]
         return body
-    
+
     def _get_info(self):
         n_steps = self.sim_hz // self.control_hz
         n_contact_points_per_step = int(np.ceil(self.n_contact_points / n_steps))
@@ -233,7 +233,7 @@ class PushTEnv(gym.Env):
         if self.window is not None:
             pygame.display.quit()
             pygame.quit()
-    
+
     def seed(self, seed=None):
         if seed is None:
             seed = np.random.randint(0,25536)
@@ -264,12 +264,12 @@ class PushTEnv(gym.Env):
 
         # Run physics to take effect
         self.space.step(1.0 / self.sim_hz)
-    
+
     def _set_state_local(self, state_local):
         agent_pos_local = state_local[:2]
         block_pose_local = state_local[2:]
         tf_img_obj = st.AffineTransform(
-            translation=self.goal_pose[:2], 
+            translation=self.goal_pose[:2],
             rotation=self.goal_pose[2])
         tf_obj_new = st.AffineTransform(
             translation=block_pose_local[:2],
@@ -291,7 +291,7 @@ class PushTEnv(gym.Env):
         self.space.damping = 0
         self.teleop = False
         self.render_buffer = list()
-        
+
         # Add walls.
         walls = [
             self._add_segment((5, 506), (5, 5), 2),

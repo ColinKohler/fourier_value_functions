@@ -1,5 +1,5 @@
 from gym.envs.registration import register
-import diffusion_policy.env.pusht
+import irrep_actions.env.pusht
 
 register(
     id='pusht-keypoints-v0',

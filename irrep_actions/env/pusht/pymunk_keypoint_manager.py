@@ -5,7 +5,7 @@ import pymunk
 import pygame
 from matplotlib import cm
 import cv2
-from diffusion_policy.env.pusht.pymunk_override import DrawOptions
+from irrep_actions.env.pusht.pymunk_override import DrawOptions
 
 
 def farthest_point_sampling(points: np.ndarray, n_points: int, init_idx: int):
@@ -26,8 +26,8 @@ def farthest_point_sampling(points: np.ndarray, n_points: int, init_idx: int):
 
 
 class PymunkKeypointManager:
-    def __init__(self, 
-            local_keypoint_map: Dict[str, np.ndarray], 
+    def __init__(self,
+            local_keypoint_map: Dict[str, np.ndarray],
             color_map: Optional[Dict[str, np.ndarray]]=None):
         """
         local_keypoint_map:
@@ -41,7 +41,7 @@ class PymunkKeypointManager:
 
         self.local_keypoint_map = local_keypoint_map
         self.color_map = color_map
-    
+
     @property
     def kwargs(self):
         return {
@@ -62,7 +62,7 @@ class PymunkKeypointManager:
             else:
                 self.block = obj = self.add_tee((256, 300), 0)
                 n_kps = n_block_kps
-            
+
             self.screen = pygame.Surface((512,512))
             self.screen.fill(pygame.Color("white"))
             draw_options = DrawOptions(self.screen)
@@ -83,7 +83,7 @@ class PymunkKeypointManager:
             obj_local_kps += small_shift
 
             local_keypoint_map[name] = obj_local_kps
-        
+
         return cls(local_keypoint_map=local_keypoint_map, **kwargs)
 
     @staticmethod
@@ -99,8 +99,8 @@ class PymunkKeypointManager:
         pose = tuple(obj.position) + (obj.angle,)
         return cls.get_tf_img(pose)
 
-    def get_keypoints_global(self, 
-            pose_map: Dict[set, Union[Sequence, pymunk.Body]], 
+    def get_keypoints_global(self,
+            pose_map: Dict[set, Union[Sequence, pymunk.Body]],
             is_obj=False):
         kp_map = dict()
         for key, value in pose_map.items():
@@ -112,7 +112,7 @@ class PymunkKeypointManager:
             kp_global = tf_img_obj(kp_local)
             kp_map[key] = kp_global
         return kp_map
-    
+
     def draw_keypoints(self, img, kps_map, radius=1):
         scale = np.array(img.shape[:2]) / np.array([512,512])
         for key, value in kps_map.items():
@@ -121,7 +121,7 @@ class PymunkKeypointManager:
             for coord in coords:
                 cv2.circle(img, coord, radius=radius, color=color, thickness=-1)
         return img
-    
+
     def draw_keypoints_pose(self, img, pose_map, is_obj=False, **kwargs):
         kp_map = self.get_keypoints_global(pose_map, is_obj=is_obj)
         return self.draw_keypoints(img, kps_map=kp_map, **kwargs)
@@ -130,7 +130,7 @@ class PymunkKeypointManager:
 def test():
     from diffusion_policy.environment.push_t_env import PushTEnv
     from matplotlib import pyplot as plt
-    
+
     env = PushTEnv(headless=True, obs_state=False, draw_action=False)
     kp_manager = PymunkKeypointManager.create_from_pusht_env(env=env)
     env.reset()
