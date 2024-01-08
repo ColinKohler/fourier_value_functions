@@ -1,10 +1,10 @@
 import gym
 import numpy as np
-from diffusion_policy.real_world.video_recorder import VideoRecorder
+from irrep_actions.gym_util.video_recorder import VideoRecorder
 
 class VideoRecordingWrapper(gym.Wrapper):
-    def __init__(self, 
-            env, 
+    def __init__(self,
+            env,
             video_recoder: VideoRecorder,
             mode='rgb_array',
             file_path=None,
@@ -15,7 +15,7 @@ class VideoRecordingWrapper(gym.Wrapper):
         When file_path is None, don't record.
         """
         super().__init__(env)
-        
+
         self.mode = mode
         self.render_kwargs = kwargs
         self.steps_per_render = steps_per_render
@@ -30,7 +30,7 @@ class VideoRecordingWrapper(gym.Wrapper):
         self.step_count = 1
         self.video_recoder.stop()
         return obs
-    
+
     def step(self, action):
         result = super().step(action)
         self.step_count += 1
@@ -44,7 +44,7 @@ class VideoRecordingWrapper(gym.Wrapper):
             assert frame.dtype == np.uint8
             self.video_recoder.write_frame(frame)
         return result
-    
+
     def render(self, mode='rgb_array', **kwargs):
         if self.video_recoder.is_ready():
             self.video_recoder.stop()

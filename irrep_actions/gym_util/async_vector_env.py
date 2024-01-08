@@ -83,7 +83,7 @@ class AsyncVectorEnv(VectorEnv):
         dummy_env_fn=None,
         observation_space=None,
         action_space=None,
-        shared_memory=True,
+        shared_memory=False,
         copy=True,
         context=None,
         daemon=True,
@@ -399,7 +399,7 @@ class AsyncVectorEnv(VectorEnv):
 
         logger.error("Raising the last exception back to the main process.")
         raise exctype(value)
-    
+
     def call_async(self, name: str, *args, **kwargs):
         """Calls the method with name asynchronously and apply args and kwargs to the method.
 
@@ -470,11 +470,11 @@ class AsyncVectorEnv(VectorEnv):
         """
         self.call_async(name, *args, **kwargs)
         return self.call_wait()
-    
 
-    def call_each(self, name: str, 
-            args_list: list=None, 
-            kwargs_list: list=None, 
+
+    def call_each(self, name: str,
+            args_list: list=None,
+            kwargs_list: list=None,
             timeout = None):
         n_envs = len(self.parent_pipes)
         if args_list is None:

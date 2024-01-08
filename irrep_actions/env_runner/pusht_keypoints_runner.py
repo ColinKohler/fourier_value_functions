@@ -23,14 +23,14 @@ class PushTKeypointsRunner(BaseRunner):
         output_dir,
         keypoint_visible_rate=1.0,
         num_train=10,
-        num_trainum_vis=3,
-        trainum_start_seed=0,
+        num_train_vis=3,
+        train_start_seed=0,
         num_test=22,
         num_test_vis=6,
         test_start_seed=10000,
         max_steps=200,
         num_obs_steps=8,
-        num_actionum_steps=8,
+        num_action_steps=8,
         num_latency_steps=0,
         fps=10,
         crf=22,
@@ -43,9 +43,9 @@ class PushTKeypointsRunner(BaseRunner):
         num_envs = num_train + num_test if num_envs is None else num_evs
 
         env_num_obs_steps = num_obs_steps + num_latency_steps
-        env_num_actionum_steps = num_actionum_steps
+        env_num_action_steps = num_action_steps
 
-        kp_kwargs = PushTKeypointsEnv.generate_keypoints_manager_params()
+        kp_kwargs = PushTKeypointsEnv.generate_keypoint_manager_params()
 
         def env_fn():
             return MultiStepWrapper(
@@ -64,10 +64,10 @@ class PushTKeypointsRunner(BaseRunner):
                         thread_type='FRAME',
                         thread_count=1
                     ),
-                    filepath=None,
+                    file_path=None,
                 ),
-                num_obs_steps=env_num_obs_steps,
-                num_actionum_steps=env_num_actionum_steps,
+                n_obs_steps=env_num_obs_steps,
+                n_action_steps=env_num_action_steps,
                 max_episode_steps=max_steps
             )
 
@@ -159,7 +159,7 @@ class PushTKeypointsRunner(BaseRunner):
             this_num_active_envs = end - start
             this_local_slice = slice(0, this_num_active_envs)
 
-            this_init_fns = self.env.init_fn_dills[this_global_slice]
+            this_init_fns = self.env_init_fn_dills[this_global_slice]
             num_diff = num_envs - len(this_init_fns)
             if num_diff > 0:
                 this_init_fns.extend([self.env_init_fn_dills[0]] * num_diff)
@@ -190,12 +190,12 @@ class PushTKeypointsRunner(BaseRunner):
                 if self.past_action and (past_action is not None):
                     obs_dict['past_action'] = past_action[:, -(self.num_obs_steps-1):].astype(np.float32)
 
-                obs_dict = dict_appy(obs_dict, lambda x: torch.from_numpy(x).to(device))
+                obs_dict = dict_apply(obs_dict, lambda x: torch.from_numpy(x).to(device))
 
                 with torch.no_grad():
-                    action_dict = policy.get_action(obs_dict)
+                    action_dict = policy.get_action(obs_dict, device)
                 action_dict = dict_apply(action_dict, lambda x: x.to('cpu').numpy())
-                action = actoin_dict['action'][:, self.num_latency_steps:]
+                action = action_dict['action'][:, self.num_latency_steps:]
 
                 # Step env
                 obs, reward, done, info = env.step(action)

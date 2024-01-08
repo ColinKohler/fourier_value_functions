@@ -28,7 +28,7 @@ class PushTKeypointsEnv(PushTEnv):
 
         if local_keypoint_map is None:
             # create default keypoint definition
-            kp_kwargs = self.genenerate_keypoint_manager_params()
+            kp_kwargs = self.generate_keypoint_manager_params()
             local_keypoint_map = kp_kwargs['local_keypoint_map']
             color_map = kp_kwargs['color_map']
 
@@ -69,7 +69,7 @@ class PushTKeypointsEnv(PushTEnv):
         self.draw_kp_map = None
 
     @classmethod
-    def genenerate_keypoint_manager_params(cls):
+    def generate_keypoint_manager_params(cls):
         env = PushTEnv()
         kp_manager = PymunkKeypointManager.create_from_pusht_env(env)
         kp_kwargs = kp_manager.kwargs
