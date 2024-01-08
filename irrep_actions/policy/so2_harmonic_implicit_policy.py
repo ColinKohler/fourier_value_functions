@@ -107,7 +107,7 @@ class SO2HarmonicImplicitPolicy(BasePolicy):
         Ta = self.num_action_steps
         B = nobs.shape[0]
 
-        # Sample actions: (1, num_samples, Da)
+        # Sample actions: (B, num_samples, Ta, Da)
         action_stats = self.get_action_stats()
         action_dist = torch.distributions.Uniform(
            low=action_stats["min"], high=action_stats["max"]
@@ -132,7 +132,6 @@ class SO2HarmonicImplicitPolicy(BasePolicy):
                     zero, resample_std, size=samples.shape, device=device
                 )
 
-        #idxs = torch.argmax(prob)
         idxs = torch.multinomial(prob, num_samples=1, replacement=True)
         acts_n = samples[torch.arange(samples.size(0)).unsqueeze(-1), idxs].squeeze(1)
         action = self.normalizer["action"].unnormalize(acts_n)

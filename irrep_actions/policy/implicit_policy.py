@@ -62,7 +62,7 @@ class ImplicitPolicy(BasePolicy):
         Ta = self.num_action_steps
         B = nobs.shape[0]
 
-        # Sample actions: (1, num_samples, Da)
+        # Sample actions: (B, num_samples, Ta, Da)
         action_stats = self.get_action_stats()
         action_dist = torch.distributions.Uniform(
             low=action_stats["min"], high=action_stats["max"]
