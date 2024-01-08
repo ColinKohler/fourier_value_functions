@@ -11,6 +11,7 @@ class LowdimDataset(BaseDataset):
         harmonic_action: bool = False,
         seed=0,
         val_ratio=0.0,
+        max_train_episodes=None,
     ):
         super().__init__(
             path,
@@ -19,6 +20,7 @@ class LowdimDataset(BaseDataset):
             pad_after=pad_after,
             seed=seed,
             val_ratio=val_ratio,
+            max_train_episodes=max_train_episodes
         )
 
     def _sample_to_data(self, sample):

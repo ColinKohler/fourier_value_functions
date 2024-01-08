@@ -23,8 +23,8 @@ import argparse
 from irrep_actions.workflow.base_workflow import BaseWorkflow
 
 def evaluate(checkpoint: str, output_dir: str, device: str):
-    if os.path.isdir(filepath):
-        inp = input("Data directory already exists. Overwrite existing dataset? (y/n)")
+    if os.path.exists(output_dir):
+        inp = input("Output directory already exists. Overwrite existing dataset? (y/n)")
         if inp == "y":
             print("Deleting existing dataset")
         else:
@@ -34,7 +34,7 @@ def evaluate(checkpoint: str, output_dir: str, device: str):
 
     # Load checkpoint
     payload = torch.load(open(checkpoint, 'rb'), pickle_module=dill)
-    cfg = payload['cfg']
+    cfg = payload['config']
     cls = hydra.utils.get_class(cfg._target_)
     workflow = cls(cfg, output_dir=output_dir)
     workflow: BaseWorkflow
@@ -56,7 +56,7 @@ def evaluate(checkpoint: str, output_dir: str, device: str):
     # Save logs
     json_log = dict()
     for k, v in runner_log.items():
-        json_log[k] = v._path isinstance(v, wanb.sdk.data_types.video.Video) else v
+        json_log[k] = v._path if isinstance(v, wanb.sdk.data_types.video.Video) else v
     out_path = os.path.join(output_dir, 'eval_log.json')
     json.dump(json_log, open(out_path, 'w'), indent=2, sort_keys=True)
 

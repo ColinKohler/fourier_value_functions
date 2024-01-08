@@ -13,10 +13,11 @@ exp_name: 'default'
 is_harmonic: False
 
 horizon: 2
-obs_horizon: 2
 num_obs_steps: 2
 num_action_steps: 1
 num_latency_steps: 0
+past_action_visible: False
+keypoint_visible_rate: 1.0
 z_dim: 256
 lmax: 3
 

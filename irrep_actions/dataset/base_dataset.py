@@ -7,7 +7,7 @@ import pickle
 from irrep_actions.dataset.replay_buffer import ReplayBuffer
 from irrep_actions.utils import torch_utils
 from irrep_actions.utils.normalizer import LinearNormalizer
-from irrep_actions.utils.sampler import SequenceSampler, get_val_mask
+from irrep_actions.utils.sampler import SequenceSampler, get_val_mask, downsample_mask
 
 
 class BaseDataset(torch.utils.data.Dataset):
@@ -20,6 +20,7 @@ class BaseDataset(torch.utils.data.Dataset):
         harmonic_action: bool = False,
         seed: int = 0,
         val_ratio: float = 0.0,
+        max_train_episodes: int = None,
     ):
         super().__init__()
 
@@ -33,6 +34,11 @@ class BaseDataset(torch.utils.data.Dataset):
             seed=seed
         )
         self.train_mask = ~val_mask
+        self.train_mask = downsample_mask(
+            mask=self.train_mask,
+            max_n=max_train_episodes,
+            seed=seed
+        )
 
         self.sampler = SequenceSampler(
             replay_buffer=self.replay_buffer,

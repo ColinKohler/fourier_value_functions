@@ -19,7 +19,7 @@ env_runner:
   num_latency_steps: ${num_latency_steps}
   fps: 10
   agent_keypoints: False
-  past_action: ${past_action}
+  past_action: ${past_action_visible}
   num_envs: null
 
 dataset:
