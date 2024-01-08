@@ -15,7 +15,7 @@ from irrep_actions.gym_util.video_recording_wrapper import VideoRecordingWrapper
 
 from irrep_actions.policy.base_policy import BasePolicy
 from irrep_actions.env_runner.base_runner import BaseRunner
-from irrep_actions.utils.torch_utils improt dict_apply
+from irrep_actions.utils.torch_utils import dict_apply
 
 class PushTKeypointsRunner(BaseRunner):
     def __init__(
@@ -160,7 +160,7 @@ class PushTKeypointsRunner(BaseRunner):
             this_local_slice = slice(0, this_num_active_envs)
 
             this_init_fns = self.env.init_fn_dills[this_global_slice]
-            num_diff = num_envs - l en(this_init_fns)
+            num_diff = num_envs - len(this_init_fns)
             if num_diff > 0:
                 this_init_fns.extend([self.env_init_fn_dills[0]] * num_diff)
             assert len(this_init_fns) == num_envs
