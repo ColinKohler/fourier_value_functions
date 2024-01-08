@@ -15,5 +15,8 @@ class BasePolicy(ModuleAttrMixin):
 
         self.normalizer = LinearNormalizer()
 
+    def reset(self):
+        pass
+
     def set_normalizer(self, normalizer: LinearNormalizer):
         self.normalizer.load_state_dict(normalizer.state_dict())

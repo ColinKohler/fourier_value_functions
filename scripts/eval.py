@@ -23,10 +23,60 @@ import argparse
 from irrep_actions.workflow.base_workflow import BaseWorkflow
 
 def evaluate(checkpoint: str, output_dir: str, device: str):
-    pass
+    if os.path.isdir(filepath):
+        inp = input("Data directory already exists. Overwrite existing dataset? (y/n)")
+        if inp == "y":
+            print("Deleting existing dataset")
+        else:
+            print("Exiting evaluation...")
+            sys.exit()
+    pathlib.Path(output_dir).mkdir(parents=True, exist_ok=True)
+
+    # Load checkpoint
+    payload = torch.load(open(checkpoint, 'rb'), pickle_module=dill)
+    cfg = payload['cfg']
+    cls = hydra.utils.get_class(cfg._target_)
+    workflow = cls(cfg, output_dir=output_dir)
+    workflow: BaseWorkflow
+    workflow.load_payload(payload, exclude_keys=None, include_keys=None)
+
+    # Load policy
+    policy = workflow.model
+    device = torch.device(device)
+    policy.to(device)
+    policy.eval()
+
+    # Run evaluation
+    env_runner = hydra.utils.instantiate(
+        cfg.task.env_runner,
+        output_dir=output_dir
+    )
+    runner_log = env_runner.run(policy)
+
+    # Save logs
+    json_log = dict()
+    for k, v in runner_log.items():
+        json_log[k] = v._path isinstance(v, wanb.sdk.data_types.video.Video) else v
+    out_path = os.path.join(output_dir, 'eval_log.json')
+    json.dump(json_log, open(out_path, 'w'), indent=2, sort_keys=True)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument()
+    parser.add_argument(
+        'checkpoint',
+        type=str,
+        help='Model checkpoint to evaluate.'
+    )
+    parser.add_argument(
+        'output_dir',
+        type=str,
+        help='Directory to save evaluation output to.'
+    )
+    parser.add_argument(
+        '--device',
+        type=str,
+        default='cuda',
+        help='Device to use: (cpu, cuda, cuda:0)'
+    )
     args = parser.parse_args()
     evaluate(args.checkpoint, args.output_dir, args.device)

@@ -84,7 +84,7 @@ class ImplicitPolicy(BasePolicy):
         acts_n = samples[torch.arange(samples.size(0)).unsqueeze(-1), idxs].squeeze(1)
         action = self.normalizer["action"].unnormalize(acts_n).cpu().squeeze()
 
-        return action
+        return {'action' : action}
 
     def compute_loss(self, batch):
         # Load batch
