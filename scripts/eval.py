@@ -56,7 +56,7 @@ def evaluate(checkpoint: str, output_dir: str, device: str):
     # Save logs
     json_log = dict()
     for k, v in runner_log.items():
-        json_log[k] = v._path if isinstance(v, wanb.sdk.data_types.video.Video) else v
+        json_log[k] = v._path if isinstance(v, wandb.sdk.data_types.video.Video) else v
     out_path = os.path.join(output_dir, 'eval_log.json')
     json.dump(json_log, open(out_path, 'w'), indent=2, sort_keys=True)
 
