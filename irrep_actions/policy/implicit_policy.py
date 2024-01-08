@@ -67,7 +67,7 @@ class ImplicitPolicy(BasePolicy):
         action_dist = torch.distributions.Uniform(
             low=action_stats["min"], high=action_stats["max"]
         )
-        samples = action_dist.sample((1, self.pred_n_samples, Ta)).to(
+        samples = action_dist.sample((B, self.pred_n_samples, Ta)).to(
             dtype=nobs.dtype
         )
 

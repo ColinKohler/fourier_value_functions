@@ -6,6 +6,7 @@ import pickle
 
 from irrep_actions.dataset.replay_buffer import ReplayBuffer
 from irrep_actions.utils import torch_utils
+from irrep_actions.utils import harmonics
 from irrep_actions.utils.normalizer import LinearNormalizer
 from irrep_actions.utils.sampler import SequenceSampler, get_val_mask, downsample_mask
 
@@ -69,6 +70,8 @@ class BaseDataset(torch.utils.data.Dataset):
 
     def get_normalizer(self, mode="limits", **kwargs):
         data = self._sample_to_data(self.replay_buffer)
+        if self.harmonic_action:
+            data["action"] = harmonics.convert_action_to_harmonics(data["action"])
         normalizer = LinearNormalizer()
         normalizer.fit(data=data, last_n_dims=1, mode=mode, **kwargs)
         return normalizer

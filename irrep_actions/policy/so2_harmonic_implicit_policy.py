@@ -112,33 +112,34 @@ class SO2HarmonicImplicitPolicy(BasePolicy):
         action_dist = torch.distributions.Uniform(
            low=action_stats["min"], high=action_stats["max"]
         )
-        samples = action_dist.sample((B, self.pred_n_samples, 1)).to(
-           dtype=policy_obs.dtype
+        samples = action_dist.sample((B, self.pred_n_samples, Ta)).to(
+           dtype=nobs.dtype
         )
 
         zero = torch.tensor(0, device=device)
         resample_std = torch.tensor(3e-2, device=device)
         for i in range(self.pred_n_iter):
-           W = self.forward(policy_obs, samples[:,:,0].unsqueeze(2))
-           logits = self.get_energy(W.view(-1, W.size(2)), samples[:,:,1].view(-1, 1))
-           logits = logits.view(1, self.pred_n_samples, Ta)
+            W = self.forward(nobs, samples[:,:,:,0].unsqueeze(3))
+            logits = self.get_energy(W.view(-1, W.size(2)), samples[:,:,:,1].view(-1, 1))
+            logits = logits.view(B, self.pred_n_samples)
 
-           prob = torch.softmax(logits, dim=-1)
+            prob = torch.softmax(logits, dim=-1)
 
-           if i < (self.pred_n_iter - 1):
-               idxs = torch.multinomial(prob, self.pred_n_samples, replacement=True)
-               samples = samples[torch.arange(samples.size(0)).unsqueeze(-1), idxs]
-               samples += torch.normal(
-                   zero, resample_std, size=samples.shape, device=device
-               )
+            if i < (self.pred_n_iter - 1):
+                idxs = torch.multinomial(prob, self.pred_n_samples, replacement=True)
+                samples = samples[torch.arange(samples.size(0)).unsqueeze(-1), idxs]
+                samples += torch.normal(
+                    zero, resample_std, size=samples.shape, device=device
+                )
 
-        idxs = torch.argmax(prob)
-        acts_n = torch.tensor([radius[0, idxs.item()], theta[idxs.item(), 0]])
+        #idxs = torch.argmax(prob)
+        idxs = torch.multinomial(prob, num_samples=1, replacement=True)
+        acts_n = samples[torch.arange(samples.size(0)).unsqueeze(-1), idxs].squeeze(1)
         action = self.normalizer["action"].unnormalize(acts_n)
-        x = action[:, 0] * np.cos(action[:, 1])
-        y = action[:, 0] * np.sin(action[:, 1])
+        x = action[:,:,0] * torch.cos(action[:,:,1])
+        y = action[:,:,0] * torch.sin(action[:,:,1])
 
-        return {'action' : [x, y]}
+        return {'action' : torch.concat([x, y], dim=1).unsqueeze(1)}
 
     def compute_loss(self, batch):
         # Load batch
