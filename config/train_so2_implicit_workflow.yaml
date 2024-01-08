@@ -31,7 +31,7 @@ policy:
   lmax: ${lmax}
   z_dim: ${z_dim}
   num_neg_act_samples: 1024
-  pred_n_iter: 3
+  pred_n_iter: 5
   pred_n_samples: 1024
   dropout: 0.1
 
