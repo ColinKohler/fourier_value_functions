@@ -23,7 +23,7 @@ env_runner:
   num_envs: null
 
 dataset:
-  _target_: irrep_actions.dataset.lowdim_dataset.LowdimDataset
+  _target_: irrep_actions.dataset.pusht_lowdim_dataset.PushTLowdimDataset
   path: data/pusht/pusht_cchi_v7_replay.zarr
   horizon: ${horizon}
   pad_before: ${eval:'${num_obs_steps}-1+${num_latency_steps}'}

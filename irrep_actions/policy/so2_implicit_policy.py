@@ -68,10 +68,13 @@ class SO2ImplicitPolicy(BasePolicy):
         self.energy_mlp = enn.SequentialModule(
             enn.Linear(self.in_type, mid_type),
             enn.FourierPointwise(self.gspace, z_dim, self.G.bl_regular_representation(L=self.Lmax).irreps, type='regular', N=8),
+            #enn.FieldDropout(mid_type, dropout),
             enn.Linear(mid_type, mid_type),
             enn.FourierPointwise(self.gspace, z_dim, self.G.bl_regular_representation(L=self.Lmax).irreps, type='regular', N=8),
+            #enn.FieldDropout(mid_type, dropout),
             enn.Linear(mid_type, mid_type),
             enn.FourierPointwise(self.gspace, z_dim, self.G.bl_regular_representation(L=self.Lmax).irreps, type='regular', N=8),
+            #enn.FieldDropout(mid_type, dropout),
             enn.Linear(mid_type, out_type),
         )
 
@@ -88,7 +91,7 @@ class SO2ImplicitPolicy(BasePolicy):
         B, N, Ta, Da = action.shape
         B, To, Do = obs.shape
 
-        s = obs.permute(0,2,1).reshape(B, 1, -1).expand(-1, N, -1)
+        s = obs.reshape(B, 1, -1).expand(-1, N, -1)
         s_a = self.in_type(torch.cat([s, action.reshape(B, N, -1)], dim=-1).reshape(B*N, -1))
         #s_a = self.in_type(torch.cat([s, action.reshape(B, N, -1)], dim=-1).reshape(B*N, -1, 1, 1))
         out = self.energy_mlp(s_a)

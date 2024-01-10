@@ -31,7 +31,7 @@ policy:
   lmax: ${lmax}
   z_dim: ${z_dim}
   num_neg_act_samples: 1024
-  pred_n_iter: 5
+  pred_n_iter: 3
   pred_n_samples: 1024
   dropout: 0.1
 
@@ -61,8 +61,9 @@ training:
   seed: 0
   resume: True
   lr_warmup_steps: 500
-  num_epochs: 1000
-  checkpoint_every: 100
+  num_epochs: 100
+  checkpoint_every: 1
+  rollout_every: 1
   val_every: 1
   tqdm_interval_sec: 1.0
 
@@ -74,6 +75,15 @@ logging:
   tags: ["${name}", "${task_name}", "${exp_name}"]
   id: null
   group: null
+
+checkpoint:
+  topk:
+    monitor_key: test_mean_score
+    mode: max
+    k: 5
+    format_str: 'epoch={epoch:04d}-test_mean_score={test_mean_score:.3f}.ckpt'
+  save_last_checkpoint: True
+  save_last_snapshot: False
 
 multi_run:
   run_dir: data/outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_${name}_${task_name}

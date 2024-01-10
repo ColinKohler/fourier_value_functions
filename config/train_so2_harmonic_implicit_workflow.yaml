@@ -62,8 +62,8 @@ training:
   seed: 0
   resume: True
   lr_warmup_steps: 500
-  num_epochs: 1000
-  checkpoint_every: 100
+  num_epochs: 100
+  checkpoint_every: 1
   val_every: 1
   tqdm_interval_sec: 1.0
 

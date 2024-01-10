@@ -1,7 +1,7 @@
 import numpy as np
 from irrep_actions.dataset.base_dataset import BaseDataset
 
-class LowdimDataset(BaseDataset):
+class PushTLowdimDataset(BaseDataset):
     def __init__(
         self,
         path,
@@ -18,6 +18,7 @@ class LowdimDataset(BaseDataset):
             horizon=horizon,
             pad_before=pad_before,
             pad_after=pad_after,
+            buffer_keys=['keypoint', 'state' , 'action'],
             harmonic_action=harmonic_action,
             seed=seed,
             val_ratio=val_ratio,

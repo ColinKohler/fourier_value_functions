@@ -14,10 +14,12 @@ import wandb
 
 from irrep_actions.dataset.base_dataset import BaseDataset
 from irrep_actions.workflow.base_workflow import BaseWorkflow
+from irrep_actions.env_runner.base_runner import BaseRunner
 from irrep_actions.policy.implicit_policy import ImplicitPolicy
 #from irrep_actions.model.modules import PoseForceEncoder
 from irrep_actions.utils import torch_utils
 from irrep_actions.utils.json_logger import JsonLogger
+from irrep_actions.utils.checkpoint_manager import TopKCheckpointManager
 
 OmegaConf.register_new_resolver("eval", eval, replace=True)
 
@@ -46,13 +48,14 @@ class ImplicitWorkflow(BaseWorkflow):
         self.epoch = 0
 
     def run(self):
-        # resume training
+        # Resume training
         if self.config.training.resume:
             lastest_ckpt_path = self.get_checkpoint_path()
             if lastest_ckpt_path.is_file():
                 print(f"Resuming from checkpoint {lastest_ckpt_path}")
                 self.load_checkpoint(path=lastest_ckpt_path)
 
+        # Datasets
         dataset: BaseDataset
         dataset = hydra.utils.instantiate(self.config.task.dataset)
         train_dataloader = DataLoader(dataset, **self.config.dataloader)
@@ -63,6 +66,7 @@ class ImplicitWorkflow(BaseWorkflow):
 
         self.model.set_normalizer(normalizer)
 
+        # LR scheduler
         lr_scheduler = torch_utils.CosineWarmupScheduler(
             self.optimizer,
             self.config.training.lr_warmup_steps,
@@ -71,6 +75,10 @@ class ImplicitWorkflow(BaseWorkflow):
 
         device = torch.device(self.config.training.device)
         self.model.to(device)
+
+        # Env runner
+        env_runner: BaseRunner
+        env_runner = hydra.utils.instantiate(self.config.task.env_runner, output_dir=self.output_dir)
 
         # Setup logging
         wandb_run = wandb.init(
@@ -85,6 +93,13 @@ class ImplicitWorkflow(BaseWorkflow):
         )
         log_path = os.path.join(self.output_dir, "logs.json.txt")
 
+        # Checkpointer
+        topk_manager = TopKCheckpointManager(
+            save_dir=os.path.join(self.output_dir, 'checkpoints'),
+            **self.config.checkpoint.topk
+        )
+
+        # Training
         with JsonLogger(log_path) as json_logger:
             for epoch in range(self.config.training.num_epochs):
                 step_log = dict()
@@ -118,6 +133,7 @@ class ImplicitWorkflow(BaseWorkflow):
                             "train_loss": loss_cpu,
                             "global_step": self.global_step,
                             "epoch": self.epoch,
+                            'lr': lr_scheduler.get_last_lr()[0],
                         }
 
                         is_last_batch = batch_idx == len(train_dataloader) - 1
@@ -133,6 +149,11 @@ class ImplicitWorkflow(BaseWorkflow):
 
                 # Validation
                 self.model.eval()
+
+                if self.epoch % self.config.training.rollout_every == 0:
+                    runner_log = env_runner.run(self.model)
+                    step_log.update(runner_log)
+
                 if self.epoch % self.config.training.val_every == 0:
                     with torch.no_grad():
                         val_losses = list()
@@ -156,7 +177,15 @@ class ImplicitWorkflow(BaseWorkflow):
 
                 # Checkpoint
                 if (self.epoch % self.config.training.checkpoint_every) == 0:
-                    self.save_checkpoint()
+                    if self.config.checkpoint.save_last_checkpoint:
+                        self.save_checkpoint()
+
+                    metric_dict = dict()
+                    for k, v in step_log.items():
+                        metric_dict[k.replace('/', '_')] = v
+                    topk_checkpoint_path = topk_manager.get_ckpt_path(metric_dict)
+                    if topk_checkpoint_path is not None:
+                        self.save_checkpoint(path=topk_checkpoint_path)
 
                 # Bookkeeping
                 wandb_run.log(step_log, step=self.global_step)

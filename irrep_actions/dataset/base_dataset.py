@@ -18,6 +18,7 @@ class BaseDataset(torch.utils.data.Dataset):
         horizon: int = 1,
         pad_before: int = 0,
         pad_after: int = 0,
+        buffer_keys: list = ['obs', 'action'],
         harmonic_action: bool = False,
         seed: int = 0,
         val_ratio: float = 0.0,
@@ -25,9 +26,7 @@ class BaseDataset(torch.utils.data.Dataset):
     ):
         super().__init__()
 
-        self.replay_buffer = ReplayBuffer.copy_from_path(
-            path, keys=['keypoint', 'state', 'action']
-        )
+        self.replay_buffer = ReplayBuffer.copy_from_path(path, keys=buffer_keys)
 
         val_mask = get_val_mask(
             n_episodes=self.replay_buffer.n_episodes,
