@@ -60,8 +60,8 @@ training:
   resume: True
   lr_warmup_steps: 500
   num_epochs: 100
-  checkpoint_every: 1
-  rollout_every: 1 
+  checkpoint_every: 50
+  rollout_every: 50
   val_every: 1
   tqdm_interval_sec: 1.0
 

@@ -42,9 +42,8 @@ class SO2HarmonicImplicitPolicy(BasePolicy):
         self.gspace = gspaces.no_base_space(self.G)
         #self.G = group.cyclic_group(8)
         #self.gspace = gspaces.rot2dOnR2(N=8)
-        self.in_type = enn.FieldType(
-            self.gspace,
-            [self.gspace.irrep(1)] * 20 + [self.gspace.irrep(0)]
+        self.in_type = self.gspace.type(
+            *[self.G.standard_representation()] * 20 + [self.G.trivial_representation]
         )
 
         #out_type = enn.FieldType(self.gspace, [self.gspace.irrep(l) for l in range(self.Lmax+1)])
@@ -62,16 +61,17 @@ class SO2HarmonicImplicitPolicy(BasePolicy):
         #    enn.R2Conv(mid_type, out_type, kernel_size=1),
         #)
 
-        out_type = enn.FieldType(self.gspace, [self.gspace.irrep(l) for l in range(self.Lmax+1)])
-        rho = self.G.spectral_regular_representation(*self.G.bl_regular_representation(L=self.Lmax).irreps, name=None)
+        out_type = self.gspace.type(*[self.G.bl_regular_representation(L=self.Lmax)])
+        #out_type = enn.FieldType(self.gspace, [self.gspace.irrep(l) for l in range(self.Lmax+1)])
+        rho = self.G.spectral_regular_representation(*self.G.bl_irreps(L=self.Lmax))
         mid_type = enn.FieldType(self.gspace, z_dim * [rho])
         self.energy_mlp = enn.SequentialModule(
             enn.Linear(self.in_type, mid_type),
-            enn.FourierPointwise(self.gspace, z_dim, self.G.bl_regular_representation(L=self.Lmax).irreps, type='regular', N=8),
+            enn.FourierPointwise(self.gspace, z_dim, self.G.bl_irreps(L=self.Lmax), type='regular', N=8),
             enn.Linear(mid_type, mid_type),
-            enn.FourierPointwise(self.gspace, z_dim, self.G.bl_regular_representation(L=self.Lmax).irreps, type='regular', N=8),
+            enn.FourierPointwise(self.gspace, z_dim, self.G.bl_irreps(L=self.Lmax), type='regular', N=8),
             enn.Linear(mid_type, mid_type),
-            enn.FourierPointwise(self.gspace, z_dim, self.G.bl_regular_representation(L=self.Lmax).irreps, type='regular', N=8),
+            enn.FourierPointwise(self.gspace, z_dim, self.G.bl_irreps(L=self.Lmax), type='regular', N=8),
             enn.Linear(mid_type, out_type),
         )
 

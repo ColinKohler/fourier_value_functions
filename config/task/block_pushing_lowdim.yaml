@@ -6,7 +6,7 @@ keypoint_dim: 2
 obs_eef_target: True
 
 env_runner: 
-  _target_:  irrep_actions.env_runner.block_push_lowdim_runner.BlockPushLowdimRunner
+  _target_:  irrep_actions.env_runner.block_pushing_lowdim_runner.BlockPushingLowdimRunner
   num_train: 6
   num_train_vis: 2
   train_start_seed: 0
