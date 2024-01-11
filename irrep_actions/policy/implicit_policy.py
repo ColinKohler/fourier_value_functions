@@ -72,7 +72,7 @@ class ImplicitPolicy(BasePolicy):
         )
 
         zero = torch.tensor(0, device=device)
-        resample_std = torch.tensor(3e-2, device=device)
+        resample_std = torch.tensor(3e-1, device=device)
         for i in range(self.pred_n_iter):
             logits = self.forward(nobs, samples)
 
@@ -84,6 +84,7 @@ class ImplicitPolicy(BasePolicy):
                 samples += torch.normal(
                     zero, resample_std, size=samples.shape, device=device
                 )
+                resample_std *= 0.5
 
         idxs = torch.multinomial(prob, num_samples=1, replacement=True)
         acts_n = samples[torch.arange(samples.size(0)).unsqueeze(-1), idxs].squeeze(1)

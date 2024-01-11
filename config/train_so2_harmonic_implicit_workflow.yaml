@@ -20,7 +20,7 @@ num_latency_steps: 0
 past_action_visible: False
 keypoint_visible_rate: 1.0
 z_dim: 256 
-lmax: 3
+lmax: 5
 
 policy:
   _target_: irrep_actions.policy.so2_harmonic_implicit_policy.SO2HarmonicImplicitPolicy
@@ -32,19 +32,19 @@ policy:
   lmax: ${lmax}
   z_dim: ${z_dim}
   num_neg_act_samples: 1024
-  pred_n_iter: 3
+  pred_n_iter: 5
   pred_n_samples: 1024
   dropout: 0.1
 
 dataloader:
-  batch_size: 16
+  batch_size: 32
   num_workers: 1
   shuffle: True
   pin_memory: True
   persistent_workers: False
 
 val_dataloader:
-  batch_size: 16
+  batch_size: 32
   num_workers: 1
   shuffle: False
   pin_memory: True
@@ -52,7 +52,7 @@ val_dataloader:
 
 optimizer:
   _target_: torch.optim.AdamW
-  lr: 1e-4
+  lr: 1e-3
   betas: [0.95, 0.999]
   eps: 1e-8
   weight_decay: 1e-6
@@ -63,8 +63,8 @@ training:
   resume: True
   lr_warmup_steps: 500
   num_epochs: 100
-  checkpoint_every: 1
-  rollout_every: 1
+  checkpoint_every: 5
+  rollout_every: 5
   val_every: 1
   tqdm_interval_sec: 1.0
 
