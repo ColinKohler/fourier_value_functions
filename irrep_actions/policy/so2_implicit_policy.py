@@ -46,7 +46,7 @@ class SO2ImplicitPolicy(BasePolicy):
             [self.gspace.irrep(1)] * 21
         )
 
-        #out_type = enn.FieldType(self.gspace, [self.gspace.regular_repr])
+        #out_type = enn.FieldType(self.gspace, [self.gspace.irrep(0)])
         #mid_type = enn.FieldType(self.gspace, z_dim * [self.gspace.regular_repr])
         #self.energy_mlp = enn.SequentialModule(
         #    enn.R2Conv(self.in_type, mid_type, kernel_size=1),
@@ -59,21 +59,21 @@ class SO2ImplicitPolicy(BasePolicy):
         #    #nn.InnerBatchNorm(out_type),
         #    enn.ReLU(mid_type, inplace=True),
         #    enn.R2Conv(mid_type, out_type, kernel_size=1),
-        #    enn.GroupPooling(out_type)
+        #    #enn.GroupPooling(out_type)
         #)
 
         out_type = enn.FieldType(self.gspace, [self.G.irrep(0)])
-        rho = self.G.spectral_regular_representation(*self.G.bl_regular_representation(L=self.Lmax).irreps, name=None)
+        rho = self.G.spectral_regular_representation(*self.G.bl_irreps(L=self.Lmax), name=None)
         mid_type = enn.FieldType(self.gspace, z_dim * [rho])
         self.energy_mlp = enn.SequentialModule(
             enn.Linear(self.in_type, mid_type),
-            enn.FourierPointwise(self.gspace, z_dim, self.G.bl_regular_representation(L=self.Lmax).irreps, type='regular', N=8),
+            enn.FourierPointwise(self.gspace, z_dim, self.G.bl_irreps(L=self.Lmax), type='regular', N=16),
             #enn.FieldDropout(mid_type, dropout),
             enn.Linear(mid_type, mid_type),
-            enn.FourierPointwise(self.gspace, z_dim, self.G.bl_regular_representation(L=self.Lmax).irreps, type='regular', N=8),
+            enn.FourierPointwise(self.gspace, z_dim, self.G.bl_irreps(L=self.Lmax), type='regular', N=16),
             #enn.FieldDropout(mid_type, dropout),
             enn.Linear(mid_type, mid_type),
-            enn.FourierPointwise(self.gspace, z_dim, self.G.bl_regular_representation(L=self.Lmax).irreps, type='regular', N=8),
+            enn.FourierPointwise(self.gspace, z_dim, self.G.bl_irreps(L=self.Lmax), type='regular', N=16),
             #enn.FieldDropout(mid_type, dropout),
             enn.Linear(mid_type, out_type),
         )

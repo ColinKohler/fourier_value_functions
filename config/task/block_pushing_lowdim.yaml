@@ -31,4 +31,3 @@ dataset:
   seed: 0
   harmonic_action: ${is_harmonic}
   val_ratio: 0.02
-  max_train_episodes: 90
