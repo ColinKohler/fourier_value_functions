@@ -112,9 +112,9 @@ class SO2HarmonicImplicitPolicy(BasePolicy):
         #y = action[:,:,0] * torch.sin(action[:,:,1])
         #action = self.normalizer["action"].unnormalize(torch.concat([x, y], dim=1))
 
-        num_disp = 10
-        num_rot = 360
-        radius = torch.linspace(0, 1, num_disp).to(nobs.device)
+        num_disp = 20
+        num_rot = 180
+        radius = torch.linspace(-1, 1, num_disp).to(nobs.device)
         radius = radius.view(1, -1, 1).repeat(B, 1, num_rot).view(B, -1, 1, 1)
         theta = torch.linspace(0, 2*np.pi, num_rot).to(nobs.device)
         theta = theta.view(1, -1 , 1).repeat(B, 1, num_disp).view(B, -1, 1, 1)
@@ -129,8 +129,8 @@ class SO2HarmonicImplicitPolicy(BasePolicy):
         acts_n = torch.concat([r,t], dim=-1)
         r = self.normalizer["action"].unnormalize(acts_n).cpu().squeeze()[:,0]
 
-        x = r[0] * np.cos(t.cpu().squeeze())
-        y = r[0] * np.sin(t.cpu().squeeze())
+        x = r * np.cos(t.cpu().squeeze()) + 255
+        y = r * np.sin(t.cpu().squeeze()) + 255
 
         return {'action' : torch.concat([x.view(B,1), y.view(B,1)], dim=1).unsqueeze(1)}
 
@@ -166,7 +166,6 @@ class SO2HarmonicImplicitPolicy(BasePolicy):
             low=action_stats["min"], high=action_stats["max"]
         )
         negatives = action_dist.sample((B, self.num_neg_act_samples, Ta)).to(dtype=naction.dtype)
-
 
         # Combine pos and neg samples: (B, train_n_neg+1, Da)
         targets = torch.cat([noisy_actions.unsqueeze(1), negatives], dim=1)

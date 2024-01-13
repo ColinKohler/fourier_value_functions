@@ -30,9 +30,9 @@ policy:
   horizon: ${horizon}
   lmax: ${lmax}
   z_dim: ${z_dim}
-  num_neg_act_samples: 1024
-  pred_n_iter: 5
-  pred_n_samples: 1024
+  num_neg_act_samples: 256
+  pred_n_iter: 3
+  pred_n_samples: 4096
   dropout: 0.1
 
 dataloader:
@@ -61,9 +61,9 @@ training:
   seed: 0
   resume: True
   lr_warmup_steps: 500
-  num_epochs: 100
-  checkpoint_every: 5
-  rollout_every: 5
+  num_epochs: 10000
+  checkpoint_every: 50
+  rollout_every: 50
   val_every: 1
   tqdm_interval_sec: 1.0
 
