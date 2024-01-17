@@ -42,7 +42,7 @@ class PushTEnv(gym.Env):
         self.render_size = render_size
         self.sim_hz = 100
         # Local controller params.
-        self.k_p, self.k_v = 100, 20    # PD control.z
+        self.k_p, self.k_v = 10, 2    # PD control.z
         self.control_hz = self.metadata['video.frames_per_second']
         # legcay set_state for data compatibility
         self.legacy = legacy
@@ -114,9 +114,12 @@ class PushTEnv(gym.Env):
             self.latest_action = action
             for i in range(n_steps):
                 # Step PD control.
-                # self.agent.velocity = self.k_p * (act - self.agent.position)    # P control works too.
-                acceleration = self.k_p * (action - self.agent.position) + self.k_v * (Vec2d(0, 0) - self.agent.velocity)
-                self.agent.velocity += acceleration * dt
+                #breakpoint()
+                self.agent.velocity = self.k_p * ((self.agent.position + action) - self.agent.position)    # P control works too.
+                #self.agent.velocity = self.k_p * (action - self.agent.position)    # P control works too.
+
+                #acceleration = self.k_p * (action - self.agent.position) + self.k_v * (Vec2d(0, 0) - self.agent.velocity)
+                #self.agent.velocity += acceleration * dt
 
                 # Step physics.
                 self.space.step(dt)
@@ -150,9 +153,11 @@ class PushTEnv(gym.Env):
         def act(obs):
             act = None
             mouse_position = pymunk.pygame_util.from_pygame(Vec2d(*pygame.mouse.get_pos()), self.screen)
-            if self.teleop or (mouse_position - self.agent.position).length < 30:
+            if self.teleop or (mouse_position - self.agent.position).length < 5:
                 self.teleop = True
-                act = mouse_position
+                act = (mouse_position - self.agent.position).x, (mouse_position - self.agent.position).y
+            elif self.teleop and (mouse_position - self.agent.position).length < 50:
+                act = (mouse_position - self.agent.position).x, (mouse_position - self.agent.position).y
             return act
         return TeleopAgent(act)
 
@@ -318,7 +323,7 @@ class PushTEnv(gym.Env):
         self.n_contact_points = 0
 
         self.max_score = 50 * 100
-        self.success_threshold = 0.95    # 95% coverage.
+        self.success_threshold = 0.90    # 95% coverage.
 
     def _add_segment(self, a, b, radius):
         shape = pymunk.Segment(self.space.static_body, a, b, radius)

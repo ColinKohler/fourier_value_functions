@@ -32,7 +32,7 @@ def main(output, render_size, control_hz):
     replay_buffer = ReplayBuffer.create_from_path(output, mode='a')
 
     # create PushT env with keypoints
-    kp_kwargs = PushTKeypointsEnv.genenerate_keypoint_manager_params()
+    kp_kwargs = PushTKeypointsEnv.generate_keypoint_manager_params()
     env = PushTKeypointsEnv(render_size=render_size, render_action=False, **kp_kwargs)
     agent = env.teleop_agent()
     clock = pygame.time.Clock()

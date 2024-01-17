@@ -136,17 +136,6 @@ class ImplicitPolicy(BasePolicy):
         ground_truth = (permutation == 0).nonzero()[:, 1].to(naction.device)
 
         energy = self.forward(nobs, targets)
-
-        #energy_data = energy[:,0]
-        #energy_samp = energy[:,1:]
-        #cd_per_example_loss = torch.mean(energy_sampl, axis=1) - torch.mean(energy_data, axis=1)
-
-        #dist = torch.sum()
-        #entropy_temp = 1e-1
-        #entropy = -torch.exp(-entropy_temp * dist)
-        #kl_per_example_loss = torch.mean(-entropy_samp_copy[..., None] - entropy)
-
-        #per_example_loss = cd_per_example_loss + kl_per_example_loss
         loss = F.cross_entropy(energy, ground_truth)
 
         return loss
