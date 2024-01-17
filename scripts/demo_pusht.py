@@ -93,7 +93,7 @@ def main(output, render_size, control_hz):
                 state = np.concatenate([info['pos_agent'], info['block_pose']])
                 # discard unused information such as visibility mask and agent pos
                 # for compatibility
-                keypoint = obs.reshape(2,-1)[0].reshape(-1,2)[:9]
+                keypoint = obs.reshape(2,-1)[0].reshape(-1,2)[:18]
                 data = {
                     'img': img,
                     'state': np.float32(state),

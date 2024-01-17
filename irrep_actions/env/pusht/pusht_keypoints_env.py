@@ -78,7 +78,8 @@ class PushTKeypointsEnv(PushTEnv):
     def _get_obs(self):
         # get keypoints
         obj_map = {
-            'block': self.block
+            'block': self.block,
+            'goal' : self._get_goal_pose_body(self.goal_pose)
         }
         if self.agent_keypoints:
             obj_map['agent'] = self.agent

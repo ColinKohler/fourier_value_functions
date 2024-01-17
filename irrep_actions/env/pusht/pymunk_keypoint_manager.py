@@ -53,12 +53,15 @@ class PymunkKeypointManager:
     def create_from_pusht_env(cls, env, n_block_kps=9, n_agent_kps=3, seed=0, **kwargs):
         rng = np.random.default_rng(seed=seed)
         local_keypoint_map = dict()
-        for name in ['block','agent']:
+        for name in ['block','agent', 'goal']:
             self = env
             self.space = pymunk.Space()
             if name == 'agent':
                 self.agent = obj = self.add_circle((256, 400), 15)
                 n_kps = n_agent_kps
+            elif name == 'goal':
+                self.goal = obj = self.add_tee((256, 300), 0)
+                n_kps = n_block_kps
             else:
                 self.block = obj = self.add_tee((256, 300), 0)
                 n_kps = n_block_kps
