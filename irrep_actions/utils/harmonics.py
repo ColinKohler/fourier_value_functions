@@ -1870,4 +1870,4 @@ def plot_energy_circle(E):
     ax.grid(True)
 
     ax.set_title("Energy", va="bottom")
-    plt.show()
+    plt.savefig('test.png')
