@@ -3,6 +3,7 @@ from gym import spaces
 
 import collections
 import numpy as np
+import numpy.random as npr
 import pygame
 import pymunk
 import pymunk.pygame_util
@@ -315,7 +316,11 @@ class PushTEnv(gym.Env):
         self.agent = self.add_circle((256, 400), 15)
         self.block = self.add_tee((256, 300), 0)
         self.goal_color = pygame.Color('LightGreen')
-        self.goal_pose = np.array([256,256,np.pi/4])  # x, y, theta (in radians)
+        #self.goal_pose = np.array([256,256,np.pi/4])  # x, y, theta (in radians)
+        self.goal_pose = np.array([
+            npr.uniform(220,380),
+            npr.uniform(220,380),
+            npr.uniform(0,2*np.pi)])  # x, y, theta (in radians)
 
         # Add collision handling
         self.collision_handeler = self.space.add_collision_handler(0, 0)
