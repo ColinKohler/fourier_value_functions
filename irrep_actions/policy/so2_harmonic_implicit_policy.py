@@ -41,20 +41,23 @@ class SO2HarmonicImplicitPolicy(BasePolicy):
         self.G = group.so2_group()
         self.gspace = gspaces.no_base_space(self.G)
         self.in_type = self.gspace.type(
-            *[self.G.standard_representation()] * 20 + [self.G.trivial_representation]
+            *[self.G.standard_representation()] * 38 + [self.G.trivial_representation]
         )
 
-        out_type = self.gspace.type(*[self.G.bl_regular_representation(L=self.Lmax)])
-        #out_type = enn.FieldType(self.gspace, [self.gspace.irrep(l) for l in range(self.Lmax+1)])
+        #out_type = self.gspace.type(*[self.G.bl_regular_representation(L=self.Lmax)])
+        out_type = enn.FieldType(self.gspace, [self.gspace.irrep(l) for l in range(self.Lmax+1)])
         rho = self.G.spectral_regular_representation(*self.G.bl_irreps(L=self.Lmax))
         mid_type = enn.FieldType(self.gspace, z_dim * [rho])
         self.energy_mlp = enn.SequentialModule(
             enn.Linear(self.in_type, mid_type),
             enn.FourierPointwise(self.gspace, z_dim, self.G.bl_irreps(L=self.Lmax), type='regular', N=16),
+            enn.FieldDropout(mid_type, dropout),
             enn.Linear(mid_type, mid_type),
             enn.FourierPointwise(self.gspace, z_dim, self.G.bl_irreps(L=self.Lmax), type='regular', N=16),
+            enn.FieldDropout(mid_type, dropout),
             enn.Linear(mid_type, mid_type),
             enn.FourierPointwise(self.gspace, z_dim, self.G.bl_irreps(L=self.Lmax), type='regular', N=16),
+            enn.FieldDropout(mid_type, dropout),
             enn.Linear(mid_type, out_type),
         )
 
@@ -73,6 +76,7 @@ class SO2HarmonicImplicitPolicy(BasePolicy):
         return torch.bmm(W.view(-1, 1, self.Lmax * 2 + 1), B)
 
     def get_action(self, obs, device):
+        obs['obs'] -= 255
         nobs = self.normalizer["obs"].normalize(obs['obs'])
         Do = self.obs_dim
         Da = self.action_dim
@@ -81,56 +85,65 @@ class SO2HarmonicImplicitPolicy(BasePolicy):
         B = nobs.shape[0]
 
         # Sample actions: (B, num_samples, Ta, Da)
-        #action_stats = self.get_action_stats()
-        #action_dist = torch.distributions.Uniform(
-        #   low=action_stats["min"], high=action_stats["max"]
-        #)
-        #samples = action_dist.sample((B, self.pred_n_samples, Ta)).to(
-        #   dtype=nobs.dtype
-        #)
+        action_stats = self.get_action_stats()
+        action_dist = torch.distributions.Uniform(
+           #low=action_stats["min"], high=action_stats["max"]
+           low=torch.tensor([-1, -1.]).to(nobs.device), high=torch.tensor([1, 1.]).to(nobs.device)
+        )
+        samples = action_dist.sample((B, self.pred_n_samples, Ta)).to(
+           dtype=nobs.dtype
+        )
 
-        #zero = torch.tensor(0, device=device)
-        #resample_std = torch.tensor(3e-2, device=device)
-        #for i in range(self.pred_n_iter):
-        #    W = self.forward(nobs, samples[:,:,:,0].unsqueeze(3))
-        #    logits = self.get_energy(W.view(-1, W.size(2)), samples[:,:,:,1].view(-1, 1))
-        #    logits = logits.view(B, self.pred_n_samples)
+        zero = torch.tensor(0, device=device)
+        resample_std = torch.tensor(3e-3, device=device)
+        for i in range(self.pred_n_iter):
+            W = self.forward(nobs, samples[:,:,:,0].unsqueeze(3))
+            theta = self.normalizer['action'].unnormalize(samples)[:,:,0,1]
+            logits = self.get_energy(W.view(-1, W.size(2)), theta.view(-1, 1))
+            logits = logits.view(B, self.pred_n_samples)
 
+            prob = torch.softmax(logits, dim=-1)
+
+            if i < (self.pred_n_iter - 1):
+                idxs = torch.multinomial(prob, self.pred_n_samples, replacement=True)
+                samples = samples[torch.arange(samples.size(0)).unsqueeze(-1), idxs]
+                samples += torch.normal(
+                    zero, resample_std, size=samples.shape, device=device
+                )
+                samples = torch.clamp(samples, -1, 1)
+                resample_std *= 0.5
+
+        idxs = torch.multinomial(prob, num_samples=1, replacement=True)
+        acts_n = samples[torch.arange(samples.size(0)).unsqueeze(-1), idxs].squeeze(1)
+        action = self.normalizer["action"].unnormalize(acts_n)
+        x = action[:,:,0] * torch.cos(action[:,:,1])
+        y = action[:,:,0] * torch.sin(action[:,:,1])
+
+        #num_disp = 200
+        #num_rot = 360
+        #radius = torch.linspace(-1, 1, num_disp).to(nobs.device)
+        #radius = radius.view(1, -1, 1).repeat(B, 1, 1).view(B, -1, 1, 1)
+        #theta = torch.linspace(0, 2*np.pi, num_rot).to(nobs.device)
+        #theta = theta.view(1, -1 , 1).repeat(B, 1, 1).view(B, -1, 1, 1)
+        #W = self.forward(nobs, radius)
+        #energy = list()
+        #for i in range(num_disp):
+        #    w = W[:,i].view(B,1,-1).repeat(1,num_rot,1)
+        #    logits = self.get_energy(w.view(-1, W.size(2)), theta.view(-1, 1))
+        #    logits = logits.view(B, -1)
         #    prob = torch.softmax(logits, dim=-1)
+        #    energy.append(logits.cpu())
+        #ee = torch.tensor([e.tolist() for e in energy]).permute(1,0,2)
+        #inds = torch.argmax(ee.reshape(B,-1), dim=1)
+        #idxs = torch.tensor([divmod(idx.item(), ee.shape[-1]) for idx in inds])
 
-        #    if i < (self.pred_n_iter - 1):
-        #        idxs = torch.multinomial(prob, self.pred_n_samples, replacement=True)
-        #        samples = samples[torch.arange(samples.size(0)).unsqueeze(-1), idxs]
-        #        samples += torch.normal(
-        #            zero, resample_std, size=samples.shape, device=device
-        #        )
+        #r = radius[torch.arange(B), idxs[:,0]]
+        #t = theta[torch.arange(B), idxs[:,1]]
+        #acts_n = torch.concat([r,t], dim=-1)
+        #r = self.normalizer["action"].unnormalize(acts_n).cpu().squeeze()[:,0]
 
-        #idxs = torch.multinomial(prob, num_samples=1, replacement=True)
-        #acts_n = samples[torch.arange(samples.size(0)).unsqueeze(-1), idxs].squeeze(1)
-        ##action = self.normalizer["action"].unnormalize(acts_n)
-        #x = action[:,:,0] * torch.cos(action[:,:,1])
-        #y = action[:,:,0] * torch.sin(action[:,:,1])
-        #action = self.normalizer["action"].unnormalize(torch.concat([x, y], dim=1))
-
-        num_disp = 20
-        num_rot = 180
-        radius = torch.linspace(-1, 1, num_disp).to(nobs.device)
-        radius = radius.view(1, -1, 1).repeat(B, 1, num_rot).view(B, -1, 1, 1)
-        theta = torch.linspace(0, 2*np.pi, num_rot).to(nobs.device)
-        theta = theta.view(1, -1 , 1).repeat(B, 1, num_disp).view(B, -1, 1, 1)
-        W = self.forward(nobs, radius)
-        logits = self.get_energy(W.view(-1, W.size(2)), theta.view(-1, 1))
-        logits = logits.view(B, -1)
-        prob = torch.softmax(logits, dim=-1)
-        idxs = torch.argmax(prob, dim=-1)
-
-        r = radius[torch.arange(B), idxs]
-        t = theta[torch.arange(B), idxs]
-        acts_n = torch.concat([r,t], dim=-1)
-        r = self.normalizer["action"].unnormalize(acts_n).cpu().squeeze()[:,0]
-
-        x = r * np.cos(t.cpu().squeeze()) + 255
-        y = r * np.sin(t.cpu().squeeze()) + 255
+        #x = r * np.cos(t.cpu().squeeze())
+        #y = r * np.sin(t.cpu().squeeze())
 
         return {'action' : torch.concat([x.view(B,1), y.view(B,1)], dim=1).unsqueeze(1)}
 

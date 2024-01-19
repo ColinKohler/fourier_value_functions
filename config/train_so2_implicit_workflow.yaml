@@ -18,7 +18,7 @@ num_action_steps: 1
 num_latency_steps: 0
 past_action_visible: False
 keypoint_visible_rate: 1.0
-z_dim: 256
+z_dim: 512
 lmax: 5
 
 policy:
@@ -61,7 +61,7 @@ training:
   seed: 0
   resume: True
   lr_warmup_steps: 500
-  num_epochs: 10000
+  num_epochs: 1000
   checkpoint_every: 50
   rollout_every: 50
   val_every: 1

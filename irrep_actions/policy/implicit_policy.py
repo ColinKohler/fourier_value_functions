@@ -34,10 +34,9 @@ class ImplicitPolicy(BasePolicy):
         in_action_channels = action_dim * num_action_steps
         in_obs_channels = obs_dim * num_obs_steps
         in_channels = in_action_channels + in_obs_channels
-        mid_channels = 1024
+        mid_channels = z_dim
         out_channels = 1
 
-        #self.encoder = encoder
         self.energy_mlp = MLP(
             [in_channels, mid_channels, mid_channels, mid_channels, out_channels], dropout=dropout, act_out=False
         )
@@ -55,6 +54,7 @@ class ImplicitPolicy(BasePolicy):
         return out.reshape(B, N)
 
     def get_action(self, obs, device):
+        obs['obs'] -= 255
         nobs = self.normalizer['obs'].normalize(obs['obs'])
         Do = self.obs_dim
         Da = self.action_dim
