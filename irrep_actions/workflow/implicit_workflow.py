@@ -155,25 +155,24 @@ class ImplicitWorkflow(BaseWorkflow):
                     step_log.update(runner_log)
 
                 if self.epoch % self.config.training.val_every == 0:
-                    with torch.no_grad():
-                        val_losses = list()
-                        with tqdm(
-                            val_dataloader,
-                            desc=f"Validation epoch {self.epoch}",
-                            leave=False,
-                            mininterval=self.config.training.tqdm_interval_sec,
-                        ) as tepoch:
-                            for batch_idx, batch in enumerate(tepoch):
-                                batch = torch_utils.dict_apply(
-                                    batch, lambda x: x.to(device, non_blocking=True)
-                                )
+                    val_losses = list()
+                    with tqdm(
+                        val_dataloader,
+                        desc=f"Validation epoch {self.epoch}",
+                        leave=False,
+                        mininterval=self.config.training.tqdm_interval_sec,
+                    ) as tepoch:
+                        for batch_idx, batch in enumerate(tepoch):
+                            batch = torch_utils.dict_apply(
+                                batch, lambda x: x.to(device, non_blocking=True)
+                            )
 
-                                # Compute loss
-                                loss = self.model.compute_loss(batch)
-                                val_losses.append(loss)
+                            # Compute loss
+                            loss = self.model.compute_loss(batch)
+                            val_losses.append(loss)
 
-                                if len(val_losses) > 0:
-                                    step_log["val_loss"] = loss
+                            if len(val_losses) > 0:
+                                step_log["val_loss"] = loss
 
                 # Checkpoint
                 if (self.epoch % self.config.training.checkpoint_every) == 0:

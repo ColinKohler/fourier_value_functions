@@ -13,6 +13,7 @@ from irrep_actions.model.layers import SO2MLP
 from irrep_actions.utils.normalizer import LinearNormalizer
 from irrep_actions.utils import torch_utils
 from irrep_actions.policy.base_policy import BasePolicy
+from irrep_actions.utils import mcmc
 
 
 class SO2ImplicitPolicy(BasePolicy):
@@ -84,30 +85,29 @@ class SO2ImplicitPolicy(BasePolicy):
         action_dist = torch.distributions.Uniform(
             low=action_stats["min"], high=action_stats["max"]
         )
-        samples = action_dist.sample((B, self.pred_n_samples, Ta)).to(
+        actions = action_dist.sample((B, self.pred_n_samples, Ta)).to(
             dtype=nobs.dtype
         )
 
-        zero = torch.tensor(0, device=device)
-        resample_std = torch.tensor(3e-1, device=device)
-        for i in range(self.pred_n_iter):
-            logits = self.forward(nobs, samples)
+        # Optimize actions
+        if False:
+            action_probs, actions = mcmc.iterative_dfo(
+                self,
+                nobs,
+                actions,
+                [action_stats['min'], action_stats['max']],
+            )
+        else:
+            action_probs, actions = mcmc.langevin_actions(
+                self,
+                nobs,
+                actions,
+                [action_stats['min'], action_stats['max']],
+            )
 
-            prob = torch.softmax(logits, dim=-1)
+        actions = self.normalizer["action"].unnormalize(actions)
 
-            if i < (self.pred_n_iter - 1):
-                idxs = torch.multinomial(prob, self.pred_n_samples, replacement=True)
-                samples = samples[torch.arange(samples.size(0)).unsqueeze(-1), idxs]
-                samples += torch.normal(
-                    zero, resample_std, size=samples.shape, device=device
-                )
-                resample_std *= 0.5
-
-        idxs = torch.multinomial(prob, num_samples=1, replacement=True)
-        acts_n = samples[torch.arange(samples.size(0)).unsqueeze(-1), idxs].squeeze(1)
-        action = self.normalizer["action"].unnormalize(acts_n)
-
-        return {'action' : action}
+        return {'action' : actions}
 
     def compute_loss(self, batch):
         # Load batch

@@ -9,6 +9,7 @@ from irrep_actions.model.layers import MLP
 from irrep_actions.utils.normalizer import LinearNormalizer
 from irrep_actions.utils import torch_utils
 from irrep_actions.policy.base_policy import BasePolicy
+from irrep_actions.utils import mcmc
 
 
 class ImplicitPolicy(BasePolicy):
@@ -72,13 +73,22 @@ class ImplicitPolicy(BasePolicy):
         )
 
         # Optimize actions
-        action_probs, actions = mcmc.iterative_dfo(
-            self,
-            nobs,
-            actions,
-            [action_stats['min'], action_stats['max']],
-        )
+        if False:
+            action_probs, actions = mcmc.iterative_dfo(
+                self,
+                nobs,
+                actions,
+                [action_stats['min'], action_stats['max']],
+            )
+        else:
+            action_probs, actions = mcmc.langevin_actions(
+                self,
+                nobs,
+                actions,
+                [action_stats['min'], action_stats['max']],
+            )
 
+        actions = self.normalizer["action"].unnormalize(actions)
         return {'action' : actions}
 
     def compute_loss(self, batch):
