@@ -13,6 +13,7 @@ from irrep_actions.model.layers import SO2MLP
 from irrep_actions.utils.normalizer import LinearNormalizer
 from irrep_actions.utils import torch_utils
 from irrep_actions.utils import harmonics
+from irrep_actions.utils import mcmc
 from irrep_actions.policy.base_policy import BasePolicy
 
 
@@ -87,63 +88,38 @@ class SO2HarmonicImplicitPolicy(BasePolicy):
         # Sample actions: (B, num_samples, Ta, Da)
         action_stats = self.get_action_stats()
         action_dist = torch.distributions.Uniform(
-           #low=action_stats["min"], high=action_stats["max"]
-           low=torch.tensor([-1, -1.]).to(nobs.device), high=torch.tensor([1, 1.]).to(nobs.device)
+           low=action_stats["min"], high=action_stats["max"]
         )
-        samples = action_dist.sample((B, self.pred_n_samples, Ta)).to(
+        actions = action_dist.sample((B, self.pred_n_samples, Ta)).to(
            dtype=nobs.dtype
         )
 
-        zero = torch.tensor(0, device=device)
-        resample_std = torch.tensor(3e-3, device=device)
-        for i in range(self.pred_n_iter):
-            W = self.forward(nobs, samples[:,:,:,0].unsqueeze(3))
-            theta = self.normalizer['action'].unnormalize(samples)[:,:,0,1]
-            logits = self.get_energy(W.view(-1, W.size(2)), theta.view(-1, 1))
-            logits = logits.view(B, self.pred_n_samples)
+        # Optimize actions
+        if False:
+            action_probs, actions = mcmc.iterative_dfo(
+                self,
+                nobs,
+                actions,
+                [action_stats['min'], action_stats['max']],
+                harmonic_actions=True,
+                lmax=self.Lmax,
+                normalizer=self.normalizer,
+                iteration_std=0.03
+            )
+        else:
+            action_probs, actions = mcmc.langevin_actions(
+                self,
+                nobs,
+                actions,
+                [action_stats['min'], action_stats['max']],
+                harmonic_actions=True,
+                lmax=self.Lmax,
+                normalizer=self.normalizer,
+            )
 
-            prob = torch.softmax(logits, dim=-1)
-
-            if i < (self.pred_n_iter - 1):
-                idxs = torch.multinomial(prob, self.pred_n_samples, replacement=True)
-                samples = samples[torch.arange(samples.size(0)).unsqueeze(-1), idxs]
-                samples += torch.normal(
-                    zero, resample_std, size=samples.shape, device=device
-                )
-                samples = torch.clamp(samples, -1, 1)
-                resample_std *= 0.5
-
-        idxs = torch.multinomial(prob, num_samples=1, replacement=True)
-        acts_n = samples[torch.arange(samples.size(0)).unsqueeze(-1), idxs].squeeze(1)
-        action = self.normalizer["action"].unnormalize(acts_n)
-        x = action[:,:,0] * torch.cos(action[:,:,1])
-        y = action[:,:,0] * torch.sin(action[:,:,1])
-
-        #num_disp = 200
-        #num_rot = 360
-        #radius = torch.linspace(-1, 1, num_disp).to(nobs.device)
-        #radius = radius.view(1, -1, 1).repeat(B, 1, 1).view(B, -1, 1, 1)
-        #theta = torch.linspace(0, 2*np.pi, num_rot).to(nobs.device)
-        #theta = theta.view(1, -1 , 1).repeat(B, 1, 1).view(B, -1, 1, 1)
-        #W = self.forward(nobs, radius)
-        #energy = list()
-        #for i in range(num_disp):
-        #    w = W[:,i].view(B,1,-1).repeat(1,num_rot,1)
-        #    logits = self.get_energy(w.view(-1, W.size(2)), theta.view(-1, 1))
-        #    logits = logits.view(B, -1)
-        #    prob = torch.softmax(logits, dim=-1)
-        #    energy.append(logits.cpu())
-        #ee = torch.tensor([e.tolist() for e in energy]).permute(1,0,2)
-        #inds = torch.argmax(ee.reshape(B,-1), dim=1)
-        #idxs = torch.tensor([divmod(idx.item(), ee.shape[-1]) for idx in inds])
-
-        #r = radius[torch.arange(B), idxs[:,0]]
-        #t = theta[torch.arange(B), idxs[:,1]]
-        #acts_n = torch.concat([r,t], dim=-1)
-        #r = self.normalizer["action"].unnormalize(acts_n).cpu().squeeze()[:,0]
-
-        #x = r * np.cos(t.cpu().squeeze())
-        #y = r * np.sin(t.cpu().squeeze())
+        actions = self.normalizer["action"].unnormalize(actions)
+        x = actions[:,:,0] * torch.cos(actions[:,:,1])
+        y = actions[:,:,0] * torch.sin(actions[:,:,1])
 
         return {'action' : torch.concat([x.view(B,1), y.view(B,1)], dim=1).unsqueeze(1)}
 

@@ -1,10 +1,14 @@
 import torch
+from irrep_actions.utils import harmonics
 
 def iterative_dfo(
     policy,
     obs,
     actions,
     action_dist,
+    harmonic_actions=False,
+    normalizer=None,
+    lmax=None,
     temp=1.0,
     num_iterations=3,
     iteration_std=0.33,
@@ -17,7 +21,13 @@ def iterative_dfo(
     resample_std = torch.tensor(iteration_std, device=device)
 
     for i in range(num_iterations):
-        logits = policy.forward(obs, actions)
+        if harmonic_actions:
+            W = policy.forward(obs, actions[:,:,:,0].unsqueeze(3))
+            theta = normalizer['action'].unnormalize(actions)[:,:,0,1]
+            logits = harmonics.get_energy(W.view(-1, W.size(2)), theta.view(-1, 1), lmax).view(B, -1)
+        else:
+            logits = policy.forward(obs, actions)
+
         log_probs = logits / temp
         probs = torch.softmax(logits, dim=-1)
 
@@ -50,6 +60,9 @@ def langevin_actions(
     use_polynomial_rate=True,
     sampler_stepsize_final=1e-5,
     sampler_stepsize_power=2.0,
+    harmonic_actions=False,
+    normalizer=None,
+    lmax=None,
 ):
     """ Langevin MCMC  """
     B = actions.size(0)
@@ -79,7 +92,10 @@ def langevin_actions(
             policy,
             obs,
             actions,
-            apply_exp
+            apply_exp,
+            harmonic_actions=harmonic_actions,
+            normalizer=normalizer,
+            lmax=lmax
         )
 
         if grad_clip is not None:
@@ -95,20 +111,29 @@ def langevin_actions(
 
         actions = actions - delta_actions
         actions = torch.clamp(actions, action_dist[0], action_dist[1])
+        actions = actions.detach()
 
         stepsize = scheduler.get_rate(step + 1)
 
-    actions = actions.detach()
-    logits = policy.forward(obs, actions)
+    if harmonic_actions:
+        W = policy.forward(obs, actions[:,:,:,0].unsqueeze(3))
+        theta = normalizer['action'].unnormalize(actions)[:,:,0,1]
+        logits = harmonics.get_energy(W.view(-1, W.size(2)), theta.view(-1, 1), lmax).view(obs.size(0), -1)
+    else:
+        logits = policy.forward(obs, actions)
+
     probs = torch.softmax(logits, dim=-1)
-    idxs = torch.multinomial(probs, num_samples=1, replacement=True)
-    actions = actions[torch.arange(B).unsqueeze(-1), idxs].squeeze(1)
 
     return probs, actions
 
-def gradient_wrt_action(policy, obs, actions, apply_exp):
+def gradient_wrt_action(policy, obs, actions, apply_exp, harmonic_actions=False, normalizer=None, lmax=None):
     actions.requires_grad_()
-    energy = policy.forward(obs, actions)
+    if harmonic_actions:
+        W = policy.forward(obs, actions[:,:,:,0].unsqueeze(3))
+        theta = normalizer['action'].unnormalize(actions)[:,:,0,1]
+        energy = harmonics.get_energy(W.view(-1, W.size(2)), theta.view(-1, 1), lmax).view(obs.size(0), -1)
+    else:
+        energy = policy.forward(obs, actions)
 
     if apply_exp:
         energy = torch.exp(energy)
@@ -116,7 +141,10 @@ def gradient_wrt_action(policy, obs, actions, apply_exp):
     # Get energy gradient wrt action
     de_dact = torch.autograd.grad(energy.sum(), actions, create_graph=True)[0]
 
-    return de_dact.detach(), energy
+    return de_dact, energy
+
+def compute_grad_norm(de_dact):
+    return torch.linalg.norm(de_dact, dim=1, ord=float('inf'))
 
 class PolynomialScheduler(object):
     def __init__(self, init, final, power, num_steps):

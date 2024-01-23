@@ -88,7 +88,10 @@ class ImplicitPolicy(BasePolicy):
                 [action_stats['min'], action_stats['max']],
             )
 
+        idxs = torch.multinomial(action_probs, num_samples=1, replacement=True)
+        actions = actions[torch.arange(B).unsqueeze(-1), idxs].squeeze(1)
         actions = self.normalizer["action"].unnormalize(actions)
+
         return {'action' : actions}
 
     def compute_loss(self, batch):
@@ -125,6 +128,13 @@ class ImplicitPolicy(BasePolicy):
         negatives = action_dist.sample((B, self.num_neg_act_samples, Ta)).to(
             dtype=naction.dtype
         )
+        if True:
+            _, negatives = mcmc.langevin_actions(
+                self,
+                nobs,
+                negatives,
+                [action_stats['min'], action_stats['max']],
+            )
 
         # Combine pos and neg samples: (B, train_n_neg+1, Ta, Da)
         targets = torch.cat([noisy_actions.unsqueeze(1), negatives], dim=1)
@@ -146,9 +156,25 @@ class ImplicitPolicy(BasePolicy):
         #kl_per_example_loss = torch.mean(-entropy_samp_copy[..., None] - entropy)
 
         #per_example_loss = cd_per_example_loss + kl_per_example_loss
-        loss = F.cross_entropy(energy, ground_truth)
+        ebm_loss = F.cross_entropy(energy, ground_truth)
 
-        return loss
+        de_dact, _ = mcmc.gradient_wrt_action(
+            self,
+            nobs,
+            targets.detach(),
+            True,
+        )
+        grad_norm = mcmc.compute_grad_norm(de_dact).view(B,-1)
+        grad_norm = grad_norm - 1.0
+        grad_norm = torch.clamp(grad_norm, 0., 1e10)
+        grad_norm = grad_norm ** 2
+        grad_loss = torch.mean(grad_norm)
+        loss = ebm_loss + grad_loss
+
+        if torch.any(torch.isnan(loss)):
+            breakpoint()
+
+        return loss, ebm_loss, grad_loss
 
     def get_action_stats(self):
         action_stats = self.normalizer["action"].get_output_stats()

@@ -4,6 +4,9 @@ import torch
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 
+def get_energy(W, theta, lmax):
+    B = circular_harmonics(lmax, theta)
+    return torch.bmm(W.view(-1, 1, lmax * 2 + 1), B)
 
 def convert_action_to_harmonics(action):
     r = np.sqrt(action[:, 0] ** 2 + action[:, 1] ** 2)
