@@ -7,10 +7,10 @@ keypoint_dim: 2
 env_runner:
   _target_: irrep_actions.env_runner.pusht_keypoints_runner.PushTKeypointsRunner
   keypoint_visible_rate: ${keypoint_visible_rate}
-  num_train: 2
+  num_train: 6
   num_train_vis: 2
   train_start_seed: 0
-  num_test: 10
+  num_test: 20
   num_test_vis: 4
   test_start_seed: 100000
   max_steps: 300
@@ -24,7 +24,7 @@ env_runner:
 
 dataset:
   _target_: irrep_actions.dataset.pusht_lowdim_dataset.PushTLowdimDataset
-  path: data/pusht_delta_diff_goal_100
+  path: data/pusht_delta_10_remove_no_op
   horizon: ${horizon}
   pad_before: ${eval:'${num_obs_steps}-1+${num_latency_steps}'}
   pad_after: ${eval:'${num_action_steps}-1'}

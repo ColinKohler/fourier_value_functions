@@ -5,7 +5,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Normal
 
-from irrep_actions.model.layers import MLP
 from irrep_actions.utils.normalizer import LinearNormalizer
 from irrep_actions.utils import torch_utils
 from irrep_actions.policy.base_policy import BasePolicy
@@ -15,53 +14,40 @@ from irrep_actions.utils import mcmc
 class ImplicitPolicy(BasePolicy):
     def __init__(
         self,
+        energy_model,
         obs_dim,
         action_dim,
         num_obs_steps,
         num_action_steps,
-        horizon,
-        z_dim,
+        action_sampling,
         num_neg_act_samples,
         pred_n_iter,
         pred_n_samples,
-        dropout,
-        #encoder,
+        harmonic_actions,
     ):
-        super().__init__(obs_dim, action_dim, num_obs_steps, num_action_steps, horizon, z_dim)
+        super().__init__(obs_dim, action_dim, num_obs_steps, num_action_steps)
+        self.action_sampling = action_sampling
         self.num_neg_act_samples = num_neg_act_samples
         self.pred_n_iter = pred_n_iter
         self.pred_n_samples = pred_n_samples
+        self.harmonic_actions = harmonic_actions
 
-        in_action_channels = action_dim * num_action_steps
-        in_obs_channels = obs_dim * num_obs_steps
-        in_channels = in_action_channels + in_obs_channels
-        mid_channels = z_dim
-        out_channels = 1
-
-        self.energy_mlp = MLP(
-            [in_channels, mid_channels, mid_channels, mid_channels, out_channels], dropout=dropout, act_out=False
-        )
-
+        self.energy_model = energy_model
         self.apply(torch_utils.init_weights)
 
-    def forward(self, obs, action):
-        B, N, Ta, Da = action.shape
-        B, To, Do = obs.shape
-
-        s = obs.reshape(B, 1, -1).expand(-1, N, -1)
-        s_a = torch.cat([s, action.reshape(B, N, -1)], dim=-1).reshape(B*N, -1)
-        out = self.energy_mlp(s_a)
-
-        return out.reshape(B, N)
-
     def get_action(self, obs, device):
-        obs['obs'] -= 255
+        B = obs['obs'].shape[0]
+
+        y_obs = (obs['obs'].reshape(-1,19,2)[:,:,0] - 255.0)
+        x_obs = (obs['obs'].reshape(-1,19,2)[:,:,1] - 255.0) * -1.
+        new_d = torch.concatenate((x_obs.unsqueeze(-1), y_obs.unsqueeze(-1)), dim=-1).view(B, 2, 38)
+        #obs['obs'] = new_d - 255
+
         nobs = self.normalizer['obs'].normalize(obs['obs'])
         Do = self.obs_dim
         Da = self.action_dim
         To = self.num_obs_steps
         Ta = self.num_action_steps
-        B = nobs.shape[0]
 
         # Sample actions: (B, num_samples, Ta, Da)
         action_stats = self.get_action_stats()
@@ -72,27 +58,84 @@ class ImplicitPolicy(BasePolicy):
             dtype=nobs.dtype
         )
 
+        #num_disp = 100
+        #num_rot = 45
+        #mag = torch.linspace(action_stats['min'][0].item(), action_stats['max'][0].item(), num_disp)
+        #mag = (
+        #    mag.view(1, -1, 1)
+        #    .repeat(
+        #        B,
+        #        1,
+        #        num_rot,
+        #    )
+        #    .view(B, -1, 1, 1)
+        #).to(device)
+        #theta = torch.linspace(action_stats['min'][1].item(), action_stats['max'][1].item(), num_rot)
+        #theta = theta.view(1, 1, -1).repeat(B, num_disp, 1).view(-1, 1).to(device)
+        #actions = torch.concatenate((mag, theta.view(B, -1, 1, 1)), dim=-1)
+
         # Optimize actions
-        if False:
-            action_probs, actions = mcmc.iterative_dfo(
-                self,
-                nobs,
-                actions,
-                [action_stats['min'], action_stats['max']],
-            )
+        if False:#self.harmonic_actions:
+            num_disp = 100
+            num_rot = 45
+            mag = torch.linspace(action_stats['min'][0].item(), action_stats['max'][0].item(), num_disp)
+            mag = (
+                mag.view(1, -1, 1)
+                .repeat(
+                    B,
+                    1,
+                    num_rot,
+                )
+                .view(B, -1, 1, 1)
+            ).to(device)
+            theta = torch.linspace(0, 2*np.pi, num_rot)
+            theta = theta.view(1, 1, -1).repeat(B, num_disp, 1).view(-1, 1).to(device)
+            logits = self.energy_model(nobs, mag, theta)
+            action_probs = torch.softmax(logits, dim=-1)
+            actions = torch.concatenate((mag, theta.view(B, -1, 1, 1)), dim=-1)
         else:
-            action_probs, actions = mcmc.langevin_actions(
-                self,
-                nobs,
-                actions,
-                [action_stats['min'], action_stats['max']],
-            )
+            if self.action_sampling == 'dfo':
+                action_probs, actions = mcmc.iterative_dfo(
+                    self.energy_model,
+                    nobs,
+                    actions,
+                    [action_stats['min'], action_stats['max']],
+                    harmonic_actions=self.harmonic_actions,
+                    normalizer=self.normalizer
+                )
+            elif self.action_sampling == 'langevin':
+                action_probs, actions = mcmc.langevin_actions(
+                    self.energy_model,
+                    nobs,
+                    actions,
+                    [action_stats['min'], action_stats['max']],
+                    num_iterations=100,
+                    harmonic_actions=self.harmonic_actions,
+                    normalizer=self.normalizer
+                )
+            else:
+                raise ValueError('Invalid action sampling suggested.')
 
-        idxs = torch.multinomial(action_probs, num_samples=1, replacement=True)
+        #idxs = torch.multinomial(action_probs, num_samples=1, replacement=True)
+        idxs = torch.argmax(action_probs, dim=-1).unsqueeze(-1)
+        #from irrep_actions.utils import harmonics
+        #breakpoint()
         actions = actions[torch.arange(B).unsqueeze(-1), idxs].squeeze(1)
-        actions = self.normalizer["action"].unnormalize(actions)
 
-        return {'action' : actions}
+        if self.harmonic_actions:
+            mag = self.normalizer["action"].unnormalize(actions)[:,:,0]
+            theta = self.normalizer["action"].unnormalize(actions)[:,:,1]
+            #theta = actions[:,:,1]
+            x = mag * torch.cos(theta)
+            y = mag * torch.sin(theta)
+            actions = torch.concat([x.view(B,1), y.view(B,1)], dim=1).unsqueeze(1)
+        else:
+            actions = self.normalizer["action"].unnormalize(actions)
+
+        x_act = actions[:,:,0]
+        y_act = actions[:,:,1] * -1
+        new_act = torch.concatenate((x_act, y_act), dim=-1).view(B,1,2)
+        return {'action' : new_act}
 
     def compute_loss(self, batch):
         # Load batch
@@ -128,13 +171,18 @@ class ImplicitPolicy(BasePolicy):
         negatives = action_dist.sample((B, self.num_neg_act_samples, Ta)).to(
             dtype=naction.dtype
         )
-        if True:
+        if self.action_sampling == 'langevin':
+            self.energy_model.eval()
             _, negatives = mcmc.langevin_actions(
-                self,
+                self.energy_model,
                 nobs,
                 negatives,
                 [action_stats['min'], action_stats['max']],
+                num_iterations=100,
+                harmonic_actions=self.harmonic_actions,
+                normalizer=self.normalizer
             )
+            self.energy_model.train()
 
         # Combine pos and neg samples: (B, train_n_neg+1, Ta, Da)
         targets = torch.cat([noisy_actions.unsqueeze(1), negatives], dim=1)
@@ -143,8 +191,17 @@ class ImplicitPolicy(BasePolicy):
         permutation = torch.rand(targets.size(0), targets.size(1)).argsort(dim=1)
         targets = targets[torch.arange(targets.size(0)).unsqueeze(-1), permutation]
         ground_truth = (permutation == 0).nonzero()[:, 1].to(naction.device)
+        one_hot = F.one_hot(ground_truth, num_classes=self.num_neg_act_samples+1).float()
 
-        energy = self.forward(nobs, targets)
+        if self.harmonic_actions:
+            mag = targets[:,:,:,0].unsqueeze(3)
+            theta = self.normalizer["action"].unnormalize(targets)[:,:,0,1]
+            energy = self.energy_model(nobs, mag, theta)
+        else:
+            energy = self.energy_model(nobs, targets)
+
+        probs = F.log_softmax(energy, dim=1)
+        ebm_loss = F.kl_div(probs, one_hot, reduction='batchmean')
 
         #energy_data = energy[:,0]
         #energy_samp = energy[:,1:]
@@ -156,23 +213,25 @@ class ImplicitPolicy(BasePolicy):
         #kl_per_example_loss = torch.mean(-entropy_samp_copy[..., None] - entropy)
 
         #per_example_loss = cd_per_example_loss + kl_per_example_loss
-        ebm_loss = F.cross_entropy(energy, ground_truth)
+        #ebm_loss = F.cross_entropy(energy, ground_truth)
 
-        de_dact, _ = mcmc.gradient_wrt_action(
-            self,
-            nobs,
-            targets.detach(),
-            True,
-        )
-        grad_norm = mcmc.compute_grad_norm(de_dact).view(B,-1)
-        grad_norm = grad_norm - 1.0
-        grad_norm = torch.clamp(grad_norm, 0., 1e10)
-        grad_norm = grad_norm ** 2
-        grad_loss = torch.mean(grad_norm)
-        loss = ebm_loss + grad_loss
-
-        if torch.any(torch.isnan(loss)):
-            breakpoint()
+        if self.action_sampling == 'langevin':
+            de_dact, _ = mcmc.gradient_wrt_action(
+                self.energy_model,
+                nobs,
+                targets.detach(),
+                harmonic_actions=self.harmonic_actions,
+                normalizer=self.normalizer
+            )
+            grad_norm = mcmc.compute_grad_norm(de_dact).view(B,-1)
+            grad_norm = grad_norm - 1.0
+            grad_norm = torch.clamp(grad_norm, 0., 1e3)
+            grad_norm = grad_norm ** 2
+            grad_loss = torch.mean(grad_norm)
+            loss = ebm_loss + grad_loss
+        else:
+            grad_loss = torch.Tensor([0])
+            loss = ebm_loss
 
         return loss, ebm_loss, grad_loss
 

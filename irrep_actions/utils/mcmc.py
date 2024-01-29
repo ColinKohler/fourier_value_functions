@@ -1,4 +1,5 @@
 import torch
+import math
 from irrep_actions.utils import harmonics
 
 def iterative_dfo(
@@ -22,9 +23,9 @@ def iterative_dfo(
 
     for i in range(num_iterations):
         if harmonic_actions:
-            W = policy.forward(obs, actions[:,:,:,0].unsqueeze(3))
-            theta = normalizer['action'].unnormalize(actions)[:,:,0,1]
-            logits = harmonics.get_energy(W.view(-1, W.size(2)), theta.view(-1, 1), lmax).view(B, -1)
+            mag = actions[:,:,:,0].unsqueeze(3)
+            theta = normalizer["action"].unnormalize(actions)[:,:,0,1]
+            logits = policy(obs, mag, theta)
         else:
             logits = policy.forward(obs, actions)
 
@@ -40,9 +41,6 @@ def iterative_dfo(
             actions = torch.clamp(actions, action_dist[0], action_dist[1])
             resample_std *= 0.5
 
-    idxs = torch.multinomial(probs, num_samples=1, replacement=True)
-    actions = actions[torch.arange(B).unsqueeze(-1), idxs].squeeze(1)
-
     return probs, actions
 
 def langevin_actions(
@@ -56,7 +54,6 @@ def langevin_actions(
     noise_scale=1.0,
     grad_clip=None,
     delta_action_clip=0.1,
-    apply_exp=True,
     use_polynomial_rate=True,
     sampler_stepsize_final=1e-5,
     sampler_stepsize_power=2.0,
@@ -83,8 +80,8 @@ def langevin_actions(
         )
 
     # Langevin step updates
-    zero = torch.tensor(0, device=policy.device)
-    noise_scale = torch.tensor(noise_scale, device=policy.device)
+    zero = torch.tensor(0, device=obs.device)
+    noise_scale = torch.tensor(noise_scale, device=obs.device)
     for step in range(num_iterations):
         langevin_lambda = 1.0
 
@@ -92,7 +89,6 @@ def langevin_actions(
             policy,
             obs,
             actions,
-            apply_exp,
             harmonic_actions=harmonic_actions,
             normalizer=normalizer,
             lmax=lmax
@@ -102,11 +98,11 @@ def langevin_actions(
             de_dact = torch.clamp(de_dact, -grad_clip, grad_clip)
 
         gradient_scale = 0.5
-        de_dact = gradient_scale * langevin_lambda * de_dact
-        de_dact += torch.normal(
+        noise = torch.normal(
             zero, langevin_lambda * noise_scale, size=de_dact.shape, device=de_dact.device
         )
-        delta_actions = stepsize * de_dact
+        #delta_actions = stepsize * de_dact + math.sqrt(2 * stepsize) * noise
+        delta_actions = stepsize * (gradient_scale * langevin_lambda * de_dact + noise)
         delta_actions = torch.clamp(delta_actions, -delta_action_clip, delta_action_clip)
 
         actions = actions - delta_actions
@@ -126,20 +122,23 @@ def langevin_actions(
 
     return probs, actions
 
-def gradient_wrt_action(policy, obs, actions, apply_exp, harmonic_actions=False, normalizer=None, lmax=None):
-    actions.requires_grad_()
-    if harmonic_actions:
-        W = policy.forward(obs, actions[:,:,:,0].unsqueeze(3))
-        theta = normalizer['action'].unnormalize(actions)[:,:,0,1]
-        energy = harmonics.get_energy(W.view(-1, W.size(2)), theta.view(-1, 1), lmax).view(obs.size(0), -1)
-    else:
-        energy = policy.forward(obs, actions)
+def gradient_wrt_action(policy, obs, actions, harmonic_actions=False, normalizer=None, lmax=None):
+    #assert not torch.is_grad_enabled()
 
-    if apply_exp:
-        energy = torch.exp(energy)
+    #if harmonic_actions:
+    #    W = policy.forward(obs, actions[:,:,:,0].unsqueeze(3))
+    #    theta = normalizer['action'].unnormalize(actions)[:,:,0,1]
+    #    energy = harmonics.get_energy(W.view(-1, W.size(2)), theta.view(-1, 1), lmax).view(obs.size(0), -1)
+    #else:
+    energy = policy.forward(obs, actions)
+    def Ex_sum(actions):
+        energy = policy.forward(obs, actions)
+        return energy.sum()
 
     # Get energy gradient wrt action
-    de_dact = torch.autograd.grad(energy.sum(), actions, create_graph=True)[0]
+    with torch.set_grad_enabled(True):
+        #de_dact1 = torch.autograd.grad(energy.sum(), actions, create_graph=True)[0]
+        de_dact = torch.autograd.functional.jacobian(Ex_sum, actions) * -1.0
 
     return de_dact, energy
 

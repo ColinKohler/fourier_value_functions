@@ -69,9 +69,19 @@ class BaseDataset(torch.utils.data.Dataset):
 
     def get_normalizer(self, mode="limits", **kwargs):
         data = self._sample_to_data(self.replay_buffer)
-        data['obs'] -= 255
+        x_obs = (data['obs'].reshape(-1,19,2)[:,:,0] - 255.0)
+        y_obs = (data['obs'].reshape(-1,19,2)[:,:,1] - 255.0) * -1
+        new_d = np.concatenate((x_obs[..., np.newaxis], y_obs[..., np.newaxis]), axis=-1).reshape(-1, 38)
+        #data['obs'] = new_d - 255
+
+        x_act = data['action'][:,0]
+        y_act = data['action'][:,1] * -1
+        new_act = np.concatenate((x_act[..., np.newaxis], y_act[..., np.newaxis]), axis=-1).reshape(-1, 2)
+        data['action'] = new_act
+
         if self.harmonic_action:
             data["action"] = harmonics.convert_action_to_harmonics(data["action"])
+
         normalizer = LinearNormalizer()
         normalizer.fit(data=data, last_n_dims=1, mode=mode, **kwargs)
         return normalizer
@@ -82,7 +92,15 @@ class BaseDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         sample = self.sampler.sample_sequence(idx)
         data = self._sample_to_data(sample)
-        data['obs'] -= 255
+        x_obs = (data['obs'].reshape(-1,19,2)[:,:,0] - 255.0)
+        y_obs = (data['obs'].reshape(-1,19,2)[:,:,1] - 255.0) * -1.0
+        new_d = np.concatenate((x_obs[..., np.newaxis], y_obs[..., np.newaxis]), axis=-1).reshape(-1, 38)
+        #data['obs'] = new_d - 255
+
+        x_act = data['action'][:,0]
+        y_act = data['action'][:,1] * -1
+        new_act = np.concatenate((x_act[..., np.newaxis], y_act[..., np.newaxis]), axis=-1).reshape(-1, 2)
+        data['action'] = new_act
 
         if self.harmonic_action:
             data["action"] = harmonics.convert_action_to_harmonics(data["action"])

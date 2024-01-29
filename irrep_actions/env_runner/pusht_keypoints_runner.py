@@ -40,8 +40,6 @@ class PushTKeypointsRunner(BaseRunner):
         num_envs = None
     ):
         super().__init__(output_dir)
-        num_train=2
-        num_test=10
         num_envs = num_train + num_test if num_envs is None else num_evs
 
         env_num_obs_steps = num_obs_steps + num_latency_steps
@@ -103,7 +101,7 @@ class PushTKeypointsRunner(BaseRunner):
 
         # Testing
         for i in range(num_test):
-            seed = test_start_seed + 1
+            seed = test_start_seed + i
             enable_render = i < num_test_vis
 
             def init_fn(env, seed=seed, enable_render=enable_render):
@@ -194,7 +192,8 @@ class PushTKeypointsRunner(BaseRunner):
 
                 obs_dict = dict_apply(obs_dict, lambda x: torch.from_numpy(x).to(device))
 
-                action_dict = policy.get_action(obs_dict, device)
+                with torch.no_grad():
+                    action_dict = policy.get_action(obs_dict, device)
                 action_dict = dict_apply(action_dict, lambda x: x.to('cpu').numpy())
                 action = action_dict['action'][:, self.num_latency_steps:]
 

@@ -12,11 +12,11 @@ from typing import Optional
 from omegaconf import OmegaConf
 import wandb
 
+from irrep_actions.model.energy_mlp import EnergyMLP
 from irrep_actions.dataset.base_dataset import BaseDataset
 from irrep_actions.workflow.base_workflow import BaseWorkflow
 from irrep_actions.env_runner.base_runner import BaseRunner
 from irrep_actions.policy.implicit_policy import ImplicitPolicy
-#from irrep_actions.model.modules import PoseForceEncoder
 from irrep_actions.utils import torch_utils
 from irrep_actions.utils.json_logger import JsonLogger
 from irrep_actions.utils.checkpoint_manager import TopKCheckpointManager
@@ -36,10 +36,11 @@ class ImplicitWorkflow(BaseWorkflow):
         npr.seed(seed)
         random.seed(seed)
 
-        #self.encoder: PoseForceEncoder
-        #self.encoder = hydra.utils.instantiate(config.encoder)
+        energy_model: EnergyMLP
+        energy_model = hydra.utils.instantiate(config.energy_mlp)
+
         self.model: ImplicitPolicy
-        self.model = hydra.utils.instantiate(config.policy)#, encoder=self.encoder)
+        self.model = hydra.utils.instantiate(config.policy, energy_model=energy_model)
         self.optimizer = hydra.utils.instantiate(
             config.optimizer, params=self.model.parameters()
         )
@@ -158,25 +159,26 @@ class ImplicitWorkflow(BaseWorkflow):
 
                 if self.epoch % self.config.training.val_every == 0:
                     val_losses = list()
-                    with tqdm(
-                        val_dataloader,
-                        desc=f"Validation epoch {self.epoch}",
-                        leave=False,
-                        mininterval=self.config.training.tqdm_interval_sec,
-                    ) as tepoch:
-                        for batch_idx, batch in enumerate(tepoch):
-                            batch = torch_utils.dict_apply(
-                                batch, lambda x: x.to(device, non_blocking=True)
-                            )
+                    with torch.no_grad():
+                        with tqdm(
+                            val_dataloader,
+                            desc=f"Validation epoch {self.epoch}",
+                            leave=False,
+                            mininterval=self.config.training.tqdm_interval_sec,
+                        ) as tepoch:
+                            for batch_idx, batch in enumerate(tepoch):
+                                batch = torch_utils.dict_apply(
+                                    batch, lambda x: x.to(device, non_blocking=True)
+                                )
 
-                            # Compute loss
-                            loss, loss_ebm, loss_grad = self.model.compute_loss(batch)
-                            val_losses.append(loss)
+                                # Compute loss
+                                loss, loss_ebm, loss_grad = self.model.compute_loss(batch)
+                                val_losses.append(loss)
 
-                            if len(val_losses) > 0:
-                                step_log["val_loss"] = loss
-                                step_log["val_loss_ebm"] = loss_ebm
-                                step_log["val_loss_grad"] = loss_grad
+                                if len(val_losses) > 0:
+                                    step_log["val_loss"] = loss
+                                    step_log["val_loss_ebm"] = loss_ebm
+                                    step_log["val_loss_grad"] = loss_grad
 
                 # Checkpoint
                 if (self.epoch % self.config.training.checkpoint_every) == 0:

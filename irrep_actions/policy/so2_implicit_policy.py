@@ -33,43 +33,10 @@ class SO2ImplicitPolicy(BasePolicy):
         #encoder,
     ):
         super().__init__(obs_dim, action_dim, num_obs_steps, num_action_steps, horizon, z_dim)
-        self.Lmax = lmax
         self.num_neg_act_samples = num_neg_act_samples
         self.pred_n_iter = pred_n_iter
         self.pred_n_samples = pred_n_samples
 
-        self.G = group.so2_group()
-        self.gspace = gspaces.no_base_space(self.G)
-        self.in_type = enn.FieldType(
-            self.gspace,
-            [self.gspace.irrep(1)] * 39
-        )
-
-        out_type = enn.FieldType(self.gspace, [self.G.irrep(0)])
-        rho = self.G.spectral_regular_representation(*self.G.bl_irreps(L=self.Lmax), name=None)
-        mid_type = enn.FieldType(self.gspace, z_dim * [rho])
-        self.energy_mlp = enn.SequentialModule(
-            enn.Linear(self.in_type, mid_type),
-            enn.FourierPointwise(self.gspace, z_dim, self.G.bl_irreps(L=self.Lmax), type='regular', N=16),
-            enn.FieldDropout(mid_type, dropout),
-            enn.Linear(mid_type, mid_type),
-            enn.FourierPointwise(self.gspace, z_dim, self.G.bl_irreps(L=self.Lmax), type='regular', N=16),
-            enn.FieldDropout(mid_type, dropout),
-            enn.Linear(mid_type, mid_type),
-            enn.FourierPointwise(self.gspace, z_dim, self.G.bl_irreps(L=self.Lmax), type='regular', N=16),
-            enn.FieldDropout(mid_type, dropout),
-            enn.Linear(mid_type, out_type),
-        )
-
-    def forward(self, obs, action):
-        B, N, Ta, Da = action.shape
-        B, To, Do = obs.shape
-
-        s = obs.reshape(B, 1, -1).expand(-1, N, -1)
-        s_a = self.in_type(torch.cat([s, action.reshape(B, N, -1)], dim=-1).reshape(B*N, -1))
-        out = self.energy_mlp(s_a)
-
-        return out.tensor.reshape(B, N)
 
     def get_action(self, obs, device):
         obs['obs'] -= 255

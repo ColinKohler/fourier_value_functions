@@ -20,6 +20,7 @@ from irrep_actions.policy.base_policy import BasePolicy
 class SO2HarmonicImplicitPolicy(BasePolicy):
     def __init__(
         self,
+        energy_model,
         obs_dim,
         action_dim,
         num_obs_steps,
@@ -33,7 +34,7 @@ class SO2HarmonicImplicitPolicy(BasePolicy):
         dropout,
         #encoder,
     ):
-        super().__init__(obs_dim, action_dim, num_obs_steps, num_action_steps, horizon, z_dim)
+        super().__init__(obs_dim, action_dim, num_obs_steps, num_action_steps)
         self.Lmax = lmax
         self.num_neg_act_samples = num_neg_act_samples
         self.pred_n_iter = pred_n_iter
@@ -95,7 +96,7 @@ class SO2HarmonicImplicitPolicy(BasePolicy):
         )
 
         # Optimize actions
-        if False:
+        if True:
             action_probs, actions = mcmc.iterative_dfo(
                 self,
                 nobs,
@@ -104,7 +105,6 @@ class SO2HarmonicImplicitPolicy(BasePolicy):
                 harmonic_actions=True,
                 lmax=self.Lmax,
                 normalizer=self.normalizer,
-                iteration_std=0.03
             )
         else:
             action_probs, actions = mcmc.langevin_actions(
@@ -117,6 +117,8 @@ class SO2HarmonicImplicitPolicy(BasePolicy):
                 normalizer=self.normalizer,
             )
 
+        idxs = torch.multinomial(action_probs, num_samples=1, replacement=True)
+        actions = actions[torch.arange(B).unsqueeze(-1), idxs].squeeze(1)
         actions = self.normalizer["action"].unnormalize(actions)
         x = actions[:,:,0] * torch.cos(actions[:,:,1])
         y = actions[:,:,0] * torch.sin(actions[:,:,1])
@@ -163,14 +165,19 @@ class SO2HarmonicImplicitPolicy(BasePolicy):
         permutation = torch.rand(targets.size(0), targets.size(1)).argsort(dim=1)
         targets = targets[torch.arange(targets.size(0)).unsqueeze(-1), permutation]
         ground_truth = (permutation == 0).nonzero()[:, 1].to(naction.device)
+        one_hot = F.one_hot(ground_truth, num_classes=self.num_neg_act_samples+1).float()
 
         W = self.forward(nobs, targets[:, :, :, 0].unsqueeze(3))
         theta = self.normalizer['action'].unnormalize(targets)[:,:,0,1]
         energy = self.get_energy(W.view(-1, W.size(2)), theta.view(-1, 1))
         energy = energy.view(B, self.num_neg_act_samples + 1)
-        loss = F.cross_entropy(energy, ground_truth)
+        probs = F.log_softmax(energy, dim=1)
+        ebm_loss = F.kl_div(probs, one_hot, reduction='batchmean')
+        #loss = F.cross_entropy(energy, ground_truth)
+        grad_loss = torch.tensor([0])
+        loss = ebm_loss
 
-        return loss
+        return loss, ebm_loss, grad_loss
 
     def get_action_stats(self):
         action_stats = self.normalizer["action"].get_output_stats()

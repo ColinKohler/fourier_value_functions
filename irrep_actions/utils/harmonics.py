@@ -26,8 +26,8 @@ def circular_harmonics(L, theta):
         ).view(-1, 1)
     ]
     for l in range(1, L + 1):
-        B.append(l * torch.cos(theta) / np.sqrt(np.pi))
-        B.append(l * torch.sin(theta) / np.sqrt(np.pi))
+        B.append(torch.cos(l * theta) / np.sqrt(np.pi))
+        B.append(torch.sin(l * theta) / np.sqrt(np.pi))
 
     return torch.stack(B).permute(1, 0, 2).float()
 
