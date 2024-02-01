@@ -127,17 +127,18 @@ class SO2EnergySkipMLP(nn.Module):
 
 
 class SO2HarmonicEnergyMLP(nn.Module):
-    def __init__(self, in_channels, mid_channels, lmax, dropout):
+    def __init__(self, in_channels, mid_channels, lmax, dropout, num_rot=360):
         super().__init__()
         self.Lmax = lmax
         self.G = group.so2_group()
         self.gspace = gspaces.no_base_space(self.G)
+        self.B = harmonics.circular_harmonics(lmax, torch.linspace(0, 2*torch.pi, num_rot).view(-1,1)).squeeze().permute(1,0)
         self.in_type = self.gspace.type(
             *[self.G.standard_representation()] * in_channels + [self.G.trivial_representation]
         )
 
-        #out_type = self.gspace.type(*[self.G.bl_regular_representation(L=self.Lmax)])
-        out_type = enn.FieldType(self.gspace, [self.gspace.irrep(l) for l in range(self.Lmax+1)])
+        out_type = self.gspace.type(*[self.G.bl_regular_representation(L=self.Lmax)])
+        #out_type = enn.FieldType(self.gspace, [self.gspace.irrep(l) for l in range(self.Lmax+1)])
         rho = self.G.spectral_regular_representation(*self.G.bl_irreps(L=lmax), name=None)
         mid_type = enn.FieldType(self.gspace, mid_channels * [rho])
         self.energy_mlp = enn.SequentialModule(
@@ -163,12 +164,25 @@ class SO2HarmonicEnergyMLP(nn.Module):
         Beta = harmonics.circular_harmonics(self.Lmax, action_theta.view(-1,1))
         return torch.bmm(W.view(-1, 1, self.Lmax * 2 + 1), Beta).view(B,N)
 
+    def get_energy_ball(self, obs, action_magnitude):
+        B, N, Ta, Da = action_magnitude.shape
+        B, To, Do = obs.shape
+
+        s = obs.reshape(B, 1, -1).expand(-1, N, -1)
+        s_a = self.in_type(torch.cat([s, action_magnitude.reshape(B, N, -1)], dim=-1).reshape(B*N, -1))
+        W = self.energy_mlp(s_a).tensor.view(B*N, 1, self.Lmax*2+1)
+        Beta = self.B.view(1,self.Lmax*2+1, 360).repeat(B*N, 1, 1).to(obs.device)
+
+        return torch.bmm(W, Beta).view(B, N, -1)
+
+
 class SO2HarmonicEnergySkipMLP(nn.Module):
-    def __init__(self, in_channels, mid_channels, lmax, dropout):
+    def __init__(self, in_channels, mid_channels, lmax, dropout, num_rot=360):
         super().__init__()
         self.Lmax = 3
         self.G = group.so2_group()
         self.gspace = gspaces.no_base_space(self.G)
+        self.B = harmonics.circular_harmonics(lmax, torch.linspace(0, 2*torch.pi, num_rot).view(-1,1)).squeeze().permute(1,0)
         self.in_type = self.gspace.type(
             *[self.G.standard_representation()] * in_channels + [self.G.trivial_representation]
         )
@@ -176,7 +190,7 @@ class SO2HarmonicEnergySkipMLP(nn.Module):
         #out_type = self.gspace.type(*[self.G.bl_regular_representation(L=self.Lmax)])
         out_type = enn.FieldType(self.gspace, [self.gspace.irrep(l) for l in range(self.Lmax+1)])
 
-        mid_channels_1 = 256
+        mid_channels_1 = mid_channels
         L_1, N_1 = 5, 16
         rho_1 = self.G.spectral_regular_representation(*self.G.bl_irreps(L=L_1), name=None)
         mid_type_1 = enn.FieldType(self.gspace, mid_channels_1 * [rho_1])
@@ -186,7 +200,7 @@ class SO2HarmonicEnergySkipMLP(nn.Module):
             enn.FieldDropout(mid_type_1, dropout),
         )
 
-        mid_channels_2 = 256
+        mid_channels_2 = mid_channels
         L_2, N_2 = 4, 16
         rho_2 = self.G.spectral_regular_representation(*self.G.bl_irreps(L=L_2), name=None)
         mid_type_2 = enn.FieldType(self.gspace, mid_channels_2 * [rho_2])
@@ -196,7 +210,7 @@ class SO2HarmonicEnergySkipMLP(nn.Module):
             enn.FieldDropout(mid_type_2, dropout),
         )
 
-        mid_channels_3 = 256
+        mid_channels_3 = mid_channels
         L_3, N_3 = 3, 16
         rho_3 = self.G.spectral_regular_representation(*self.G.bl_irreps(L=L_3), name=None)
         mid_type_3 = enn.FieldType(self.gspace, mid_channels_3 * [rho_3])
@@ -207,7 +221,7 @@ class SO2HarmonicEnergySkipMLP(nn.Module):
         )
         self.out_in_type = enn.FieldType(
             self.gspace,
-            [self.G.standard_representation()] * in_channels + [self.G.trivial_representation] + mid_channels_1 * [rho_1] + mid_channels_2 * [rho_2] + mid_channels_3 * [rho_3]
+            mid_channels_1 * [rho_1] + mid_channels_2 * [rho_2] + mid_channels_3 * [rho_3]
         )
         self.energy_mlp_out = enn.Linear(self.out_in_type, out_type)
 
@@ -221,8 +235,25 @@ class SO2HarmonicEnergySkipMLP(nn.Module):
         x1 = self.energy_mlp_1(s_a)
         x2 = self.energy_mlp_2(x1)
         x3 = self.energy_mlp_3(x2)
-        x_123 = self.out_in_type(torch.cat([s_a.tensor, x1.tensor, x2.tensor, x3.tensor], dim=-1))
+        x_123 = self.out_in_type(torch.cat([x1.tensor, x2.tensor, x3.tensor], dim=-1))
         W = self.energy_mlp_out(x_123).tensor.view(B, N, -1)
 
         Beta = harmonics.circular_harmonics(self.Lmax, action_theta.view(-1,1))
         return torch.bmm(W.view(-1, 1, self.Lmax * 2 + 1), Beta).view(B,N)
+
+    def get_energy_ball(self, obs, action_magnitude):
+        B, N, Ta, Da = action_magnitude.shape
+        B, To, Do = obs.shape
+
+        s = obs.reshape(B, 1, -1).expand(-1, N, -1)
+        s_a = self.in_type(torch.cat([s, action_magnitude.reshape(B, N, -1)], dim=-1).reshape(B*N, -1))
+
+        x1 = self.energy_mlp_1(s_a)
+        x2 = self.energy_mlp_2(x1)
+        x3 = self.energy_mlp_3(x2)
+        x_123 = self.out_in_type(torch.cat([x1.tensor, x2.tensor, x3.tensor], dim=-1))
+        W = self.energy_mlp_out(x_123).tensor.view(B*N, 1, self.Lmax*2+1)
+
+        Beta = self.B.view(1,self.Lmax*2+1, 360).repeat(B*N, 1, 1).to(obs.device)
+        return torch.bmm(W, Beta).view(B, N, -1)
+

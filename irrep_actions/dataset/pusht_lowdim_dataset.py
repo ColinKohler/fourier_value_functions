@@ -34,8 +34,18 @@ class PushTLowdimDataset(BaseDataset):
             agent_pos], axis=-1
         )
 
+        B = obs.shape[0]
+        Do = obs.shape[-1] // 2
+        x_obs = (obs.reshape(-1,Do,2)[:,:,0] - 255.0)
+        y_obs = (obs.reshape(-1,Do,2)[:,:,1] - 255.0) * -1
+        obs = np.concatenate((x_obs[..., np.newaxis], y_obs[..., np.newaxis]), axis=-1).reshape(B, -1)
+
+        x_act = sample['action'][0]
+        y_act = sample['action'][1] * -1
+        action = np.concatenate((x_act[..., np.newaxis], y_act[..., np.newaxis]), axis=-1).reshape(-1, 2)
+
         data = {
             'obs': obs, # T, D_o
-            "action": sample["action"],  # T, D_a
+            "action": action,  # T, D_a
         }
         return data

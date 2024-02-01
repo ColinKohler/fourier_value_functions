@@ -10,7 +10,7 @@ env_runner:
   num_train: 6
   num_train_vis: 2
   train_start_seed: 0
-  num_test: 20
+  num_test: 50
   num_test_vis: 4
   test_start_seed: 100000
   max_steps: 300

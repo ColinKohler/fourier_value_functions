@@ -1,3 +1,6 @@
+import os
+os.environ["SDL_VIDEODRIVER"] = "dummy"
+
 import gym
 from gym import spaces
 

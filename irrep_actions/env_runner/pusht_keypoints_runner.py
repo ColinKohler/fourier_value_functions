@@ -40,9 +40,6 @@ class PushTKeypointsRunner(BaseRunner):
         num_envs = None
     ):
         super().__init__(output_dir)
-        #num_envs = 25
-        #num_train = 0
-        #num_test = 50
         num_envs = num_train + num_test if num_envs is None else num_evs
 
         env_num_obs_steps = num_obs_steps + num_latency_steps
@@ -184,6 +181,7 @@ class PushTKeypointsRunner(BaseRunner):
 
             done = False
             while not done:
+                B = obs.shape[0]
                 Do = obs.shape[-1] // 2
                 obs_dict = {
                     'obs' : obs[..., :self.num_obs_steps, :Do].astype(np.float32),
@@ -191,12 +189,19 @@ class PushTKeypointsRunner(BaseRunner):
                 }
 
                 if self.past_action and (past_action is not None):
-                    obs_dict['past_action'] = past_action[:, -(self.num_obs_steps-1):].astype(np.float32)
+                    obs['past_action'] = past_action[:, -(self.num_obs_steps-1):].astype(np.float32)
 
                 obs_dict = dict_apply(obs_dict, lambda x: torch.from_numpy(x).to(device))
+                x_obs = (obs_dict['obs'].reshape(B,Do,2)[:,:,0] - 255.0)
+                y_obs = (obs_dict['obs'].reshape(B,Do,2)[:,:,1] - 255.0) * -1.
+                obs_dict['obs'] = torch.concatenate((x_obs.unsqueeze(-1), y_obs.unsqueeze(-1)), dim=-1).view(B, -1).view(B,2,Do)
 
                 with torch.no_grad():
                     action_dict = policy.get_action(obs_dict, device)
+
+                x_act = action_dict['action'][:,:,0]
+                y_act = action_dict['action'][:,:,1] * -1
+                action_dict['action'] =  torch.concatenate((x_act, y_act), dim=-1).view(B,1,2)
                 action_dict = dict_apply(action_dict, lambda x: x.to('cpu').numpy())
                 action = action_dict['action'][:, self.num_latency_steps:]
 
