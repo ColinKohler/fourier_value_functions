@@ -1,4 +1,5 @@
 import torch
+from torch.nn.utils import spectral_norm
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -8,12 +9,15 @@ from escnn import group
 
 
 class MLP(nn.Module):
-    def __init__(self, hiddens, dropout=0.0, act_out=True):
+    def __init__(self, hiddens, dropout=0.0, act_out=True, spec_norm=False):
         super().__init__()
 
         layers = list()
         for i, (h, h_) in enumerate(zip(hiddens, hiddens[1:])):
-            layers.append(nn.Linear(h, h_))
+            if spec_norm:
+                layers.append(spectral_norm(nn.Linear(h, h_)))
+            else:
+                layers.append(nn.Linear(h, h_))
             is_last_layer = i == len(hiddens) - 2
             if not is_last_layer or act_out:
                 layers.append(nn.LeakyReLU(0.01, inplace=True))

@@ -39,7 +39,7 @@ class PushTKeypointsEnv(PushTEnv):
         Dagentkps = np.prod(local_keypoint_map['agent'].shape)
         Dagentpos = 2
 
-        Do = Dblockkps
+        Do = Dblockkps * 2
         if agent_keypoints:
             # blockkp + agnet_pos
             Do += Dagentkps

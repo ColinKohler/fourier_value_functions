@@ -16,7 +16,7 @@ from irrep_actions.model.energy_mlp import EnergyMLP
 from irrep_actions.dataset.base_dataset import BaseDataset
 from irrep_actions.workflow.base_workflow import BaseWorkflow
 from irrep_actions.env_runner.base_runner import BaseRunner
-from irrep_actions.policy.implicit_policy import ImplicitPolicy
+from irrep_actions.policy.diffusion_policy import DiffusionPolicy
 from irrep_actions.utils import torch_utils
 from irrep_actions.utils.json_logger import JsonLogger
 from irrep_actions.utils.checkpoint_manager import TopKCheckpointManager
@@ -24,7 +24,7 @@ from irrep_actions.utils.checkpoint_manager import TopKCheckpointManager
 OmegaConf.register_new_resolver("eval", eval, replace=True)
 
 
-class ImplicitWorkflow(BaseWorkflow):
+class DiffusionWorkflow(BaseWorkflow):
     include_keys = ["global_step", "epoch"]
 
     def __init__(self, config: OmegaConf, output_dir: Optional[str] = None):

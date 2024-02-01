@@ -18,7 +18,7 @@ num_action_steps: 1
 num_latency_steps: 0
 past_action_visible: False
 keypoint_visible_rate: 1.0
-z_dim: 256 
+z_dim: 1024
 
 policy:
   _target_: irrep_actions.policy.implicit_policy.ImplicitPolicy
@@ -26,22 +26,28 @@ policy:
   action_dim: ${action_dim}
   num_obs_steps: ${num_obs_steps}
   num_action_steps: ${num_action_steps}
-  horizon: ${horizon}
-  z_dim: ${z_dim}
+  action_sampling: 'dfo'
   num_neg_act_samples: 256
   pred_n_iter: 3
-  pred_n_samples: 16384
+  pred_n_samples: 4096
+  harmonic_actions: False
+
+energy_mlp:
+  _target_: irrep_actions.model.energy_mlp.EnergyMLP
+  in_channels: ${eval:'${action_dim}*${num_action_steps} + ${obs_dim}*${num_obs_steps}'}
+  mid_channels: ${z_dim}
   dropout: 0.1
+  spec_norm: False
 
 dataloader:
-  batch_size: 32
+  batch_size: 128
   num_workers: 1
   shuffle: True
   pin_memory: True
   persistent_workers: False
 
 val_dataloader:
-  batch_size: 32
+  batch_size: 128
   num_workers: 1
   shuffle: False
   pin_memory: True
@@ -59,7 +65,7 @@ training:
   seed: 0
   resume: True
   lr_warmup_steps: 500
-  num_epochs: 10000
+  num_epochs: 1000
   checkpoint_every: 50
   rollout_every: 50
   val_every: 1

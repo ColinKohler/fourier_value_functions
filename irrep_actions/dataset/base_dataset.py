@@ -2,6 +2,7 @@ import copy
 from typing import Dict
 import torch
 import numpy as np
+import numpy.random as npr
 import pickle
 
 from irrep_actions.dataset.replay_buffer import ReplayBuffer
@@ -27,6 +28,7 @@ class BaseDataset(torch.utils.data.Dataset):
         super().__init__()
 
         self.replay_buffer = ReplayBuffer.copy_from_path(path, keys=buffer_keys)
+        self.augment = True
 
         val_mask = get_val_mask(
             n_episodes=self.replay_buffer.n_episodes,
@@ -69,8 +71,20 @@ class BaseDataset(torch.utils.data.Dataset):
 
     def get_normalizer(self, mode="limits", **kwargs):
         data = self._sample_to_data(self.replay_buffer)
+        x_obs = (data['obs'].reshape(-1,19,2)[:,:,0] - 255.0)
+        y_obs = (data['obs'].reshape(-1,19,2)[:,:,1] - 255.0) * -1
+        new_d = np.concatenate((x_obs[..., np.newaxis], y_obs[..., np.newaxis]), axis=-1).reshape(-1, 38)
+        data['obs'] = new_d
+        #data['obs'] = new_d - 255
+
+        x_act = data['action'][:,0]
+        y_act = data['action'][:,1] * -1
+        new_act = np.concatenate((x_act[..., np.newaxis], y_act[..., np.newaxis]), axis=-1).reshape(-1, 2)
+        data['action'] = new_act
+
         if self.harmonic_action:
-            data["action"] = harmonics.convert_action_to_harmonics(data["action"] - 255)
+            data["action"] = harmonics.convert_action_to_harmonics(data["action"])
+
         normalizer = LinearNormalizer()
         normalizer.fit(data=data, last_n_dims=1, mode=mode, **kwargs)
         return normalizer
@@ -82,11 +96,30 @@ class BaseDataset(torch.utils.data.Dataset):
         sample = self.sampler.sample_sequence(idx)
         data = self._sample_to_data(sample)
 
+        rot = npr.uniform(0, 2*np.pi)
+        rot = np.array([[np.cos(rot), -np.sin(rot)], [np.sin(rot), np.cos(rot)]])
+
+        x_obs = (data['obs'].reshape(-1,19,2)[:,:,0] - 255.0)
+        y_obs = (data['obs'].reshape(-1,19,2)[:,:,1] - 255.0) * -1.0
+        new_d = np.concatenate((x_obs[..., np.newaxis], y_obs[..., np.newaxis]), axis=-1).reshape(-1, 38)
+        #new_d = np.concatenate((x_obs[..., np.newaxis], y_obs[..., np.newaxis]), axis=-1).reshape(-1, 2)
+        #new_d = (rot @ new_d.T).T.reshape(-1,38)
+        data['obs'] = new_d
+        #data['obs'] = new_d - 255
+
+        x_act = data['action'][:,0]
+        y_act = data['action'][:,1] * -1
+        new_act = np.concatenate((x_act[..., np.newaxis], y_act[..., np.newaxis]), axis=-1).reshape(-1, 2)
+        #new_act = (rot @ new_act.T).T
+        data['action'] = new_act
+
         if self.harmonic_action:
-            data["action"] = harmonics.convert_action_to_harmonics(data["action"] - 255)
+            data["action"] = harmonics.convert_action_to_harmonics(data["action"])
 
         torch_data = torch_utils.dict_apply(data, torch.from_numpy)
-        return self.normalizer.normalize(torch_data)
+        norm_data =  self.normalizer.normalize(torch_data)
+
+        return norm_data
 
     def _sample_to_data(self, sample):
         raise NotImplementedError()

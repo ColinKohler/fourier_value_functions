@@ -1,6 +1,6 @@
 name: pusht_lowdim 
 
-obs_dim: 20 # 9*2 keypoints + 2 state
+obs_dim: 38 # 9*2 keypoints + 2 state
 action_dim: 2
 keypoint_dim: 2
 
@@ -10,7 +10,7 @@ env_runner:
   num_train: 6
   num_train_vis: 2
   train_start_seed: 0
-  num_test: 50
+  num_test: 20
   num_test_vis: 4
   test_start_seed: 100000
   max_steps: 300
@@ -24,10 +24,11 @@ env_runner:
 
 dataset:
   _target_: irrep_actions.dataset.pusht_lowdim_dataset.PushTLowdimDataset
-  path: data/test
+  path: data/pusht_delta_10_remove_no_op
   horizon: ${horizon}
   pad_before: ${eval:'${num_obs_steps}-1+${num_latency_steps}'}
   pad_after: ${eval:'${num_action_steps}-1'}
   seed: 0
   harmonic_action: ${is_harmonic}
   val_ratio: 0.02
+  max_train_episodes: 90

@@ -13,12 +13,14 @@ from irrep_actions.model.layers import SO2MLP
 from irrep_actions.utils.normalizer import LinearNormalizer
 from irrep_actions.utils import torch_utils
 from irrep_actions.utils import harmonics
+from irrep_actions.utils import mcmc
 from irrep_actions.policy.base_policy import BasePolicy
 
 
 class SO2HarmonicImplicitPolicy(BasePolicy):
     def __init__(
         self,
+        energy_model,
         obs_dim,
         action_dim,
         num_obs_steps,
@@ -32,7 +34,7 @@ class SO2HarmonicImplicitPolicy(BasePolicy):
         dropout,
         #encoder,
     ):
-        super().__init__(obs_dim, action_dim, num_obs_steps, num_action_steps, horizon, z_dim)
+        super().__init__(obs_dim, action_dim, num_obs_steps, num_action_steps)
         self.Lmax = lmax
         self.num_neg_act_samples = num_neg_act_samples
         self.pred_n_iter = pred_n_iter
@@ -41,20 +43,23 @@ class SO2HarmonicImplicitPolicy(BasePolicy):
         self.G = group.so2_group()
         self.gspace = gspaces.no_base_space(self.G)
         self.in_type = self.gspace.type(
-            *[self.G.standard_representation()] * 20 + [self.G.trivial_representation]
+            *[self.G.standard_representation()] * 38 + [self.G.trivial_representation]
         )
 
-        out_type = self.gspace.type(*[self.G.bl_regular_representation(L=self.Lmax)])
-        #out_type = enn.FieldType(self.gspace, [self.gspace.irrep(l) for l in range(self.Lmax+1)])
+        #out_type = self.gspace.type(*[self.G.bl_regular_representation(L=self.Lmax)])
+        out_type = enn.FieldType(self.gspace, [self.gspace.irrep(l) for l in range(self.Lmax+1)])
         rho = self.G.spectral_regular_representation(*self.G.bl_irreps(L=self.Lmax))
         mid_type = enn.FieldType(self.gspace, z_dim * [rho])
         self.energy_mlp = enn.SequentialModule(
             enn.Linear(self.in_type, mid_type),
             enn.FourierPointwise(self.gspace, z_dim, self.G.bl_irreps(L=self.Lmax), type='regular', N=16),
+            enn.FieldDropout(mid_type, dropout),
             enn.Linear(mid_type, mid_type),
             enn.FourierPointwise(self.gspace, z_dim, self.G.bl_irreps(L=self.Lmax), type='regular', N=16),
+            enn.FieldDropout(mid_type, dropout),
             enn.Linear(mid_type, mid_type),
             enn.FourierPointwise(self.gspace, z_dim, self.G.bl_irreps(L=self.Lmax), type='regular', N=16),
+            enn.FieldDropout(mid_type, dropout),
             enn.Linear(mid_type, out_type),
         )
 
@@ -73,6 +78,7 @@ class SO2HarmonicImplicitPolicy(BasePolicy):
         return torch.bmm(W.view(-1, 1, self.Lmax * 2 + 1), B)
 
     def get_action(self, obs, device):
+        obs['obs'] -= 255
         nobs = self.normalizer["obs"].normalize(obs['obs'])
         Do = self.obs_dim
         Da = self.action_dim
@@ -81,56 +87,41 @@ class SO2HarmonicImplicitPolicy(BasePolicy):
         B = nobs.shape[0]
 
         # Sample actions: (B, num_samples, Ta, Da)
-        #action_stats = self.get_action_stats()
-        #action_dist = torch.distributions.Uniform(
-        #   low=action_stats["min"], high=action_stats["max"]
-        #)
-        #samples = action_dist.sample((B, self.pred_n_samples, Ta)).to(
-        #   dtype=nobs.dtype
-        #)
+        action_stats = self.get_action_stats()
+        action_dist = torch.distributions.Uniform(
+           low=action_stats["min"], high=action_stats["max"]
+        )
+        actions = action_dist.sample((B, self.pred_n_samples, Ta)).to(
+           dtype=nobs.dtype
+        )
 
-        #zero = torch.tensor(0, device=device)
-        #resample_std = torch.tensor(3e-2, device=device)
-        #for i in range(self.pred_n_iter):
-        #    W = self.forward(nobs, samples[:,:,:,0].unsqueeze(3))
-        #    logits = self.get_energy(W.view(-1, W.size(2)), samples[:,:,:,1].view(-1, 1))
-        #    logits = logits.view(B, self.pred_n_samples)
+        # Optimize actions
+        if True:
+            action_probs, actions = mcmc.iterative_dfo(
+                self,
+                nobs,
+                actions,
+                [action_stats['min'], action_stats['max']],
+                harmonic_actions=True,
+                lmax=self.Lmax,
+                normalizer=self.normalizer,
+            )
+        else:
+            action_probs, actions = mcmc.langevin_actions(
+                self,
+                nobs,
+                actions,
+                [action_stats['min'], action_stats['max']],
+                harmonic_actions=True,
+                lmax=self.Lmax,
+                normalizer=self.normalizer,
+            )
 
-        #    prob = torch.softmax(logits, dim=-1)
-
-        #    if i < (self.pred_n_iter - 1):
-        #        idxs = torch.multinomial(prob, self.pred_n_samples, replacement=True)
-        #        samples = samples[torch.arange(samples.size(0)).unsqueeze(-1), idxs]
-        #        samples += torch.normal(
-        #            zero, resample_std, size=samples.shape, device=device
-        #        )
-
-        #idxs = torch.multinomial(prob, num_samples=1, replacement=True)
-        #acts_n = samples[torch.arange(samples.size(0)).unsqueeze(-1), idxs].squeeze(1)
-        ##action = self.normalizer["action"].unnormalize(acts_n)
-        #x = action[:,:,0] * torch.cos(action[:,:,1])
-        #y = action[:,:,0] * torch.sin(action[:,:,1])
-        #action = self.normalizer["action"].unnormalize(torch.concat([x, y], dim=1))
-
-        num_disp = 20
-        num_rot = 180
-        radius = torch.linspace(-1, 1, num_disp).to(nobs.device)
-        radius = radius.view(1, -1, 1).repeat(B, 1, num_rot).view(B, -1, 1, 1)
-        theta = torch.linspace(0, 2*np.pi, num_rot).to(nobs.device)
-        theta = theta.view(1, -1 , 1).repeat(B, 1, num_disp).view(B, -1, 1, 1)
-        W = self.forward(nobs, radius)
-        logits = self.get_energy(W.view(-1, W.size(2)), theta.view(-1, 1))
-        logits = logits.view(B, -1)
-        prob = torch.softmax(logits, dim=-1)
-        idxs = torch.argmax(prob, dim=-1)
-
-        r = radius[torch.arange(B), idxs]
-        t = theta[torch.arange(B), idxs]
-        acts_n = torch.concat([r,t], dim=-1)
-        r = self.normalizer["action"].unnormalize(acts_n).cpu().squeeze()[:,0]
-
-        x = r * np.cos(t.cpu().squeeze()) + 255
-        y = r * np.sin(t.cpu().squeeze()) + 255
+        idxs = torch.multinomial(action_probs, num_samples=1, replacement=True)
+        actions = actions[torch.arange(B).unsqueeze(-1), idxs].squeeze(1)
+        actions = self.normalizer["action"].unnormalize(actions)
+        x = actions[:,:,0] * torch.cos(actions[:,:,1])
+        y = actions[:,:,0] * torch.sin(actions[:,:,1])
 
         return {'action' : torch.concat([x.view(B,1), y.view(B,1)], dim=1).unsqueeze(1)}
 
@@ -174,14 +165,19 @@ class SO2HarmonicImplicitPolicy(BasePolicy):
         permutation = torch.rand(targets.size(0), targets.size(1)).argsort(dim=1)
         targets = targets[torch.arange(targets.size(0)).unsqueeze(-1), permutation]
         ground_truth = (permutation == 0).nonzero()[:, 1].to(naction.device)
+        one_hot = F.one_hot(ground_truth, num_classes=self.num_neg_act_samples+1).float()
 
         W = self.forward(nobs, targets[:, :, :, 0].unsqueeze(3))
         theta = self.normalizer['action'].unnormalize(targets)[:,:,0,1]
         energy = self.get_energy(W.view(-1, W.size(2)), theta.view(-1, 1))
         energy = energy.view(B, self.num_neg_act_samples + 1)
-        loss = F.cross_entropy(energy, ground_truth)
+        probs = F.log_softmax(energy, dim=1)
+        ebm_loss = F.kl_div(probs, one_hot, reduction='batchmean')
+        #loss = F.cross_entropy(energy, ground_truth)
+        grad_loss = torch.tensor([0])
+        loss = ebm_loss
 
-        return loss
+        return loss, ebm_loss, grad_loss
 
     def get_action_stats(self):
         action_stats = self.normalizer["action"].get_output_stats()
