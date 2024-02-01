@@ -33,7 +33,7 @@ def main(output, render_size, control_hz):
 
     # create PushT env with keypoints
     kp_kwargs = PushTKeypointsEnv.generate_keypoint_manager_params()
-    env = PushTKeypointsEnv(render_size=render_size, render_action=False, **kp_kwargs)
+    env = PushTKeypointsEnv(render_size=render_size, render_action=False, random_goal_pose=True, **kp_kwargs)
     agent = env.teleop_agent()
     clock = pygame.time.Clock()
 
@@ -94,6 +94,8 @@ def main(output, render_size, control_hz):
                 # discard unused information such as visibility mask and agent pos
                 # for compatibility
                 keypoint = obs.reshape(2,-1)[0].reshape(-1,2)[:18]
+                #ap = info['pos_agent'] - 255.0
+                #ap[1] *= -1
                 data = {
                     'img': img,
                     'state': np.float32(state),

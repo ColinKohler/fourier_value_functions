@@ -8,15 +8,17 @@ class PushTImageEnv(PushTEnv):
 
     def __init__(self,
             legacy=False,
-            block_cog=None, 
+            block_cog=None,
             damping=None,
-            render_size=96):
+            render_size=96,
+            random_goal_pose=False):
         super().__init__(
-            legacy=legacy, 
+            legacy=legacy,
             block_cog=block_cog,
             damping=damping,
             render_size=render_size,
-            render_action=False)
+            render_action=False,
+            random_goal_pose=random_goal_pose)
         ws = self.window_size
         self.observation_space = spaces.Dict({
             'image': spaces.Box(
@@ -33,7 +35,7 @@ class PushTImageEnv(PushTEnv):
             )
         })
         self.render_cache = None
-    
+
     def _get_obs(self):
         img = super()._render_frame(mode='rgb_array')
 
@@ -62,5 +64,5 @@ class PushTImageEnv(PushTEnv):
 
         if self.render_cache is None:
             self._get_obs()
-        
+
         return self.render_cache

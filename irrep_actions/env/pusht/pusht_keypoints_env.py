@@ -15,6 +15,7 @@ class PushTKeypointsEnv(PushTEnv):
             draw_keypoints=False,
             reset_to_state=None,
             render_action=True,
+            random_goal_pose=False,
             local_keypoint_map: Dict[str, np.ndarray]=None,
             color_map: Optional[Dict[str, np.ndarray]]=None):
         super().__init__(
@@ -23,7 +24,8 @@ class PushTKeypointsEnv(PushTEnv):
             damping=damping,
             render_size=render_size,
             reset_to_state=reset_to_state,
-            render_action=render_action)
+            render_action=render_action,
+            random_goal_pose=random_goal_pose)
         ws = self.window_size
 
         if local_keypoint_map is None:

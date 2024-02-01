@@ -35,7 +35,8 @@ class PushTEnv(gym.Env):
             block_cog=None, damping=None,
             render_action=True,
             render_size=96,
-            reset_to_state=None
+            reset_to_state=None,
+            random_goal_pose=False,
         ):
         self._seed = None
         self.seed()
@@ -47,6 +48,7 @@ class PushTEnv(gym.Env):
         self.control_hz = self.metadata['video.frames_per_second']
         # legcay set_state for data compatibility
         self.legacy = legacy
+        self.random_goal_pose = random_goal_pose
 
         # agent_pos, block_pos, block_angle
         self.observation_space = spaces.Box(
@@ -157,8 +159,12 @@ class PushTEnv(gym.Env):
             if self.teleop or (mouse_position - self.agent.position).length < 5:
                 self.teleop = True
                 act = (mouse_position - self.agent.position).x, (mouse_position - self.agent.position).y
-            elif self.teleop and (mouse_position - self.agent.position).length < 50:
-                act = (mouse_position - self.agent.position).x, (mouse_position - self.agent.position).y
+
+            if act is not None:
+                act = np.clip(act, -10, 10)
+                if np.all(np.abs(act) < 1):
+                    act = None
+
             return act
         return TeleopAgent(act)
 
@@ -316,13 +322,13 @@ class PushTEnv(gym.Env):
         self.agent = self.add_circle((256, 400), 15)
         self.block = self.add_tee((256, 300), 0)
         self.goal_color = pygame.Color('LightGreen')
-        if True:
-            self.goal_pose = np.array([256,256,np.pi/4])  # x, y, theta (in radians)
-        else:
+        if self.random_goal_pose:
             self.goal_pose = np.array([
                 npr.uniform(220,380),
                 npr.uniform(220,380),
                 npr.uniform(0,2*np.pi)])  # x, y, theta (in radians)
+        else:
+            self.goal_pose = np.array([256,256,np.pi/4])  # x, y, theta (in radians)
 
         # Add collision handling
         self.collision_handeler = self.space.add_collision_handler(0, 0)
