@@ -18,7 +18,7 @@ num_action_steps: 1
 num_latency_steps: 0
 past_action_visible: False
 keypoint_visible_rate: 1.0
-z_dim: 512
+z_dim: 1024
 
 policy:
   _target_: irrep_actions.policy.implicit_policy.ImplicitPolicy
@@ -40,14 +40,14 @@ energy_mlp:
   spec_norm: False
 
 dataloader:
-  batch_size: 256
+  batch_size: 128
   num_workers: 1
   shuffle: True
   pin_memory: True
   persistent_workers: False
 
 val_dataloader:
-  batch_size: 256
+  batch_size: 128
   num_workers: 1
   shuffle: False
   pin_memory: True
@@ -65,7 +65,7 @@ training:
   seed: 0
   resume: True
   lr_warmup_steps: 500
-  num_epochs: 10000
+  num_epochs: 1000
   checkpoint_every: 50
   rollout_every: 50
   val_every: 1

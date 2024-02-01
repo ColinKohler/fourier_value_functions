@@ -40,6 +40,9 @@ class PushTKeypointsRunner(BaseRunner):
         num_envs = None
     ):
         super().__init__(output_dir)
+        #num_envs = 25
+        #num_train = 0
+        #num_test = 50
         num_envs = num_train + num_test if num_envs is None else num_evs
 
         env_num_obs_steps = num_obs_steps + num_latency_steps

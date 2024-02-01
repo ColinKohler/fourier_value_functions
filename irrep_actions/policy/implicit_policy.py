@@ -38,9 +38,10 @@ class ImplicitPolicy(BasePolicy):
     def get_action(self, obs, device):
         B = obs['obs'].shape[0]
 
-        y_obs = (obs['obs'].reshape(-1,19,2)[:,:,0] - 255.0)
-        x_obs = (obs['obs'].reshape(-1,19,2)[:,:,1] - 255.0) * -1.
-        new_d = torch.concatenate((x_obs.unsqueeze(-1), y_obs.unsqueeze(-1)), dim=-1).view(B, 2, 38)
+        x_obs = (obs['obs'].reshape(B,19*2,2)[:,:,0] - 255.0)
+        y_obs = (obs['obs'].reshape(B,19*2,2)[:,:,1] - 255.0) * -1.
+        new_d = torch.concatenate((x_obs.unsqueeze(-1), y_obs.unsqueeze(-1)), dim=-1).view(B, -1).view(B,2,19*2)
+        obs['obs'] = new_d
         #obs['obs'] = new_d - 255
 
         nobs = self.normalizer['obs'].normalize(obs['obs'])
@@ -153,15 +154,24 @@ class ImplicitPolicy(BasePolicy):
         end = start + Ta
         naction = naction[:, start:end]
 
-        # Add noise to positive samples
+        # Add noise to positive samples and observations
         action_noise = torch.normal(
             mean=0,
-            std=1e-4,
+            std=1e-3,
             size=naction.shape,
             dtype=naction.dtype,
             device=naction.device,
         )
         noisy_actions = naction + action_noise
+
+        obs_noise = torch.normal(
+            mean=0,
+            std=1e-3,
+            size=nobs.shape,
+            dtype=nobs.dtype,
+            device=nobs.device
+        )
+        nobs = nobs + obs_noise
 
         # Sample negatives: (B, train_n_neg, Da)
         action_stats = self.get_action_stats()

@@ -66,7 +66,7 @@ training:
   seed: 0
   resume: True
   lr_warmup_steps: 500
-  num_epochs: 10000
+  num_epochs: 1000
   checkpoint_every: 50
   rollout_every: 50
   val_every: 1
