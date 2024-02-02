@@ -37,10 +37,11 @@ class PushTKeypointsRunner(BaseRunner):
         agent_keypoints=False,
         past_action=False,
         tqdm_interval_sec=5.0,
-        num_envs = None
+        num_envs = None,
+        random_goal_pose=False,
     ):
         super().__init__(output_dir)
-        num_envs = num_train + num_test if num_envs is None else num_evs
+        num_envs = num_train + num_test if num_envs is None else num_envs
 
         env_num_obs_steps = num_obs_steps + num_latency_steps
         env_num_action_steps = num_action_steps
@@ -54,6 +55,7 @@ class PushTKeypointsRunner(BaseRunner):
                         legacy=False,
                         keypoint_visible_rate=keypoint_visible_rate,
                         agent_keypoints=agent_keypoints,
+                        random_goal_pose=random_goal_pose,
                         **kp_kwargs
                     ),
                     video_recoder=VideoRecorder.create_h264(

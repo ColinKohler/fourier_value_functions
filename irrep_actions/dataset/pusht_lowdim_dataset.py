@@ -40,8 +40,8 @@ class PushTLowdimDataset(BaseDataset):
         y_obs = (obs.reshape(-1,Do,2)[:,:,1] - 255.0) * -1
         obs = np.concatenate((x_obs[..., np.newaxis], y_obs[..., np.newaxis]), axis=-1).reshape(B, -1)
 
-        x_act = sample['action'][0]
-        y_act = sample['action'][1] * -1
+        x_act = sample['action'][:,0]
+        y_act = sample['action'][:,1] * -1
         action = np.concatenate((x_act[..., np.newaxis], y_act[..., np.newaxis]), axis=-1).reshape(-1, 2)
 
         data = {

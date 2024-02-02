@@ -24,6 +24,8 @@ class ImplicitPolicy(BasePolicy):
         pred_n_iter,
         pred_n_samples,
         harmonic_actions,
+        sample_actions=False,
+        temperature=1.0,
         grad_pen=False,
     ):
         super().__init__(obs_dim, action_dim, num_obs_steps, num_action_steps)
@@ -32,6 +34,8 @@ class ImplicitPolicy(BasePolicy):
         self.pred_n_iter = pred_n_iter
         self.pred_n_samples = pred_n_samples
         self.harmonic_actions = harmonic_actions
+        self.sample_actions = sample_actions
+        self.temperature = temperature
         self.grad_pen = grad_pen
 
         self.energy_model = energy_model
@@ -46,27 +50,31 @@ class ImplicitPolicy(BasePolicy):
         To = self.num_obs_steps
         Ta = self.num_action_steps
 
-        # Sample actions: (B, num_samples, Ta, Da)
         action_stats = self.get_action_stats()
         action_dist = torch.distributions.Uniform(
             low=action_stats["min"], high=action_stats["max"]
         )
-        actions = action_dist.sample((B, self.pred_n_samples, Ta)).to(
-            dtype=nobs.dtype
-        )
 
         # Optimize actions
         if self.harmonic_actions:
-            num_disp = 500
-            mag = torch.linspace(action_stats['min'][0].item(), action_stats['max'][0].item(), num_disp)
+            mag = torch.linspace(action_stats['min'][0].item(), action_stats['max'][0].item(), self.pred_n_samples)
             mag = mag.view(1, -1, 1).repeat(B, 1, 1).view(B, -1, 1, 1).to(device)
-            theta = torch.linspace(0, 2*np.pi, 360).view(1, -1).repeat(B, 1).to(device)
+            theta = torch.linspace(0, 2*np.pi, self.energy_model.num_rot).view(1, -1).repeat(B, 1).to(device)
             logits = self.energy_model.get_energy_ball(nobs, mag)
             action_probs = torch.softmax(logits, dim=-1)
-            flat_indexes = torch.multinomial(action_probs.flatten(start_dim=-2), num_samples=1, replacement=True)
+
+            if self.sample_actions:
+                flat_indexes = torch.multinomial(action_probs.flatten(start_dim=-2), num_samples=1, replacement=True)
+            else:
+                flat_indexes = torch.argmax(action_probs.flatten(start_dim=-2), dim=-1)
             idx = torch.tensor([divmod(idx.item(), action_probs.shape[-1]) for idx in flat_indexes])
             actions = torch.vstack([mag[torch.arange(B),idx[:,0],0,0], theta[torch.arange(B), idx[:,1]]]).permute(1,0).view(B,1,2)
         else:
+            # Sample actions: (B, num_samples, Ta, Da)
+            actions = action_dist.sample((B, self.pred_n_samples, Ta)).to(
+                dtype=nobs.dtype
+            )
+
             if self.action_sampling == 'dfo':
                 action_probs, actions = mcmc.iterative_dfo(
                     self.energy_model,

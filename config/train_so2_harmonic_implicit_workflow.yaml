@@ -30,16 +30,19 @@ policy:
   action_sampling: 'dfo'
   num_neg_act_samples: 256
   pred_n_iter: 3
-  pred_n_samples: 4096
+  pred_n_samples: 5000
   harmonic_actions: True
+  sample_actions: False 
+  temperature: 1.0
   grad_pen: False
 
 energy_mlp:
-  _target_: irrep_actions.model.energy_mlp.SO2HarmonicEnergySkipMLP
+  _target_: irrep_actions.model.energy_mlp.SO2HarmonicEnergyMLP
   in_channels: ${eval:'(${obs_dim}*${num_obs_steps}) // 2'}
   mid_channels: ${z_dim}
   lmax: ${lmax}
   dropout: 0.1
+  num_rot: 360 
 
 dataloader:
   batch_size: 128
@@ -90,7 +93,6 @@ checkpoint:
     format_str: 'epoch={epoch:04d}-test_mean_score={test_mean_score:.3f}.ckpt'
   save_last_checkpoint: True
   save_last_snapshot: False
-
 
 multi_run:
   run_dir: data/outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_${name}_${task_name}

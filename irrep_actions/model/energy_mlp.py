@@ -132,13 +132,14 @@ class SO2HarmonicEnergyMLP(nn.Module):
         self.Lmax = lmax
         self.G = group.so2_group()
         self.gspace = gspaces.no_base_space(self.G)
-        self.B = harmonics.circular_harmonics(lmax, torch.linspace(0, 2*torch.pi, num_rot).view(-1,1)).squeeze().permute(1,0)
+        self.num_rot = num_rot
+        self.B = harmonics.circular_harmonics(lmax, torch.linspace(0, 2*torch.pi, self.num_rot).view(-1,1)).squeeze().permute(1,0)
         self.in_type = self.gspace.type(
             *[self.G.standard_representation()] * in_channels + [self.G.trivial_representation]
         )
 
-        out_type = self.gspace.type(*[self.G.bl_regular_representation(L=self.Lmax)])
-        #out_type = enn.FieldType(self.gspace, [self.gspace.irrep(l) for l in range(self.Lmax+1)])
+        #out_type = self.gspace.type(*[self.G.bl_regular_representation(L=self.Lmax)])
+        out_type = enn.FieldType(self.gspace, [self.gspace.irrep(l) for l in range(self.Lmax+1)])
         rho = self.G.spectral_regular_representation(*self.G.bl_irreps(L=lmax), name=None)
         mid_type = enn.FieldType(self.gspace, mid_channels * [rho])
         self.energy_mlp = enn.SequentialModule(
@@ -171,7 +172,7 @@ class SO2HarmonicEnergyMLP(nn.Module):
         s = obs.reshape(B, 1, -1).expand(-1, N, -1)
         s_a = self.in_type(torch.cat([s, action_magnitude.reshape(B, N, -1)], dim=-1).reshape(B*N, -1))
         W = self.energy_mlp(s_a).tensor.view(B*N, 1, self.Lmax*2+1)
-        Beta = self.B.view(1,self.Lmax*2+1, 360).repeat(B*N, 1, 1).to(obs.device)
+        Beta = self.B.view(1,self.Lmax*2+1, self.num_rot).repeat(B*N, 1, 1).to(obs.device)
 
         return torch.bmm(W, Beta).view(B, N, -1)
 
