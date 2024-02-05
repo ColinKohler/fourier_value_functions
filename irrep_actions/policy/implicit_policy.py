@@ -61,14 +61,15 @@ class ImplicitPolicy(BasePolicy):
             mag = mag.view(1, -1, 1).repeat(B, 1, 1).view(B, -1, 1, 1).to(device)
             theta = torch.linspace(0, 2*np.pi, self.energy_model.num_rot).view(1, -1).repeat(B, 1).to(device)
             logits = self.energy_model.get_energy_ball(nobs, mag)
-            action_probs = torch.softmax(logits, dim=-1)
+            action_probs = torch.softmax(logits/self.temperature, dim=-1)
 
             if self.sample_actions:
                 flat_indexes = torch.multinomial(action_probs.flatten(start_dim=-2), num_samples=1, replacement=True)
             else:
                 flat_indexes = torch.argmax(action_probs.flatten(start_dim=-2), dim=-1)
-            idx = torch.tensor([divmod(idx.item(), action_probs.shape[-1]) for idx in flat_indexes])
-            actions = torch.vstack([mag[torch.arange(B),idx[:,0],0,0], theta[torch.arange(B), idx[:,1]]]).permute(1,0).view(B,1,2)
+            mag_idx = flat_indexes.div(action_probs.shape[-1], rounding_mode='floor')
+            theta_idx = torch.remainder(flat_indexes, action_probs.shape[-1])
+            actions = torch.vstack([mag[torch.arange(B),mag_idx,0,0], theta[torch.arange(B), theta_idx]]).permute(1,0).view(B,1,2)
         else:
             # Sample actions: (B, num_samples, Ta, Da)
             actions = action_dist.sample((B, self.pred_n_samples, Ta)).to(
@@ -153,11 +154,27 @@ class ImplicitPolicy(BasePolicy):
         action_dist = torch.distributions.Uniform(
             low=action_stats["min"], high=action_stats["max"]
         )
-        negatives = action_dist.sample((B, self.num_neg_act_samples, Ta)).to(
-            dtype=naction.dtype
-        )
 
-        if self.action_sampling == 'langevin':
+        if self.harmonic_actions:
+            mag = torch.linspace(action_stats['min'][0].item(), action_stats['max'][0].item(), 1000)
+            mag = mag.view(1, -1, 1).repeat(B, 1, 1).view(B, -1, 1, 1).to(nobs.device)
+            theta = torch.linspace(0, 2*np.pi, self.energy_model.num_rot).view(1, -1).repeat(B, 1).to(nobs.device)
+            with torch.no_grad():
+                logits = self.energy_model.get_energy_ball(nobs, mag)
+            action_probs = torch.softmax(logits/2., dim=-1)
+
+            flat_indexes = torch.multinomial(action_probs.flatten(start_dim=-2), num_samples=self.num_neg_act_samples, replacement=True)
+            mag_idx = flat_indexes.view(-1).div(action_probs.shape[-1], rounding_mode='floor')
+            theta_idx = torch.remainder(flat_indexes.view(-1), action_probs.shape[-1])
+            negatives = torch.vstack([
+                mag.repeat(self.num_neg_act_samples, 1, 1, 1)[torch.arange(B*self.num_neg_act_samples),mag_idx,0,0],
+                theta.repeat(self.num_neg_act_samples, 1)[torch.arange(B*self.num_neg_act_samples), theta_idx]
+            ]).permute(1,0).view(B,self.num_neg_act_samples,Ta,2)
+        elif self.action_sampling == 'langevin':
+            negatives = action_dist.sample((B, self.num_neg_act_samples, Ta)).to(
+                dtype=naction.dtype
+            )
+
             self.energy_model.eval()
             _, negatives = mcmc.langevin_actions(
                 self.energy_model,
@@ -169,6 +186,11 @@ class ImplicitPolicy(BasePolicy):
                 normalizer=self.normalizer
             )
             self.energy_model.train()
+        else:
+            negatives = action_dist.sample((B, self.num_neg_act_samples, Ta)).to(
+                dtype=naction.dtype
+            )
+
 
         # Combine pos and neg samples: (B, train_n_neg+1, Ta, Da)
         targets = torch.cat([noisy_actions.unsqueeze(1), negatives], dim=1)

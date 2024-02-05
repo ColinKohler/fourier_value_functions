@@ -194,8 +194,8 @@ class PushTKeypointsRunner(BaseRunner):
                     obs['past_action'] = past_action[:, -(self.num_obs_steps-1):].astype(np.float32)
 
                 obs_dict = dict_apply(obs_dict, lambda x: torch.from_numpy(x).to(device))
-                x_obs = (obs_dict['obs'].reshape(B,Do,2)[:,:,0] - 255.0)
-                y_obs = (obs_dict['obs'].reshape(B,Do,2)[:,:,1] - 255.0) * -1.
+                x_obs = (obs_dict['obs'].reshape(B,-1,2)[:,:,0] - 255.0)
+                y_obs = (obs_dict['obs'].reshape(B,-1,2)[:,:,1] - 255.0) * -1.
                 obs_dict['obs'] = torch.concatenate((x_obs.unsqueeze(-1), y_obs.unsqueeze(-1)), dim=-1).view(B, -1).view(B,2,Do)
 
                 with torch.no_grad():

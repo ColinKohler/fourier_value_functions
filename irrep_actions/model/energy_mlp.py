@@ -127,7 +127,7 @@ class SO2EnergySkipMLP(nn.Module):
 
 
 class SO2HarmonicEnergyMLP(nn.Module):
-    def __init__(self, in_channels, mid_channels, lmax, dropout, num_rot=360):
+    def __init__(self, in_channels, mid_channels, lmax, dropout, N=32, num_rot=360):
         super().__init__()
         self.Lmax = lmax
         self.G = group.so2_group()
@@ -138,19 +138,18 @@ class SO2HarmonicEnergyMLP(nn.Module):
             *[self.G.standard_representation()] * in_channels + [self.G.trivial_representation]
         )
 
-        #out_type = self.gspace.type(*[self.G.bl_regular_representation(L=self.Lmax)])
         out_type = enn.FieldType(self.gspace, [self.gspace.irrep(l) for l in range(self.Lmax+1)])
         rho = self.G.spectral_regular_representation(*self.G.bl_irreps(L=lmax), name=None)
         mid_type = enn.FieldType(self.gspace, mid_channels * [rho])
         self.energy_mlp = enn.SequentialModule(
             enn.Linear(self.in_type, mid_type),
-            enn.FourierPointwise(self.gspace, mid_channels, self.G.bl_irreps(L=lmax), type='regular', N=16),
+            enn.FourierPointwise(self.gspace, mid_channels, self.G.bl_irreps(L=lmax), type='regular', N=N),
             enn.FieldDropout(mid_type, dropout),
             enn.Linear(mid_type, mid_type),
-            enn.FourierPointwise(self.gspace, mid_channels, self.G.bl_irreps(L=lmax), type='regular', N=16),
+            enn.FourierPointwise(self.gspace, mid_channels, self.G.bl_irreps(L=lmax), type='regular', N=N),
             enn.FieldDropout(mid_type, dropout),
             enn.Linear(mid_type, mid_type),
-            enn.FourierPointwise(self.gspace, mid_channels, self.G.bl_irreps(L=lmax), type='regular', N=16),
+            enn.FourierPointwise(self.gspace, mid_channels, self.G.bl_irreps(L=lmax), type='regular', N=N),
             enn.FieldDropout(mid_type, dropout),
             enn.Linear(mid_type, out_type),
         )
