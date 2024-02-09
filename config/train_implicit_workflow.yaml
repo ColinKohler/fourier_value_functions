@@ -31,6 +31,10 @@ policy:
   pred_n_iter: 3
   pred_n_samples: 4096
   harmonic_actions: False
+  optimize_negatives: False 
+  sample_actions: True 
+  temperature: 1.0
+  grad_pen: False
 
 energy_mlp:
   _target_: irrep_actions.model.energy_mlp.EnergyMLP

@@ -20,6 +20,7 @@ past_action_visible: False
 keypoint_visible_rate: 1.0
 z_dim: 512
 lmax: 3
+N: 16
 
 policy:
   _target_: irrep_actions.policy.implicit_policy.ImplicitPolicy
@@ -32,6 +33,10 @@ policy:
   pred_n_iter: 3
   pred_n_samples: 4096
   harmonic_actions: False
+  optimize_negatives: False 
+  sample_actions: True 
+  temperature: 1.0
+  grad_pen: False
 
 energy_mlp:
   _target_: irrep_actions.model.energy_mlp.SO2EnergyMLP
@@ -39,6 +44,7 @@ energy_mlp:
   mid_channels: ${z_dim}
   lmax: ${lmax}
   dropout: 0.1
+  N: ${N}
 
 dataloader:
   batch_size: 128
