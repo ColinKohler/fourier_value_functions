@@ -24,6 +24,7 @@ class ImplicitPolicy(BasePolicy):
         pred_n_iter,
         pred_n_samples,
         harmonic_actions,
+        optimize_negatives=False,
         sample_actions=False,
         temperature=1.0,
         grad_pen=False,
@@ -34,6 +35,7 @@ class ImplicitPolicy(BasePolicy):
         self.pred_n_iter = pred_n_iter
         self.pred_n_samples = pred_n_samples
         self.harmonic_actions = harmonic_actions
+        self.optimize_negatives = optimize_negatives
         self.sample_actions = sample_actions
         self.temperature = temperature
         self.grad_pen = grad_pen
@@ -60,11 +62,11 @@ class ImplicitPolicy(BasePolicy):
             mag = torch.linspace(action_stats['min'][0].item(), action_stats['max'][0].item(), self.pred_n_samples)
             mag = mag.view(1, -1, 1).repeat(B, 1, 1).view(B, -1, 1, 1).to(device)
             theta = torch.linspace(0, 2*np.pi, self.energy_model.num_rot).view(1, -1).repeat(B, 1).to(device)
-            logits = self.energy_model.get_energy_ball(nobs, mag)
-            action_probs = torch.softmax(logits/self.temperature, dim=-1)
+            logits = self.energy_model.get_energy_ball(nobs, mag).view(B, -1)
+            action_probs = torch.softmax(logits/self.temperature, dim=-1).view(B, self.pred_n_samples, self.energy_model.num_rot)
 
             if self.sample_actions:
-                flat_indexes = torch.multinomial(action_probs.flatten(start_dim=-2), num_samples=1, replacement=True)
+                flat_indexes = torch.multinomial(action_probs.flatten(start_dim=-2), num_samples=1, replacement=True).squeeze()
             else:
                 flat_indexes = torch.argmax(action_probs.flatten(start_dim=-2), dim=-1)
             mag_idx = flat_indexes.div(action_probs.shape[-1], rounding_mode='floor')
@@ -98,7 +100,10 @@ class ImplicitPolicy(BasePolicy):
             else:
                 raise ValueError('Invalid action sampling suggested.')
 
-            idxs = torch.multinomial(action_probs, num_samples=1, replacement=True)
+            if self.sample_actions:
+                idxs = torch.multinomial(action_probs, num_samples=1, replacement=True)
+            else:
+                idxs = torch.argmax(action_probs, dim=-1)
             actions = actions[torch.arange(B).unsqueeze(-1), idxs].squeeze(1)
 
         if self.harmonic_actions:
@@ -131,7 +136,7 @@ class ImplicitPolicy(BasePolicy):
         # Add noise to positive samples and observations
         action_noise = torch.normal(
             mean=0,
-            std=1e-3,
+            std=1e-4,
             size=naction.shape,
             dtype=naction.dtype,
             device=naction.device,
@@ -139,15 +144,15 @@ class ImplicitPolicy(BasePolicy):
         noisy_actions = naction + action_noise
 
         # Add the same noise to all the points in the observation
-        obs_noise = torch.normal(
-            mean=0,
-            std=1e-3,
-            size=(B, 2),
-            dtype=nobs.dtype,
-            device=nobs.device
-        )
-        obs_noise = obs_noise.view(B,1,1,2).repeat(1,To,Do//2,1).view(B,To,-1)
-        nobs = nobs + obs_noise
+        #obs_noise = torch.normal(
+        #    mean=0,
+        #    std=1e-3,
+        #    size=(B, 2),
+        #    dtype=nobs.dtype,
+        #    device=nobs.device
+        #)
+        #obs_noise = obs_noise.view(B,1,1,2).repeat(1,To,Do//2,1).view(B,To,-1)
+        #nobs = nobs + obs_noise
 
         # Sample negatives: (B, train_n_neg, Da)
         action_stats = self.get_action_stats()
@@ -155,13 +160,13 @@ class ImplicitPolicy(BasePolicy):
             low=action_stats["min"], high=action_stats["max"]
         )
 
-        if self.harmonic_actions:
+        if self.optimize_negatives and self.harmonic_actions:
             mag = torch.linspace(action_stats['min'][0].item(), action_stats['max'][0].item(), 1000)
             mag = mag.view(1, -1, 1).repeat(B, 1, 1).view(B, -1, 1, 1).to(nobs.device)
             theta = torch.linspace(0, 2*np.pi, self.energy_model.num_rot).view(1, -1).repeat(B, 1).to(nobs.device)
             with torch.no_grad():
-                logits = self.energy_model.get_energy_ball(nobs, mag)
-            action_probs = torch.softmax(logits/2., dim=-1)
+                logits = self.energy_model.get_energy_ball(nobs, mag).view(B, -1)
+            action_probs = torch.softmax(logits/2., dim=-1).view(B, 1000, self.energy_model.num_rot)
 
             flat_indexes = torch.multinomial(action_probs.flatten(start_dim=-2), num_samples=self.num_neg_act_samples, replacement=True)
             mag_idx = flat_indexes.view(-1).div(action_probs.shape[-1], rounding_mode='floor')
@@ -170,7 +175,7 @@ class ImplicitPolicy(BasePolicy):
                 mag.repeat(self.num_neg_act_samples, 1, 1, 1)[torch.arange(B*self.num_neg_act_samples),mag_idx,0,0],
                 theta.repeat(self.num_neg_act_samples, 1)[torch.arange(B*self.num_neg_act_samples), theta_idx]
             ]).permute(1,0).view(B,self.num_neg_act_samples,Ta,2)
-        elif self.action_sampling == 'langevin':
+        elif self.optimize_negatives and self.action_sampling == 'langevin':
             negatives = action_dist.sample((B, self.num_neg_act_samples, Ta)).to(
                 dtype=naction.dtype
             )
@@ -186,11 +191,22 @@ class ImplicitPolicy(BasePolicy):
                 normalizer=self.normalizer
             )
             self.energy_model.train()
+        elif self.optimize_negatives and self.action_sampling == 'dfo':
+            negatives = action_dist.sample((B, self.num_neg_act_samples, Ta)).to(
+                dtype=naction.dtype
+            )
+            _, negatives = mcmc.iterative_dfo(
+                    self.energy_model,
+                    nobs,
+                    negatives,
+                    [action_stats['min'], action_stats['max']],
+                    harmonic_actions=self.harmonic_actions,
+                    normalizer=self.normalizer
+                )
         else:
             negatives = action_dist.sample((B, self.num_neg_act_samples, Ta)).to(
                 dtype=naction.dtype
             )
-
 
         # Combine pos and neg samples: (B, train_n_neg+1, Ta, Da)
         targets = torch.cat([noisy_actions.unsqueeze(1), negatives], dim=1)

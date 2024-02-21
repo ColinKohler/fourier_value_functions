@@ -326,10 +326,13 @@ class PushTEnv(gym.Env):
         self.block = self.add_tee((256, 300), 0)
         self.goal_color = pygame.Color('LightGreen')
         if self.random_goal_pose:
+            seed = self._seed
+            rs = np.random.RandomState(seed=seed)
             self.goal_pose = np.array([
-                npr.uniform(220,380),
-                npr.uniform(220,380),
-                npr.uniform(0,2*np.pi)])  # x, y, theta (in radians)
+                rs.randint(220,380),
+                rs.randint(220,380),
+                rs.randn() * 2 * np.pi - np.pi
+            ])  # x, y, theta (in radians)
         else:
             self.goal_pose = np.array([256,256,np.pi/4])  # x, y, theta (in radians)
 

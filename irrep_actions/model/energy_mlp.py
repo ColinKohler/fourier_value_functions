@@ -29,7 +29,7 @@ class EnergyMLP(nn.Module):
         return out.reshape(B, N)
 
 class SO2EnergyMLP(nn.Module):
-    def __init__(self, in_channels, mid_channels, lmax, dropout):
+    def __init__(self, in_channels, mid_channels, lmax, dropout, N=16):
         super().__init__()
         self.Lmax = lmax
         self.G = group.so2_group()
@@ -44,13 +44,13 @@ class SO2EnergyMLP(nn.Module):
         mid_type = enn.FieldType(self.gspace, mid_channels * [rho])
         self.energy_mlp = enn.SequentialModule(
             enn.Linear(self.in_type, mid_type),
-            enn.FourierPointwise(self.gspace, mid_channels, self.G.bl_irreps(L=self.Lmax), type='regular', N=16),
+            enn.FourierPointwise(self.gspace, mid_channels, self.G.bl_irreps(L=self.Lmax), type='regular', N=N),
             enn.FieldDropout(mid_type, dropout),
             enn.Linear(mid_type, mid_type),
-            enn.FourierPointwise(self.gspace, mid_channels, self.G.bl_irreps(L=self.Lmax), type='regular', N=16),
+            enn.FourierPointwise(self.gspace, mid_channels, self.G.bl_irreps(L=self.Lmax), type='regular', N=N),
             enn.FieldDropout(mid_type, dropout),
             enn.Linear(mid_type, mid_type),
-            enn.FourierPointwise(self.gspace, mid_channels, self.G.bl_irreps(L=self.Lmax), type='regular', N=16),
+            enn.FourierPointwise(self.gspace, mid_channels, self.G.bl_irreps(L=self.Lmax), type='regular', N=N),
             enn.FieldDropout(mid_type, dropout),
             enn.Linear(mid_type, out_type),
         )
@@ -127,7 +127,7 @@ class SO2EnergySkipMLP(nn.Module):
 
 
 class SO2HarmonicEnergyMLP(nn.Module):
-    def __init__(self, in_channels, mid_channels, lmax, dropout, N=32, num_rot=360):
+    def __init__(self, in_channels, mid_channels, lmax, dropout, N=16, num_rot=360):
         super().__init__()
         self.Lmax = lmax
         self.G = group.so2_group()
@@ -144,13 +144,13 @@ class SO2HarmonicEnergyMLP(nn.Module):
         self.energy_mlp = enn.SequentialModule(
             enn.Linear(self.in_type, mid_type),
             enn.FourierPointwise(self.gspace, mid_channels, self.G.bl_irreps(L=lmax), type='regular', N=N),
-            enn.FieldDropout(mid_type, dropout),
+            enn.FieldDropout(mid_type, dropout, inplace=True),
             enn.Linear(mid_type, mid_type),
             enn.FourierPointwise(self.gspace, mid_channels, self.G.bl_irreps(L=lmax), type='regular', N=N),
-            enn.FieldDropout(mid_type, dropout),
+            enn.FieldDropout(mid_type, dropout, inplace=True),
             enn.Linear(mid_type, mid_type),
             enn.FourierPointwise(self.gspace, mid_channels, self.G.bl_irreps(L=lmax), type='regular', N=N),
-            enn.FieldDropout(mid_type, dropout),
+            enn.FieldDropout(mid_type, dropout, inplace=True),
             enn.Linear(mid_type, out_type),
         )
 
