@@ -1,43 +1,34 @@
-name: block_touching 
+name: pusht_lowdim 
 
-robot_state_dim: 9
-object_state_dim: 3
-world_state_len: ${robot_state_len}
+image_dim: [3, 96, 96]
 action_dim: 2
-z_dim: 64
+keypoint_dim: 2
 
-encoder:
-  _target_: fail.model.modules.RobotStateObjectPoseEncoder
-  robot_state_dim: ${robot_state_dim}
-  object_state_dim: ${task.object_state_dim}
-  robot_state_len: ${robot_state_len}
-  object_state_len: ${world_state_len}
-  model_dim: 32
-  trans_out_dim: 32
-  trans_layers: 4
-  trans_heads: 8
-  z_dim: ${z_dim}
-  dropout: 0.1
-
-so2_encoder:
-  _target_: fail.model.modules.SO2RobotStateObjectPoseEncoder
-  robot_state_dim: ${robot_state_dim}
-  object_state_dim: ${task.object_state_dim}
-  robot_state_len: ${robot_state_len}
-  object_state_len: ${world_state_len}
-  model_dim: 64
-  trans_out_dim: 32
-  trans_layers: 4
-  trans_heads: 8
-  L: 3
-  z_dim: ${z_dim}
-  dropout: 0.1
+env_runner:
+  _target_: irrep_actions.env_runner.pusht_image_runner.PushTImageRunner
+  num_train: 10
+  num_train_vis: 2
+  train_start_seed: 0
+  num_test: 50
+  num_test_vis: 4
+  test_start_seed: 100000
+  max_steps: 500
+  num_obs_steps: ${num_obs_steps}
+  num_action_steps: ${num_action_steps}
+  num_latency_steps: ${num_latency_steps}
+  fps: 10
+  past_action: ${past_action_visible}
+  num_envs: 30
+  render_size: 96
+  random_goal_pose: False
 
 dataset:
-  _target_: fail.dataset.object_state_dataset.ObjectStateDataset
-  path: data/block_touching_100
-  horizon: ${num_obs_steps}
-  pad_before: 0
+  _target_: irrep_actions.dataset.pusht_image_dataset.PushTImageDataset
+  path: data/pusht_100
+  horizon: ${horizon}
+  pad_before: ${eval:'${num_obs_steps}-1+${num_latency_steps}'}
   pad_after: ${eval:'${num_action_steps}-1'}
   seed: 0
+  harmonic_action: ${is_harmonic}
   val_ratio: 0.02
+  max_train_episodes: 90
