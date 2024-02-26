@@ -1,5 +1,5 @@
 from gym import spaces
-from diffusion_policy.env.pusht.pusht_env import PushTEnv
+from irrep_actions.env.pusht.pusht_env import PushTEnv
 import numpy as np
 import cv2
 

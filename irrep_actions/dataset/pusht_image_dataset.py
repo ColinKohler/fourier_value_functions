@@ -18,7 +18,7 @@ class PushTImageDataset(BaseDataset):
             horizon=horizon,
             pad_before=pad_before,
             pad_after=pad_after,
-            buffer_keys=['img', 'state' , 'action'],
+            buffer_keys=['img', 'action'],
             harmonic_action=harmonic_action,
             seed=seed,
             val_ratio=val_ratio,
@@ -29,7 +29,6 @@ class PushTImageDataset(BaseDataset):
         obs = np.moveaxis(sample['img'],-1,1) / 255
 
         T = obs.shape[0]
-
         x_act = sample['action'][:,0]
         y_act = sample['action'][:,1] * -1
         action = np.concatenate((x_act[..., np.newaxis], y_act[..., np.newaxis]), axis=-1).reshape(T, 2)

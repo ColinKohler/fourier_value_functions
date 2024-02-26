@@ -5,7 +5,8 @@ from escnn import gspaces
 from escnn import nn as enn
 from escnn import group
 
-from irrep_actions.model.layers import MLP, SO2MLP
+from irrep_actions.model.layers import MLP
+from irrep_actions.model.equiv_layers import SO2MLP
 from irrep_actions.utils import harmonics
 
 class EnergyMLP(nn.Module):

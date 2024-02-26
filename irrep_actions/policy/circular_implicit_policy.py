@@ -11,7 +11,7 @@ from irrep_actions.policy.base_policy import BasePolicy
 from irrep_actions.utils import mcmc
 
 
-class ImplicitPolicy(BasePolicy):
+class CircularImplicitPolicy(BasePolicy):
     def __init__(
         self,
         obs_encoder: nn.Module,
@@ -20,7 +20,6 @@ class ImplicitPolicy(BasePolicy):
         action_dim: int,
         num_obs_steps: int,
         num_action_steps: int,
-        action_sampling: str,
         num_neg_act_samples: int,
         pred_n_iter: int,
         pred_n_samples: int,
@@ -30,7 +29,6 @@ class ImplicitPolicy(BasePolicy):
         grad_pen: bool=False,
     ):
         super().__init__(obs_dim, action_dim, num_obs_steps, num_action_steps)
-        self.action_sampling = action_sampling
         self.num_neg_act_samples = num_neg_act_samples
         self.pred_n_iter = pred_n_iter
         self.pred_n_samples = pred_n_samples
@@ -44,9 +42,14 @@ class ImplicitPolicy(BasePolicy):
         self.apply(torch_utils.init_weights)
 
     def forward(self, obs, action):
-        B, T, C, W, H = obs.shape
-        z = self.obs_encoder(obs.view(B*T, C, W, H)).view(B, T, -1)
-        return self.energy_head(z, action)
+        B = obs.size(0)
+        z = self.obs_encoder(obs).view(B, -1)
+        return self.engery_head(z, action)
+
+    def get_energy_ball(self, obs, action):
+        B = obs.size(0)
+        z = self.obs_encoder(obs).view(B, -1)
+        return self.energy_head.get_energy_ball(z, action)
 
     def get_action(self, obs, device):
         B = obs['obs'].shape[0]
@@ -63,36 +66,31 @@ class ImplicitPolicy(BasePolicy):
         )
 
         # Optimize actions
-        actions = action_dist.sample((B, self.pred_n_samples, Ta)).to(
-            dtype=nobs.dtype
-        )
+        mag = torch.linspace(action_stats['min'][0].item(), action_stats['max'][0].item(), self.pred_n_samples)
+        mag = mag.view(1, -1, 1).repeat(B, 1, 1).view(B, -1, 1, 1).to(device)
+        theta = torch.linspace(0, 2*np.pi, self.energy_head.num_rot).view(1, -1).repeat(B, 1).to(device)
+        logits = self.get_energy_ball(nobs, mag).view(B, -1)
+        action_probs = torch.softmax(logits/self.temperature, dim=-1).view(B, self.pred_n_samples, self.energy_head.num_rot)
 
-        if self.action_sampling == 'dfo':
-            action_probs, actions = mcmc.iterative_dfo(
-                self,
-                nobs,
-                actions,
-                [action_stats['min'], action_stats['max']],
-                normalizer=self.normalizer
-            )
-        elif self.action_sampling == 'langevin':
-            action_probs, actions = mcmc.langevin_actions(
-                self,
-                nobs,
-                actions,
-                [action_stats['min'], action_stats['max']],
-                num_iterations=100,
-                normalizer=self.normalizer
-            )
+        if self.sample_actions:
+            flat_indexes = torch.multinomial(action_probs.flatten(start_dim=-2), num_samples=1, replacement=True).squeeze()
         else:
-            raise ValueError('Invalid action sampling suggested.')
+            flat_indexes = torch.argmax(action_probs.flatten(start_dim=-2), dim=-1)
+        mag_idx = flat_indexes.div(action_probs.shape[-1], rounding_mode='floor')
+        theta_idx = torch.remainder(flat_indexes, action_probs.shape[-1])
+        actions = torch.vstack([mag[torch.arange(B),mag_idx,0,0], theta[torch.arange(B), theta_idx]]).permute(1,0).view(B,1,2)
 
         if self.sample_actions:
             idxs = torch.multinomial(action_probs, num_samples=1, replacement=True)
         else:
             idxs = torch.argmax(action_probs, dim=-1)
         actions = actions[torch.arange(B).unsqueeze(-1), idxs].squeeze(1)
-        actions = self.normalizer["action"].unnormalize(actions)
+
+        mag = self.normalizer["action"].unnormalize(actions)[:,:,0]
+        theta = actions[:,:,1]
+        x = mag * torch.cos(theta)
+        y = mag * torch.sin(theta)
+        actions = torch.concat([x.view(B,1), y.view(B,1)], dim=1).unsqueeze(1)
 
         return {'action' : actions}
 
@@ -128,32 +126,21 @@ class ImplicitPolicy(BasePolicy):
             low=action_stats["min"], high=action_stats["max"]
         )
 
-        if self.optimize_negatives and self.action_sampling == 'langevin':
-            negatives = action_dist.sample((B, self.num_neg_act_samples, Ta)).to(
-                dtype=naction.dtype
-            )
+        if self.optimize_negatives:
+            mag = torch.linspace(action_stats['min'][0].item(), action_stats['max'][0].item(), 1000)
+            mag = mag.view(1, -1, 1).repeat(B, 1, 1).view(B, -1, 1, 1).to(nobs.device)
+            theta = torch.linspace(0, 2*np.pi, self.energy_head.num_rot).view(1, -1).repeat(B, 1).to(nobs.device)
+            with torch.no_grad():
+                logits = self.get_energy_ball(nobs, mag).view(B, -1)
+            action_probs = torch.softmax(logits/2., dim=-1).view(B, 1000, self.energy_head.num_rot)
 
-            self.eval()
-            _, negatives = mcmc.langevin_actions(
-                self,
-                nobs,
-                negatives,
-                [action_stats['min'], action_stats['max']],
-                num_iterations=100,
-                normalizer=self.normalizer
-            )
-            self.train()
-        elif self.optimize_negatives and self.action_sampling == 'dfo':
-            negatives = action_dist.sample((B, self.num_neg_act_samples, Ta)).to(
-                dtype=naction.dtype
-            )
-            _, negatives = mcmc.iterative_dfo(
-                    self,
-                    nobs,
-                    negatives,
-                    [action_stats['min'], action_stats['max']],
-                    normalizer=self.normalizer
-                )
+            flat_indexes = torch.multinomial(action_probs.flatten(start_dim=-2), num_samples=self.num_neg_act_samples, replacement=True)
+            mag_idx = flat_indexes.view(-1).div(action_probs.shape[-1], rounding_mode='floor')
+            theta_idx = torch.remainder(flat_indexes.view(-1), action_probs.shape[-1])
+            negatives = torch.vstack([
+                mag.repeat(self.num_neg_act_samples, 1, 1, 1)[torch.arange(B*self.num_neg_act_samples),mag_idx,0,0],
+                theta.repeat(self.num_neg_act_samples, 1)[torch.arange(B*self.num_neg_act_samples), theta_idx]
+            ]).permute(1,0).view(B,self.num_neg_act_samples,Ta,2)
         else:
             negatives = action_dist.sample((B, self.num_neg_act_samples, Ta)).to(
                 dtype=naction.dtype
@@ -168,39 +155,13 @@ class ImplicitPolicy(BasePolicy):
         ground_truth = (permutation == 0).nonzero()[:, 1].to(naction.device)
         one_hot = F.one_hot(ground_truth, num_classes=self.num_neg_act_samples+1).float()
 
-        energy = self.forward(nobs, targets)
+        mag = targets[:,:,:,0].unsqueeze(3)
+        theta = self.normalizer["action"].unnormalize(targets)[:,:,0,1]
+        energy = self.forward(nobs, mag, theta)
 
         probs = F.log_softmax(energy, dim=1)
         ebm_loss = F.kl_div(probs, one_hot, reduction='batchmean')
-
-        #energy_data = energy[:,0]
-        #energy_samp = energy[:,1:]
-        #cd_per_example_loss = torch.mean(energy_sampl, axis=1) - torch.mean(energy_data, axis=1)
-
-        #dist = torch.sum()
-        #entropy_temp = 1e-1
-        #entropy = -torch.exp(-entropy_temp * dist)
-        #kl_per_example_loss = torch.mean(-entropy_samp_copy[..., None] - entropy)
-
-        #per_example_loss = cd_per_example_loss + kl_per_example_loss
-        #ebm_loss = F.cross_entropy(energy, ground_truth)
-
-        if self.grad_pen:
-            de_dact, _ = mcmc.gradient_wrt_action(
-                self,
-                nobs,
-                targets.detach(),
-                normalizer=self.normalizer
-            )
-            grad_norm = mcmc.compute_grad_norm(de_dact).view(B,-1)
-            grad_norm = grad_norm - 1.0
-            grad_norm = torch.clamp(grad_norm, 0., 1e3)
-            grad_norm = grad_norm ** 2
-            grad_loss = torch.mean(grad_norm)
-            loss = ebm_loss + grad_loss
-        else:
-            grad_loss = torch.Tensor([0])
-            loss = ebm_loss
+        grad_loss = 0
 
         return loss, ebm_loss, grad_loss
 

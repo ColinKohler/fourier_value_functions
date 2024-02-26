@@ -1,4 +1,4 @@
-name: pusht_lowdim 
+name: pusht_image
 
 image_dim: [3, 96, 96]
 action_dim: 2
@@ -24,7 +24,7 @@ env_runner:
 
 dataset:
   _target_: irrep_actions.dataset.pusht_image_dataset.PushTImageDataset
-  path: data/pusht_100
+  path: data/pusht_rand_goal_100
   horizon: ${horizon}
   pad_before: ${eval:'${num_obs_steps}-1+${num_latency_steps}'}
   pad_after: ${eval:'${num_action_steps}-1'}

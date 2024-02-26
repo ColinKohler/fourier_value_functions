@@ -12,6 +12,7 @@ from typing import Optional
 from omegaconf import OmegaConf
 import wandb
 
+from irrep_actions.model.vision_encoder import ImageEncoder
 from irrep_actions.model.energy_mlp import EnergyMLP
 from irrep_actions.dataset.base_dataset import BaseDataset
 from irrep_actions.workflow.base_workflow import BaseWorkflow
@@ -36,11 +37,18 @@ class ImplicitWorkflow(BaseWorkflow):
         npr.seed(seed)
         random.seed(seed)
 
-        energy_model: EnergyMLP
-        energy_model = hydra.utils.instantiate(config.energy_mlp)
+        obs_encoder: ImageEncoder
+        obs_encoder = hydra.utils.instantiate(config.obs_encoder)
+
+        energy_head: EnergyMLP
+        energy_head = hydra.utils.instantiate(config.energy_head)
 
         self.model: ImplicitPolicy
-        self.model = hydra.utils.instantiate(config.policy, energy_model=energy_model)
+        self.model = hydra.utils.instantiate(
+            config.policy,
+            obs_encoder=obs_encoder,
+            energy_head=energy_head,
+        )
         self.optimizer = hydra.utils.instantiate(
             config.optimizer, params=self.model.parameters()
         )

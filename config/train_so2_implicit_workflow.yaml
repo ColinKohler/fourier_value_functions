@@ -10,7 +10,6 @@ action_dim: ${task.action_dim}
 keypoint_dim: ${task.keypoint_dim}
 task_name: ${task.name}
 exp_name: 'default'
-is_harmonic: False
 
 horizon: 2
 num_obs_steps: 2
@@ -32,7 +31,6 @@ policy:
   num_neg_act_samples: 256
   pred_n_iter: 3
   pred_n_samples: 4096
-  harmonic_actions: False
   optimize_negatives: False 
   sample_actions: True 
   temperature: 1.0
