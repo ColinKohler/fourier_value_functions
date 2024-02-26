@@ -34,7 +34,12 @@ class ImageEncoder(nn.Module):
 
 class SO2ImageEncoder(nn.Module):
     def __init__(self, in_channels, z_dim, dropout):
-        pass
+        super().__init__()
+
+        self.conv = enn.SequentialDict(
+            # 96x96
+            SO2ResNetBlock(in_channels, z_dim // 8),
+        )
 
     def forward(x: enn.GeometricTensor) -> enn.GeometricTensor:
         pass

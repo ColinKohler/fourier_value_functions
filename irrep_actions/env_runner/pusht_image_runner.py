@@ -178,20 +178,11 @@ class PushTImageRunner(BaseRunner):
 
             done = False
             while not done:
-                B = obs.shape[0]
-                Do = obs.shape[-1] // 2
-                obs_dict = {
-                    'obs' : obs[..., :self.num_obs_steps, :Do].astype(np.float32),
-                    'obs_mask' : obs[..., :self.num_obs_steps, Do:] > 0.5
-                }
-
+                B = obs['image'].shape[0]
+                obs_dict = {'obs': obs['image']}
                 if self.past_action and (past_action is not None):
                     obs['past_action'] = past_action[:, -(self.num_obs_steps-1):].astype(np.float32)
-
                 obs_dict = dict_apply(obs_dict, lambda x: torch.from_numpy(x).to(device))
-                x_obs = (obs_dict['obs'].reshape(B,-1,2)[:,:,0] - 255.0)
-                y_obs = (obs_dict['obs'].reshape(B,-1,2)[:,:,1] - 255.0) * -1.
-                obs_dict['obs'] = torch.concatenate((x_obs.unsqueeze(-1), y_obs.unsqueeze(-1)), dim=-1).view(B, -1).view(B,2,Do)
 
                 with torch.no_grad():
                     action_dict = policy.get_action(obs_dict, device)
