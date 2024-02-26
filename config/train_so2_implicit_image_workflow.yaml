@@ -17,9 +17,9 @@ num_action_steps: 1
 num_latency_steps: 0
 past_action_visible: False
 keypoint_visible_rate: 1.0
-z_dim: 512
+z_dim: 256
 lmax: 3
-N: 16
+N: 8
 is_harmonic: False
 
 policy:
@@ -38,12 +38,14 @@ policy:
   grad_pen: False
 
 obs_encoder:
-  _target_: irrep_actions.model.vision_encoder.SO2ImageEncoder
+  _target_: irrep_actions.model.vision_encoder.CyclicImageEncoder
   in_channels: 3
   z_dim: ${z_dim}
   dropout: 0.1
+  lmax: ${lmax}
+  N: ${N}
 
-energy_mlp:
+energy_head:
   _target_: irrep_actions.model.energy_mlp.SO2EnergyMLP
   in_channels: ${eval:'(${action_dim}*${num_action_steps} + ${z_dim}*${num_obs_steps}) // 2'}
   mid_channels: ${z_dim}

@@ -13,7 +13,7 @@ class EnergyMLP(nn.Module):
     def __init__(self, in_channels, mid_channels, dropout, spec_norm):
         super().__init__()
         self.energy_mlp = MLP(
-            [in_channels, mid_channels, mid_channels, mid_channels, mid_channels, mid_channels, mid_channels, mid_channels, 1],
+            [in_channels] + mid_channels +  [1],
             dropout=dropout,
             act_out=False,
             spec_norm=spec_norm
@@ -35,9 +35,14 @@ class SO2EnergyMLP(nn.Module):
         self.Lmax = lmax
         self.G = group.so2_group()
         self.gspace = gspaces.no_base_space(self.G)
+        #self.in_type = enn.FieldType(
+        #    self.gspace,
+        #    [self.gspace.irrep(1)] * in_channels
+        #)
+        rho = self.G.spectral_regular_representation(*self.G.bl_irreps(L=3))
         self.in_type = enn.FieldType(
             self.gspace,
-            [self.gspace.irrep(1)] * in_channels
+            256 * [rho] + [self.gspace.irrep(1)]
         )
 
         out_type = enn.FieldType(self.gspace, [self.G.irrep(0)])
@@ -60,6 +65,7 @@ class SO2EnergyMLP(nn.Module):
         B, N, Ta, Da = action.shape
         B, To, Do = obs.shape
 
+        breakpoint()
         s = obs.reshape(B, 1, -1).expand(-1, N, -1)
         s_a = self.in_type(torch.cat([s, action.reshape(B, N, -1)], dim=-1).reshape(B*N, -1))
         out = self.energy_mlp(s_a)

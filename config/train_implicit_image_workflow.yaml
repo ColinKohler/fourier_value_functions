@@ -17,7 +17,7 @@ num_action_steps: 1
 num_latency_steps: 0
 past_action_visible: False
 keypoint_visible_rate: 1.0
-z_dim: 1024
+z_dim: 256
 is_harmonic: False
 
 policy:
@@ -44,7 +44,7 @@ obs_encoder:
 energy_head:
   _target_: irrep_actions.model.energy_mlp.EnergyMLP
   in_channels: ${eval:'${action_dim}*${num_action_steps} + ${z_dim}*${num_obs_steps}'}
-  mid_channels: ${z_dim}
+  mid_channels: [1024, 1024, 1024, 1024]
   dropout: 0.1
   spec_norm: False
 

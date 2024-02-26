@@ -49,26 +49,27 @@ class SO2MLP(nn.Module):
         return self.so2_mlp(x)
 
 
-class DihedralResNetBlock(nn.Module):
+class CyclicResNetBlock(nn.Module):
     def __init__(
         self,
         in_type: enn.FieldType,
         channels: int,
-        stride: int,
+        kernel_size: int=3,
+        stride: int=1,
         N: int=8,
         initialize: bool=True,
     ):
         super().__init__()
 
-        self.G = spaces.flipRot2dOnR2(N)
+        self.G = gspaces.rot2dOnR2(N)
         self.gspace = gspaces.no_base_space(self.G)
         self.in_type = in_type
-        self.out_type = enn.FieldType(self.G, channels * [self.G.repr])
+        self.out_type = enn.FieldType(self.G, channels * [self.G.regular_repr])
 
         self.conv1 = enn.SequentialModule(
             enn.R2Conv(
                 in_type,
-                act.in_type,
+                self.out_type,
                 kernel_size=kernel_size,
                 padding=(kernel_size - 1) // 2,
                 stride=stride,
@@ -89,7 +90,7 @@ class DihedralResNetBlock(nn.Module):
 
         self.upscale = None
         if len(self.in_type) != channels or stride != 1:
-            self.upscale = nn.R2Conv(
+            self.upscale = enn.R2Conv(
                 self.in_type,
                 self.out_type,
                 kernel_size=1,
@@ -101,7 +102,7 @@ class DihedralResNetBlock(nn.Module):
     def forward(self, x: enn.GeometricTensor) -> enn.GeometricTensor:
         res = x
         out = self.conv1(x)
-        out = self.conv2(x)
+        out = self.conv2(out)
         if self.upscale is not None:
             out += self.upscale(res)
         else:
@@ -116,8 +117,9 @@ class SO2ResNetBlock(nn.Module):
         self,
         in_type: enn.FieldType,
         channels: int,
-        stride: int,
-        lmax: int,
+        kernel_size: int=3,
+        stride: int=2,
+        lmax: int=3,
         N: int=8,
         initialize: bool=True,
     ):
@@ -138,7 +140,7 @@ class SO2ResNetBlock(nn.Module):
         self.conv1 = enn.SequentialModule(
             enn.R2Conv(
                 in_type,
-                act.in_type,
+                act1.in_type,
                 kernel_size=kernel_size,
                 padding=(kernel_size - 1) // 2,
                 stride=stride,
