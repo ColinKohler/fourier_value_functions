@@ -53,7 +53,7 @@ class LinearNormalizer(DictOfTensorMixin):
         return SingleFieldLinearNormalizer(self.params_dict[key])
 
     def __setitem__(self, key: str, value: "SingleFieldLinearNormalizer"):
-        self.params_fict[key] = value.params_dict
+        self.params_dict[key] = value.params_dict
 
     def _normalize_impl(self, x, forward=True):
         if isinstance(x, dict):

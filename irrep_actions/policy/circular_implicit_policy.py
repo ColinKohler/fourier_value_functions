@@ -41,14 +41,15 @@ class CircularImplicitPolicy(BasePolicy):
         self.energy_head = energy_head
         self.apply(torch_utils.init_weights)
 
-    def forward(self, obs, action):
-        B = obs.size(0)
-        z = self.obs_encoder(obs).view(B, -1)
-        return self.engery_head(z, action)
+
+    def forward(self, obs, action, theta):
+        B, T, C, W, H = obs.shape
+        z = self.obs_encoder(obs.view(B*T, C, W, H)).view(B, T, -1)
+        return self.energy_head(z, action, theta)
 
     def get_energy_ball(self, obs, action):
-        B = obs.size(0)
-        z = self.obs_encoder(obs).view(B, -1)
+        B, T, C, W, H = obs.shape
+        z = self.obs_encoder(obs.view(B*T, C, W, H)).view(B, T, -1)
         return self.energy_head.get_energy_ball(z, action)
 
     def get_action(self, obs, device):
@@ -79,12 +80,6 @@ class CircularImplicitPolicy(BasePolicy):
         mag_idx = flat_indexes.div(action_probs.shape[-1], rounding_mode='floor')
         theta_idx = torch.remainder(flat_indexes, action_probs.shape[-1])
         actions = torch.vstack([mag[torch.arange(B),mag_idx,0,0], theta[torch.arange(B), theta_idx]]).permute(1,0).view(B,1,2)
-
-        if self.sample_actions:
-            idxs = torch.multinomial(action_probs, num_samples=1, replacement=True)
-        else:
-            idxs = torch.argmax(action_probs, dim=-1)
-        actions = actions[torch.arange(B).unsqueeze(-1), idxs].squeeze(1)
 
         mag = self.normalizer["action"].unnormalize(actions)[:,:,0]
         theta = actions[:,:,1]
@@ -161,7 +156,8 @@ class CircularImplicitPolicy(BasePolicy):
 
         probs = F.log_softmax(energy, dim=1)
         ebm_loss = F.kl_div(probs, one_hot, reduction='batchmean')
-        grad_loss = 0
+        grad_loss = torch.Tensor([0])
+        loss = ebm_loss
 
         return loss, ebm_loss, grad_loss
 

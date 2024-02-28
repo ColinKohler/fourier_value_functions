@@ -47,21 +47,21 @@ obs_encoder:
 
 energy_head:
   _target_: irrep_actions.model.energy_mlp.SO2EnergyMLP
-  in_channels: ${eval:'(${action_dim}*${num_action_steps} + ${z_dim}*${num_obs_steps}) // 2'}
+  in_channels: ${eval:'(${action_dim}*${num_action_steps} + ${z_dim}*${num_obs_steps})'}
   mid_channels: ${z_dim}
   lmax: ${lmax}
   dropout: 0.1
   N: ${N}
 
 dataloader:
-  batch_size: 128
+  batch_size: 64
   num_workers: 1
   shuffle: True
   pin_memory: True
   persistent_workers: False
 
 val_dataloader:
-  batch_size: 128
+  batch_size: 64
   num_workers: 1
   shuffle: False
   pin_memory: True

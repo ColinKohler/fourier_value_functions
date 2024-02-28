@@ -179,7 +179,8 @@ class PushTImageRunner(BaseRunner):
             done = False
             while not done:
                 B = obs['image'].shape[0]
-                obs_dict = {'obs': obs['image']}
+                cropped_image = obs['image'][:,:,:,6:-6, 6:-6]
+                obs_dict = {'obs': cropped_image}
                 if self.past_action and (past_action is not None):
                     obs['past_action'] = past_action[:, -(self.num_obs_steps-1):].astype(np.float32)
                 obs_dict = dict_apply(obs_dict, lambda x: torch.from_numpy(x).to(device))

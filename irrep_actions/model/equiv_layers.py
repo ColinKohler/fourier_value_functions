@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from escnn import gspaces
 from escnn import nn as enn
 from escnn import group
+from escnn.gspaces.r2 import GSpace2D
 
 class SO2MLP(nn.Module):
     def __init__(
@@ -30,7 +31,7 @@ class SO2MLP(nn.Module):
             act = enn.FourierELU(
                 self.gspace,
                 channels=c,
-                irreps=self.G.bl_regular_representation(L=l).irreps,
+                irreps=self.G.bl_irreps(L=l),
                 inplace=True,
                 type="regular",
                 N=N,
@@ -118,7 +119,7 @@ class SO2ResNetBlock(nn.Module):
         in_type: enn.FieldType,
         channels: int,
         kernel_size: int=3,
-        stride: int=2,
+        stride: int=1,
         lmax: int=3,
         N: int=8,
         initialize: bool=True,
@@ -126,13 +127,13 @@ class SO2ResNetBlock(nn.Module):
         super().__init__()
 
         self.G = group.so2_group()
-        self.gspace = gspaces.no_base_space(self.G)
+        self.gspace = GSpace2D((None, -1), lmax)
         self.in_type = in_type
 
         act1 = enn.FourierELU(
             self.gspace,
             channels=channels,
-            irreps=self.G.bl_regular_representation(L=lmax).irreps,
+            irreps=self.G.bl_irreps(L=lmax),
             inplace=True,
             type="regular",
             N=N,
@@ -152,7 +153,7 @@ class SO2ResNetBlock(nn.Module):
         self.act = enn.FourierELU(
             self.gspace,
             channels=channels,
-            irreps=self.G.bl_regular_representation(L=lmax).irreps,
+            irreps=self.G.bl_irreps(L=lmax),
             inplace=True,
             type="regular",
             N=N,
@@ -165,12 +166,13 @@ class SO2ResNetBlock(nn.Module):
             stride=stride,
             initialize=initialize
         )
+        self.out_type = self.act.out_type
 
         self.upscale = None
         if len(self.in_type) != channels or stride != 1:
-            self.upscale = nn.R2Conv(
+            self.upscale = enn.R2Conv(
                 self.in_type,
-                self.act.out_type,
+                self.act.in_type,
                 kernel_size=1,
                 stride=stride,
                 bias=False,
@@ -181,7 +183,7 @@ class SO2ResNetBlock(nn.Module):
     def forward(self, x: enn.GeometricTensor) -> enn.GeometricTensor:
         res = x
         out = self.conv1(x)
-        out = self.conv2(x)
+        out = self.conv2(out)
         if self.upscale is not None:
             out += self.upscale(res)
         else:

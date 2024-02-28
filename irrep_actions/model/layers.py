@@ -35,7 +35,7 @@ class ResNetBlock(nn.Module):
         in_channels: int,
         out_channels: int,
         kernel_size: int=3,
-        stride: int=2,
+        stride: int=1,
     ):
         super().__init__()
 

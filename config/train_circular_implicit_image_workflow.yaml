@@ -1,16 +1,15 @@
 defaults:
   - _self_
-  - task: pusht_lowdim 
+  - task: pusht_image
 
-name: train_so2_harmonic_implicit_policy
+name: train_circular_implicit_image_policy
 _target_: irrep_actions.workflow.implicit_workflow.ImplicitWorkflow
 
-obs_dim: ${task.obs_dim} 
+obs_dim: ${task.image_dim} 
 action_dim: ${task.action_dim}
 keypoint_dim: ${task.keypoint_dim}
 task_name: ${task.name}
 exp_name: 'default'
-is_harmonic: True
 
 horizon: 2
 num_obs_steps: 2
@@ -18,9 +17,10 @@ num_action_steps: 1
 num_latency_steps: 0
 past_action_visible: False
 keypoint_visible_rate: 1.0
-z_dim: 512 
+z_dim: 256 
 lmax: 3
-N: 16
+N: 8
+is_harmonic: True
 
 policy:
   _target_: irrep_actions.policy.circular_implicit_policy.CircularImplicitPolicy
@@ -28,19 +28,25 @@ policy:
   action_dim: ${action_dim}
   num_obs_steps: ${num_obs_steps}
   num_action_steps: ${num_action_steps}
-  action_sampling: 'dfo'
   num_neg_act_samples: 256
   pred_n_iter: 3
   pred_n_samples: 5000
-  harmonic_actions: True
   optimize_negatives: False 
   sample_actions: True 
   temperature: 1.0
   grad_pen: False
 
-energy_mlp:
+obs_encoder:
+  _target_: irrep_actions.model.vision_encoder.CyclicImageEncoder
+  in_channels: 3
+  z_dim: ${z_dim}
+  dropout: 0.1
+  lmax: ${lmax}
+  N: ${N}
+
+energy_head:
   _target_: irrep_actions.model.energy_mlp.SO2HarmonicEnergyMLP
-  in_channels: ${eval:'(${obs_dim}*${num_obs_steps}) // 2'}
+  in_channels: ${eval:'(${z_dim}*${num_obs_steps})'}
   mid_channels: ${z_dim}
   lmax: ${lmax}
   dropout: 0.1
@@ -48,14 +54,14 @@ energy_mlp:
   N: ${N}
 
 dataloader:
-  batch_size: 128
+  batch_size: 64
   num_workers: 1
   shuffle: True
   pin_memory: True
   persistent_workers: False
 
 val_dataloader:
-  batch_size: 128
+  batch_size: 64
   num_workers: 1
   shuffle: False
   pin_memory: True

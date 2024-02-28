@@ -35,14 +35,10 @@ class SO2EnergyMLP(nn.Module):
         self.Lmax = lmax
         self.G = group.so2_group()
         self.gspace = gspaces.no_base_space(self.G)
-        #self.in_type = enn.FieldType(
-        #    self.gspace,
-        #    [self.gspace.irrep(1)] * in_channels
-        #)
-        rho = self.G.spectral_regular_representation(*self.G.bl_irreps(L=3))
+        rho = self.G.spectral_regular_representation(*self.G.bl_irreps(L=lmax))
         self.in_type = enn.FieldType(
             self.gspace,
-            256 * [rho] + [self.gspace.irrep(1)]
+            2 * 256 * [rho] + [self.gspace.irrep(1)]
         )
 
         out_type = enn.FieldType(self.gspace, [self.G.irrep(0)])
@@ -65,7 +61,6 @@ class SO2EnergyMLP(nn.Module):
         B, N, Ta, Da = action.shape
         B, To, Do = obs.shape
 
-        breakpoint()
         s = obs.reshape(B, 1, -1).expand(-1, N, -1)
         s_a = self.in_type(torch.cat([s, action.reshape(B, N, -1)], dim=-1).reshape(B*N, -1))
         out = self.energy_mlp(s_a)
@@ -141,9 +136,14 @@ class SO2HarmonicEnergyMLP(nn.Module):
         self.gspace = gspaces.no_base_space(self.G)
         self.num_rot = num_rot
         self.B = harmonics.circular_harmonics(lmax, torch.linspace(0, 2*torch.pi, self.num_rot).view(-1,1)).squeeze().permute(1,0)
-        self.in_type = self.gspace.type(
-            *[self.G.standard_representation()] * in_channels + [self.G.trivial_representation]
+        rho = self.G.spectral_regular_representation(*self.G.bl_irreps(L=lmax))
+        self.in_type = enn.FieldType(
+            self.gspace,
+            2 * 256 * [rho] + [self.gspace.irrep(0)]
         )
+        #self.in_type = self.gspace.type(
+        #    *[self.G.standard_representation()] * in_channels + [self.G.trivial_representation]
+        #)
 
         out_type = enn.FieldType(self.gspace, [self.gspace.irrep(l) for l in range(self.Lmax+1)])
         rho = self.G.spectral_regular_representation(*self.G.bl_irreps(L=lmax), name=None)

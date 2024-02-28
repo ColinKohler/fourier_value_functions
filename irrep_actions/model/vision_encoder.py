@@ -4,6 +4,7 @@ import torch.nn as nn
 from escnn import gspaces
 from escnn import nn as enn
 from escnn import group
+from escnn.gspaces.r2 import GSpace2D
 
 from irrep_actions.model.layers import ResNetBlock
 from irrep_actions.model.equiv_layers import CyclicResNetBlock, SO2ResNetBlock
@@ -14,18 +15,27 @@ class ImageEncoder(nn.Module):
         super().__init__()
 
         self.conv = nn.Sequential(
-            # 96x96
-            ResNetBlock(in_channels, z_dim // 8),
-            # 48x48
+            # 84x84
+            nn.Conv2d(in_channels, z_dim // 8, kernel_size=5, padding=0),
+            nn.ReLU(inplace=True),
+            # 80x80
+            ResNetBlock(z_dim // 8, z_dim // 8),
+            ResNetBlock(z_dim // 8, z_dim // 8),
+            nn.MaxPool2d(2),
+            # 40x40
             ResNetBlock(z_dim // 8, z_dim // 4),
-            # 24x24
+            ResNetBlock(z_dim // 4, z_dim // 4),
+            nn.MaxPool2d(2),
+            # 20x20
             ResNetBlock(z_dim // 4, z_dim // 2),
-            # 12x12
+            ResNetBlock(z_dim // 2, z_dim // 2),
+            nn.MaxPool2d(2),
+            # 10x10
             ResNetBlock(z_dim // 2, z_dim),
-            # 6x6
             ResNetBlock(z_dim, z_dim),
-            # 3x3
-            nn.Conv2d(z_dim, z_dim, kernel_size=3, padding=0),
+            nn.MaxPool2d(2),
+            # 5x5
+            nn.Conv2d(z_dim, z_dim, kernel_size=5, padding=0),
             nn.ReLU(inplace=True)
             # 1x1
         )
@@ -52,27 +62,44 @@ class CyclicImageEncoder(nn.Module):
         )
 
         layers = list()
-        # 96x96
-        layers.append(CyclicResNetBlock(self.in_type, z_dim // 8, N=N))
+        # 84x84
+        layers.append(
+            enn.R2Conv(
+                self.in_type,
+                enn.FieldType(self.cyclic, z_dim // 8 * [self.cyclic.regular_repr]),
+                kernel_size=5,
+                padding=0,
+                initialize=initialize
+            )
+        )
+        layers.append(
+            enn.ReLU(
+                enn.FieldType(self.cyclic, z_dim // 8 * [self.cyclic.regular_repr]),
+                inplace=True
+            )
+        )
+        # 80x80
+        layers.append(CyclicResNetBlock(layers[-1].out_type, z_dim // 8, N=N))
+        layers.append(CyclicResNetBlock(layers[-1].out_type, z_dim // 8, N=N))
         layers.append(enn.PointwiseMaxPool(layers[-1].out_type, 2))
-        # 48x48
+        # 40x40
+        layers.append(CyclicResNetBlock(layers[-1].out_type, z_dim // 4, N=N))
         layers.append(CyclicResNetBlock(layers[-1].out_type, z_dim // 4, N=N))
         layers.append(enn.PointwiseMaxPool(layers[-1].out_type, 2))
-        # 24x24
+        # 20x20
+        layers.append(CyclicResNetBlock(layers[-1].out_type, z_dim // 2, N=N))
         layers.append(CyclicResNetBlock(layers[-1].out_type, z_dim // 2, N=N))
         layers.append(enn.PointwiseMaxPool(layers[-1].out_type, 2))
-        # 12x12
+        # 10x10
+        layers.append(CyclicResNetBlock(layers[-1].out_type, z_dim, N=N))
         layers.append(CyclicResNetBlock(layers[-1].out_type, z_dim, N=N))
         layers.append(enn.PointwiseMaxPool(layers[-1].out_type, 2))
-        # 6x6
-        layers.append(CyclicResNetBlock(layers[-1].out_type, z_dim, N=N))
-        layers.append(enn.PointwiseMaxPool(layers[-1].out_type, 2))
-        # 3x3
+        # 5x5
         layers.append(
             enn.R2Conv(
                 layers[-1].out_type,
                 self.out_type,
-                kernel_size=3,
+                kernel_size=5,
                 padding=0,
                 initialize=initialize
             )
@@ -84,7 +111,7 @@ class CyclicImageEncoder(nn.Module):
         self.fourier = Fourier(
             self.gspace,
             z_dim,
-            self.G.bl_regular_representation(L=3).irreps,
+            self.G.bl_irreps(L=3),
             N=N
         )
 
@@ -100,7 +127,7 @@ class SO2ImageEncoder(nn.Module):
     def __init__(self, in_channels, z_dim, dropout, lmax=3, N=16, initialize=True):
         super().__init__()
         self.G = group.so2_group()
-        self.gspace = gspaces.no_base_space(self.G)
+        self.gspace = GSpace2D((None, -1), lmax)
 
         self.in_type = enn.FieldType(
             self.gspace,
@@ -110,19 +137,24 @@ class SO2ImageEncoder(nn.Module):
         layers = list()
         # 96x96
         layers.append(SO2ResNetBlock(self.in_type, z_dim // 8, lmax=lmax, N=N))
+        layers.append(enn.NormMaxPool(layers[-1].out_type, 2))
         # 48x48
-        layers.append(SO2ResNetBlockLayers(layers[-1].out_type, z_dim // 4, lmax=lmax, N=N))
+        layers.append(SO2ResNetBlock(layers[-1].out_type, z_dim // 4, lmax=lmax, N=N))
+        layers.append(enn.NormMaxPool(layers[-1].out_type, 2))
         # 24x24
-        layers.append(SO2ResNetBlockLayers(layers[-1].out_type, z_dim // 2, lmax=lmax, N=N))
+        layers.append(SO2ResNetBlock(layers[-1].out_type, z_dim // 2, lmax=lmax, N=N))
+        layers.append(enn.NormMaxPool(layers[-1].out_type, 2))
         # 12x12
-        layers.append(SO2ResNetBlockLayers(layers[-1].out_type, z_dim, lmax=lmax, N=N))
+        layers.append(SO2ResNetBlock(layers[-1].out_type, z_dim, lmax=lmax, N=N))
+        layers.append(enn.NormMaxPool(layers[-1].out_type, 2))
         # 6x6
-        layers.append(SO2ResNetBlockLayers(layers[-1].out_type, z_dim, lmax=lmax, N=N))
+        layers.append(SO2ResNetBlock(layers[-1].out_type, z_dim, lmax=lmax, N=N))
+        layers.append(enn.NormMaxPool(layers[-1].out_type, 2))
         # 3x3
         act = enn.FourierELU(
             self.gspace,
-            channels=channels,
-            irreps=self.G.bl_regular_representation(L=lmax).irreps,
+            channels=z_dim,
+            irreps=self.G.bl_irreps(L=lmax),
             inplace=True,
             type="regular",
             N=N,
@@ -131,16 +163,20 @@ class SO2ImageEncoder(nn.Module):
             enn.R2Conv(
                 layers[-1].out_type,
                 act.in_type,
-                kernel_size=kernel_size,
-                padding=(kernel_size - 1) // 2,
-                stride=stride,
+                kernel_size=3,
+                padding=0,
                 initialize=initialize
             )
         )
         layers.append(act)
         # 1x1
 
-        self.conv = enn.SequentialDict(*layers)
+        self.out_type = layers[-1].out_type
+        self.conv = nn.Sequential(*layers)
 
-    def forward(x: enn.GeometricTensor) -> enn.GeometricTensor:
-       return self.conv(x)
+    def forward(self, x):
+        B = x.size(0)
+        x = enn.GeometricTensor(x, self.in_type)
+        out = self.conv(x)
+
+        return out.tensor
