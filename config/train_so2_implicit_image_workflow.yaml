@@ -46,7 +46,7 @@ obs_encoder:
   N: ${N}
 
 energy_head:
-  _target_: irrep_actions.model.energy_mlp.SO2EnergyMLP
+  _target_: irrep_actions.model.energy_mlp.CyclicEnergyMLP
   in_channels: ${eval:'(${action_dim}*${num_action_steps} + ${z_dim}*${num_obs_steps})'}
   mid_channels: ${z_dim}
   lmax: ${lmax}

@@ -79,20 +79,20 @@ class CyclicImageEncoder(nn.Module):
             )
         )
         # 80x80
-        layers.append(CyclicResNetBlock(layers[-1].out_type, z_dim // 8, N=N))
-        layers.append(CyclicResNetBlock(layers[-1].out_type, z_dim // 8, N=N))
+        layers.append(CyclicResNetBlock(layers[-1].out_type, z_dim // 8, N=N, initialize=initialize))
+        layers.append(CyclicResNetBlock(layers[-1].out_type, z_dim // 8, N=N, initialize=initialize))
         layers.append(enn.PointwiseMaxPool(layers[-1].out_type, 2))
         # 40x40
-        layers.append(CyclicResNetBlock(layers[-1].out_type, z_dim // 4, N=N))
-        layers.append(CyclicResNetBlock(layers[-1].out_type, z_dim // 4, N=N))
+        layers.append(CyclicResNetBlock(layers[-1].out_type, z_dim // 4, N=N, initialize=initialize))
+        layers.append(CyclicResNetBlock(layers[-1].out_type, z_dim // 4, N=N, initialize=initialize))
         layers.append(enn.PointwiseMaxPool(layers[-1].out_type, 2))
         # 20x20
-        layers.append(CyclicResNetBlock(layers[-1].out_type, z_dim // 2, N=N))
-        layers.append(CyclicResNetBlock(layers[-1].out_type, z_dim // 2, N=N))
+        layers.append(CyclicResNetBlock(layers[-1].out_type, z_dim // 2, N=N, initialize=initialize))
+        layers.append(CyclicResNetBlock(layers[-1].out_type, z_dim // 2, N=N, initialize=initialize))
         layers.append(enn.PointwiseMaxPool(layers[-1].out_type, 2))
         # 10x10
-        layers.append(CyclicResNetBlock(layers[-1].out_type, z_dim, N=N))
-        layers.append(CyclicResNetBlock(layers[-1].out_type, z_dim, N=N))
+        layers.append(CyclicResNetBlock(layers[-1].out_type, z_dim, N=N, initialize=initialize))
+        layers.append(CyclicResNetBlock(layers[-1].out_type, z_dim, N=N, initialize=initialize))
         layers.append(enn.PointwiseMaxPool(layers[-1].out_type, 2))
         # 5x5
         layers.append(
@@ -118,6 +118,7 @@ class CyclicImageEncoder(nn.Module):
     def forward(self, x):
         B = x.size(0)
         x = enn.GeometricTensor(x, self.in_type)
+        #out = self.conv(x)
         cyclic_out = self.conv(x).tensor.view(B, self.z_dim, -1)
         out = self.fourier(cyclic_out)
 
@@ -136,19 +137,19 @@ class SO2ImageEncoder(nn.Module):
 
         layers = list()
         # 96x96
-        layers.append(SO2ResNetBlock(self.in_type, z_dim // 8, lmax=lmax, N=N))
+        layers.append(SO2ResNetBlock(self.in_type, z_dim // 8, lmax=lmax, N=N, initialize=initialize))
         layers.append(enn.NormMaxPool(layers[-1].out_type, 2))
         # 48x48
-        layers.append(SO2ResNetBlock(layers[-1].out_type, z_dim // 4, lmax=lmax, N=N))
+        layers.append(SO2ResNetBlock(layers[-1].out_type, z_dim // 4, lmax=lmax, N=N, initialize=initialize))
         layers.append(enn.NormMaxPool(layers[-1].out_type, 2))
         # 24x24
-        layers.append(SO2ResNetBlock(layers[-1].out_type, z_dim // 2, lmax=lmax, N=N))
+        layers.append(SO2ResNetBlock(layers[-1].out_type, z_dim // 2, lmax=lmax, N=N, initialize=initialize))
         layers.append(enn.NormMaxPool(layers[-1].out_type, 2))
         # 12x12
-        layers.append(SO2ResNetBlock(layers[-1].out_type, z_dim, lmax=lmax, N=N))
+        layers.append(SO2ResNetBlock(layers[-1].out_type, z_dim, lmax=lmax, N=N, initialize=initialize))
         layers.append(enn.NormMaxPool(layers[-1].out_type, 2))
         # 6x6
-        layers.append(SO2ResNetBlock(layers[-1].out_type, z_dim, lmax=lmax, N=N))
+        layers.append(SO2ResNetBlock(layers[-1].out_type, z_dim, lmax=lmax, N=N, initialize=initialize))
         layers.append(enn.NormMaxPool(layers[-1].out_type, 2))
         # 3x3
         act = enn.FourierELU(

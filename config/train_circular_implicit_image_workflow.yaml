@@ -17,7 +17,7 @@ num_action_steps: 1
 num_latency_steps: 0
 past_action_visible: False
 keypoint_visible_rate: 1.0
-z_dim: 256 
+z_dim: 128 
 lmax: 3
 N: 8
 is_harmonic: True
@@ -28,9 +28,8 @@ policy:
   action_dim: ${action_dim}
   num_obs_steps: ${num_obs_steps}
   num_action_steps: ${num_action_steps}
-  num_neg_act_samples: 256
-  pred_n_iter: 3
-  pred_n_samples: 5000
+  num_neg_act_samples: 1024
+  pred_n_samples: 500
   optimize_negatives: False 
   sample_actions: True 
   temperature: 1.0
@@ -39,7 +38,7 @@ policy:
 obs_encoder:
   _target_: irrep_actions.model.vision_encoder.CyclicImageEncoder
   in_channels: 3
-  z_dim: ${z_dim}
+  z_dim: 256
   dropout: 0.1
   lmax: ${lmax}
   N: ${N}
@@ -69,7 +68,7 @@ val_dataloader:
 
 optimizer:
   _target_: torch.optim.AdamW
-  lr: 1e-3
+  lr: 5e-4
   betas: [0.95, 0.999]
   eps: 1e-8
   weight_decay: 1e-6
@@ -79,9 +78,9 @@ training:
   seed: 0
   resume: True
   lr_warmup_steps: 500
-  num_epochs: 1000
-  checkpoint_every: 50
-  rollout_every: 50
+  num_epochs: 200
+  checkpoint_every: 20
+  rollout_every: 20
   val_every: 1
   tqdm_interval_sec: 1.0
 

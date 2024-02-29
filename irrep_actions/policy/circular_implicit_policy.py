@@ -21,7 +21,6 @@ class CircularImplicitPolicy(BasePolicy):
         num_obs_steps: int,
         num_action_steps: int,
         num_neg_act_samples: int,
-        pred_n_iter: int,
         pred_n_samples: int,
         optimize_negatives: bool=False,
         sample_actions: bool=False,
@@ -30,7 +29,6 @@ class CircularImplicitPolicy(BasePolicy):
     ):
         super().__init__(obs_dim, action_dim, num_obs_steps, num_action_steps)
         self.num_neg_act_samples = num_neg_act_samples
-        self.pred_n_iter = pred_n_iter
         self.pred_n_samples = pred_n_samples
         self.optimize_negatives = optimize_negatives
         self.sample_actions = sample_actions
