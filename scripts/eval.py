@@ -36,7 +36,7 @@ def evaluate(checkpoint: str, output_dir: str, device: str):
     payload = torch.load(open(checkpoint, 'rb'), pickle_module=dill)
     cfg = payload['config']
     cls = hydra.utils.get_class(cfg._target_)
-    workflow = cls(cfg, output_dir=output_dir)
+    workflow = cls(cfg, output_dir=output_dir, eval=True)
     workflow: BaseWorkflow
     workflow.load_payload(payload, exclude_keys=None, include_keys=None)
 

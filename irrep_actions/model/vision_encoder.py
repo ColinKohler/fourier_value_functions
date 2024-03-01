@@ -108,21 +108,13 @@ class CyclicImageEncoder(nn.Module):
         # 1x1
 
         self.conv = nn.Sequential(*layers)
-        self.fourier = Fourier(
-            self.gspace,
-            z_dim,
-            self.G.bl_irreps(L=3),
-            N=N
-        )
 
     def forward(self, x):
         B = x.size(0)
         x = enn.GeometricTensor(x, self.in_type)
-        #out = self.conv(x)
-        cyclic_out = self.conv(x).tensor.view(B, self.z_dim, -1)
-        out = self.fourier(cyclic_out)
+        out = self.conv(x).tensor.view(B, self.z_dim, -1)
 
-        return out.tensor
+        return out
 
 class SO2ImageEncoder(nn.Module):
     def __init__(self, in_channels, z_dim, dropout, lmax=3, N=16, initialize=True):

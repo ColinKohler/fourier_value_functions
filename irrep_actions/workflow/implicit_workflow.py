@@ -28,7 +28,7 @@ OmegaConf.register_new_resolver("eval", eval, replace=True)
 class ImplicitWorkflow(BaseWorkflow):
     include_keys = ["global_step", "epoch"]
 
-    def __init__(self, config: OmegaConf, output_dir: Optional[str] = None):
+    def __init__(self, config: OmegaConf, output_dir: Optional[str] = None, eval: bool=False):
         super().__init__(config, output_dir=output_dir)
 
         # Set random seed
@@ -38,10 +38,10 @@ class ImplicitWorkflow(BaseWorkflow):
         random.seed(seed)
 
         obs_encoder: ImageEncoder
-        obs_encoder = hydra.utils.instantiate(config.obs_encoder, initialize=True)
+        obs_encoder = hydra.utils.instantiate(config.obs_encoder, initialize=eval)
 
         energy_head: EnergyMLP
-        energy_head = hydra.utils.instantiate(config.energy_head, initialize=True)
+        energy_head = hydra.utils.instantiate(config.energy_head, initialize=eval)
 
         self.model: ImplicitPolicy
         self.model = hydra.utils.instantiate(

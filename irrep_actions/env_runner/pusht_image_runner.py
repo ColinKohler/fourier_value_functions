@@ -40,6 +40,7 @@ class PushTImageRunner(BaseRunner):
         num_envs = None,
         random_goal_pose=False,
     ):
+        num_test_vis=50
         super().__init__(output_dir)
         num_envs = num_train + num_test if num_envs is None else num_envs
 
@@ -178,9 +179,20 @@ class PushTImageRunner(BaseRunner):
 
             done = False
             while not done:
-                B = obs['image'].shape[0]
+                B, T, C, H, W = obs['image'].shape
                 cropped_image = obs['image'][:,:,:,6:-6, 6:-6]
-                obs_dict = {'obs': cropped_image}
+                #from torchvision.transforms.functional import resize
+                #cropped_image = resize(torch.tensor(obs['image']).view(-1, 3, 96,96), (84, 84)).view(-1, 2, 3, 84, 84).numpy()
+                #from torchvision.transforms.functional import resize
+
+                x_pos = (obs['agent_pos'][:,:,0] - 255.0)
+                y_pos = (obs['agent_pos'][:,:,1] - 255.0) * -1
+                agent_pos = np.concatenate((x_pos[..., np.newaxis], y_pos[..., np.newaxis]), axis=-1).reshape(B, T, 2)
+
+                obs_dict = {
+                    'image': cropped_image,
+                    'agent_pos': agent_pos
+                }
                 if self.past_action and (past_action is not None):
                     obs['past_action'] = past_action[:, -(self.num_obs_steps-1):].astype(np.float32)
                 obs_dict = dict_apply(obs_dict, lambda x: torch.from_numpy(x).to(device))

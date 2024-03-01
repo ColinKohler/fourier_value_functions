@@ -36,17 +36,18 @@ policy:
   grad_pen: False
 
 obs_encoder:
-  _target_: irrep_actions.model.vision_encoder.CyclicImageEncoder
-  in_channels: 3
-  z_dim: 256
-  dropout: 0.1
+  _target_: irrep_actions.model.obs_encoder.SO2ObsEncoder
+  num_obs: ${num_obs_steps}
+  img_channels: 3
+  z_dim: ${z_dim}
   lmax: ${lmax}
   N: ${N}
+  dropout: 0.1
 
 energy_head:
-  _target_: irrep_actions.model.energy_mlp.SO2HarmonicEnergyMLP
-  in_channels: ${eval:'(${z_dim}*${num_obs_steps})'}
-  mid_channels: ${z_dim}
+  _target_: irrep_actions.model.energy_mlp.CircularEnergyMLP
+  obs_feat_dim: ${z_dim}
+  mlp_dim: ${z_dim}
   lmax: ${lmax}
   dropout: 0.1
   num_rot: 360 

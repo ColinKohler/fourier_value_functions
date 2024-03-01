@@ -38,7 +38,7 @@ class CyclicEnergyMLP(nn.Module):
         rho = self.gspace.regular_repr
         self.in_type = enn.FieldType(
             self.gspace,
-            2 * 256 * [rho] + [self.gspace.irrep(1)]
+            2 * 256 * [rho] + 2 * [self.gspace.irrep(1)]
         )
 
         out_type = enn.FieldType(self.gspace, [self.G.irrep(0)])
@@ -166,57 +166,55 @@ class SO2EnergySkipMLP(nn.Module):
         return out.tensor.reshape(B, N)
 
 
-class SO2HarmonicEnergyMLP(nn.Module):
-    def __init__(self, in_channels, mid_channels, lmax, dropout, N=16, num_rot=360, initialize=True):
+class CircularEnergyMLP(nn.Module):
+    def __init__(self, obs_feat_dim, mlp_dim, lmax, dropout, N=16, num_rot=360, initialize=True):
         super().__init__()
         self.Lmax = lmax
+        self.num_rot = num_rot
+        circle_theta = torch.linspace(0, 2*torch.pi, self.num_rot).view(-1,1)
+        self.B = harmonics.circular_harmonics(lmax, circle_theta).squeeze().permute(1,0)
+
         self.G = group.so2_group()
         self.gspace = gspaces.no_base_space(self.G)
-        self.num_rot = num_rot
-        self.B = harmonics.circular_harmonics(lmax, torch.linspace(0, 2*torch.pi, self.num_rot).view(-1,1)).squeeze().permute(1,0)
         rho = self.G.spectral_regular_representation(*self.G.bl_irreps(L=lmax))
+
         self.in_type = enn.FieldType(
             self.gspace,
-            2 * 256 * [rho] + [self.gspace.irrep(0)]
+            obs_feat_dim * [rho] + [self.gspace.irrep(0)]
         )
-        #self.in_type = self.gspace.type(
-        #    *[self.G.standard_representation()] * in_channels + [self.G.trivial_representation]
-        #)
-
+        mlp_type = enn.FieldType(self.gspace, mlp_dim * [rho])
         out_type = enn.FieldType(self.gspace, [self.gspace.irrep(l) for l in range(self.Lmax+1)])
-        rho = self.G.spectral_regular_representation(*self.G.bl_irreps(L=lmax), name=None)
-        mid_type = enn.FieldType(self.gspace, mid_channels * [rho])
-        self.energy_mlp = enn.SequentialModule(
-            enn.Linear(self.in_type, mid_type, initialize=True),
-            enn.FourierPointwise(self.gspace, mid_channels, self.G.bl_irreps(L=lmax), type='regular', N=N),
-            enn.FieldDropout(mid_type, dropout, inplace=True),
-            enn.Linear(mid_type, mid_type, initialize=True),
-            enn.FourierPointwise(self.gspace, mid_channels, self.G.bl_irreps(L=lmax), type='regular', N=N),
-            enn.FieldDropout(mid_type, dropout, inplace=True),
-            enn.Linear(mid_type, mid_type, initialize=True),
-            enn.FourierPointwise(self.gspace, mid_channels, self.G.bl_irreps(L=lmax), type='regular', N=N),
-            enn.FieldDropout(mid_type, dropout, inplace=True),
-            enn.Linear(mid_type, out_type, initialize=True),
+
+        self.energy_mlp = SO2MLP(
+            self.in_type,
+            channels=[mlp_dim] * 4,
+            lmaxs=[lmax] * 4,
+            out_type=out_type,
+            N=N,
+            dropout=dropout,
+            act_out = False
         )
 
-    def forward(self, obs, action_magnitude, action_theta):
+    def forward(self, obs_feat, action_magnitude, action_theta):
         B, N, Ta, Da = action_magnitude.shape
-        B, To, Do = obs.shape
+        B, Dz = obs_feat.shape
 
-        s = obs.reshape(B, 1, -1).expand(-1, N, -1)
-        s_a = self.in_type(torch.cat([s, action_magnitude.reshape(B, N, -1)], dim=-1).reshape(B*N, -1))
+        s = obs_feat.reshape(B, 1, -1).expand(-1, N, -1)
+        s_a = self.in_type(
+            torch.cat([s, action_magnitude.reshape(B, N, -1)], dim=-1).reshape(B*N, -1)
+        )
         W = self.energy_mlp(s_a).tensor.view(B, N, -1)
         Beta = harmonics.circular_harmonics(self.Lmax, action_theta.view(-1,1))
         return torch.bmm(W.view(-1, 1, self.Lmax * 2 + 1), Beta).view(B,N)
 
-    def get_energy_ball(self, obs, action_magnitude):
+    def get_energy_ball(self, obs_feat, action_magnitude):
         B, N, Ta, Da = action_magnitude.shape
-        B, To, Do = obs.shape
+        B, Dz = obs_feat.shape
 
-        s = obs.reshape(B, 1, -1).expand(-1, N, -1)
+        s = obs_feat.reshape(B, 1, -1).expand(-1, N, -1)
         s_a = self.in_type(torch.cat([s, action_magnitude.reshape(B, N, -1)], dim=-1).reshape(B*N, -1))
         W = self.energy_mlp(s_a).tensor.view(B*N, 1, self.Lmax*2+1)
-        Beta = self.B.view(1,self.Lmax*2+1, self.num_rot).repeat(B*N, 1, 1).to(obs.device)
+        Beta = self.B.view(1,self.Lmax*2+1, self.num_rot).repeat(B*N, 1, 1).to(obs_feat.device)
 
         return torch.bmm(W, Beta).view(B, N, -1)
 

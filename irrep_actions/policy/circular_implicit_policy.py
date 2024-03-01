@@ -39,21 +39,10 @@ class CircularImplicitPolicy(BasePolicy):
         self.energy_head = energy_head
         self.apply(torch_utils.init_weights)
 
-
-    def forward(self, obs, action, theta):
-        B, T, C, W, H = obs.shape
-        z = self.obs_encoder(obs.view(B*T, C, W, H)).view(B, T, -1)
-        return self.energy_head(z, action, theta)
-
-    def get_energy_ball(self, obs, action):
-        B, T, C, W, H = obs.shape
-        z = self.obs_encoder(obs.view(B*T, C, W, H)).view(B, T, -1)
-        return self.energy_head.get_energy_ball(z, action)
-
     def get_action(self, obs, device):
-        B = obs['obs'].shape[0]
+        B = obs['image'].shape[0]
 
-        nobs = self.normalizer['obs'].normalize(obs['obs'])
+        nobs = self.normalizer.normalize(obs)
         Do = self.obs_dim
         Da = self.action_dim
         To = self.num_obs_steps
@@ -68,7 +57,8 @@ class CircularImplicitPolicy(BasePolicy):
         mag = torch.linspace(action_stats['min'][0].item(), action_stats['max'][0].item(), self.pred_n_samples)
         mag = mag.view(1, -1, 1).repeat(B, 1, 1).view(B, -1, 1, 1).to(device)
         theta = torch.linspace(0, 2*np.pi, self.energy_head.num_rot).view(1, -1).repeat(B, 1).to(device)
-        logits = self.get_energy_ball(nobs, mag).view(B, -1)
+        obs_feat = self.obs_encoder(nobs)
+        logits = self.energy_head.get_energy_ball(obs_feat, mag).view(B, -1)
         action_probs = torch.softmax(logits/self.temperature, dim=-1).view(B, self.pred_n_samples, self.energy_head.num_rot)
 
         if self.sample_actions:
@@ -89,8 +79,8 @@ class CircularImplicitPolicy(BasePolicy):
 
     def compute_loss(self, batch):
         # Load batch
-        nobs = batch["obs"].float()
-        naction = batch["action"].float()
+        nobs = self.normalizer.normalize(batch["obs"])
+        naction = self.normalizer['action'].normalize(batch["action"]).float()
 
         Do = self.obs_dim
         Da = self.action_dim
@@ -98,7 +88,6 @@ class CircularImplicitPolicy(BasePolicy):
         Ta = self.num_action_steps
         B = naction.shape[0]
 
-        nobs = nobs[:, :To]
         start = To - 1
         end = start + Ta
         naction = naction[:, start:end]
@@ -150,7 +139,8 @@ class CircularImplicitPolicy(BasePolicy):
 
         mag = targets[:,:,:,0].unsqueeze(3)
         theta = self.normalizer["action"].unnormalize(targets)[:,:,0,1]
-        energy = self.forward(nobs, mag, theta)
+        obs_feat = self.obs_encoder(nobs)
+        energy = self.energy_head(obs_feat, mag, theta)
 
         probs = F.log_softmax(energy, dim=1)
         ebm_loss = F.kl_div(probs, one_hot, reduction='batchmean')

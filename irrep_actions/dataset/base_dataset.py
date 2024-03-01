@@ -69,8 +69,9 @@ class BaseDataset(torch.utils.data.Dataset):
         val_set.train_mask = ~self.train_mask
         return val_set
 
-    def get_normalizer(self, mode="limits", **kwargs):
-        data = self._sample_to_data(self.replay_buffer, rand_crop=False)
+    def get_normalizer(self, data=None, mode="limits", **kwargs):
+        if data is None:
+            data = self._sample_to_data(self.replay_buffer, rand_crop=False)
 
         if self.harmonic_action:
             data["action"] = harmonics.convert_action_to_harmonics(data["action"])
@@ -90,9 +91,8 @@ class BaseDataset(torch.utils.data.Dataset):
             data["action"] = harmonics.convert_action_to_harmonics(data["action"])
 
         torch_data = torch_utils.dict_apply(data, torch.from_numpy)
-        norm_data =  self.normalizer.normalize(torch_data)
 
-        return norm_data
+        return torch_data
 
     def _sample_to_data(self, sample):
         raise NotImplementedError()
