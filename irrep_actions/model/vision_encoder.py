@@ -6,9 +6,9 @@ from escnn import nn as enn
 from escnn import group
 from escnn.gspaces.r2 import GSpace2D
 
-from irrep_actions.model.layers import ResNetBlock
-from irrep_actions.model.equiv_layers import CyclicResNetBlock, SO2ResNetBlock
-from irrep_actions.model.fourier import Fourier
+from irrep_actions.model.modules.layers import ResNetBlock
+from irrep_actions.model.modules.equiv_layers import CyclicResNetBlock, SO2ResNetBlock
+from irrep_actions.model.modules.fourier import Fourier
 
 class ImageEncoder(nn.Module):
     def __init__(self, in_channels, z_dim, dropout):
@@ -112,9 +112,9 @@ class CyclicImageEncoder(nn.Module):
     def forward(self, x):
         B = x.size(0)
         x = enn.GeometricTensor(x, self.in_type)
-        out = self.conv(x).tensor.view(B, self.z_dim, -1)
+        out = self.conv(x).tensor
 
-        return out
+        return out.view(B, self.z_dim, -1)
 
 class SO2ImageEncoder(nn.Module):
     def __init__(self, in_channels, z_dim, dropout, lmax=3, N=16, initialize=True):

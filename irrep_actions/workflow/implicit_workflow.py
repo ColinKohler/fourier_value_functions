@@ -38,10 +38,10 @@ class ImplicitWorkflow(BaseWorkflow):
         random.seed(seed)
 
         obs_encoder: ImageEncoder
-        obs_encoder = hydra.utils.instantiate(config.obs_encoder, initialize=eval)
+        obs_encoder = hydra.utils.instantiate(config.obs_encoder, initialize=(not eval))
 
         energy_head: EnergyMLP
-        energy_head = hydra.utils.instantiate(config.energy_head, initialize=eval)
+        energy_head = hydra.utils.instantiate(config.energy_head, initialize=(not eval))
 
         self.model: ImplicitPolicy
         self.model = hydra.utils.instantiate(

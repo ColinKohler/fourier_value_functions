@@ -180,9 +180,9 @@ class PushTImageRunner(BaseRunner):
             done = False
             while not done:
                 B, T, C, H, W = obs['image'].shape
-                cropped_image = obs['image'][:,:,:,6:-6, 6:-6]
-                #from torchvision.transforms.functional import resize
-                #cropped_image = resize(torch.tensor(obs['image']).view(-1, 3, 96,96), (84, 84)).view(-1, 2, 3, 84, 84).numpy()
+                #cropped_image = obs['image'][:,:,:,6:-6, 6:-6]
+                from torchvision.transforms.functional import resize
+                cropped_image = resize(torch.tensor(obs['image']).view(-1, 3, 96,96), (84, 84)).view(-1, 2, 3, 84, 84).numpy()
                 #from torchvision.transforms.functional import resize
 
                 x_pos = (obs['agent_pos'][:,:,0] - 255.0)

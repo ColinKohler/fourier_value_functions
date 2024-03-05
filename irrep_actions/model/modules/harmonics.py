@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 from torch import nn
 
@@ -6,15 +7,17 @@ class HarmonicFunction(nn.Module):
         self,
         maximum_frequency: int
     ):
+        super().__init__()
+
         self.maximum_frequency = maximum_frequency
 
-    def generate_baseis_fns(self, L: int) -> nn.Tensor:
+    def generate_baseis_fns(self, L: int) -> torch.Tensor:
         raise NotImplementedError
 
 class CircularHarmonics(HarmonicFunction):
     def __init__(
         self,
-        maximum_frequency: int
+        maximum_frequency: int,
         N: int=360
     ):
         '''
@@ -22,28 +25,28 @@ class CircularHarmonics(HarmonicFunction):
         '''
         super().__init__(maximum_frequency)
 
-        self.basis_fns = self.generate_basis_fns(maximum_frequency, N)
+        self.basis_fns = nn.Parameter(self.generate_basis_fns(maximum_frequency, N))
 
-    def generate_basis_fns(self, L: int, N: int) -> nn.Tensor:
+    def generate_basis_fns(self, L: int, N: int) -> torch.Tensor:
         ''' Generate circular basis funcations for the desired frequency.
 
         Args:
             L: int - Maxmium basis function frequnecy
 
         Returns:
-            nn.Tensor: Basis functions
+            torch.Tensor: Basis functions
         '''
-        circle_theta = torch.linspace(0, 2*torch.pi, N).view(-1,1)
+        theta = torch.linspace(0, 2*torch.pi, N).view(-1,1)
         basis_fns = [
-            torch.tensor([1 / torch.sqrt(2 * torch.pi)] * theta.size(0)).view(-1, 1)
+            torch.tensor([1 / np.sqrt(2 * torch.pi)] * theta.size(0)).view(-1, 1)
         ]
         for l in range(1, L+1):
-            basis_fns.append(torch.cos(l * theta) / torch.sqrt(torch.pi))
-            basis_fns.append(torch.sin(l * theta) / torch.sqrt(torch.pi))
+            basis_fns.append(torch.cos(l * theta) / np.sqrt(torch.pi))
+            basis_fns.append(torch.sin(l * theta) / np.sqrt(torch.pi))
 
-        return torch.stack(B).permute(1, 0, 2).float().squeeze().permute(1,0)
+        return torch.stack(basis_fns).permute(1, 0, 2).float().squeeze().permute(1,0)
 
-    def evaluate(self, w: nn.Tensor) -> nn.Tensor:
+    def evaluate(self, w: torch.Tensor) -> torch.Tensor:
         ''' Evaluate the harmonic function using the given coefficents and the basis functions generated at init.
 
         Args:
@@ -51,10 +54,11 @@ class CircularHarmonics(HarmonicFunction):
 
         Returns:
         '''
-        B, F = w.shape
-        return torch.bmm(w.view(B, 1, F), self.basis_fns)
+        return torch.mm(w,  self.basis_fns)
+        #B, F = w.shape
+        #return torch.bmm(w.view(B, 1, F), self.basis_fns)
 
-    def convert_to_polar_coords(self, x: nn.Tensor) -> nn.Tensor:
+    def convert_to_polar_coords(self, x: torch.Tensor) -> torch.Tensor:
         ''' Convert regular coordinates to polar coordinates.
 
         Args:

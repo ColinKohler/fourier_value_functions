@@ -9,9 +9,6 @@ from escnn import group
 
 import math
 
-from fail.model.layers import SO2MLP
-
-
 def scaledDotProduct(q, k, v, mask=None):
     d_k = q.size()[-1]
     attn_logits = torch.matmul(q, k.transpose(-2, -1))

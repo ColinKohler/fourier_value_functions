@@ -7,8 +7,8 @@ from escnn import group
 from escnn.gspaces.r2 import GSpace2D
 
 from irrep_actions.model.vision_encoder import CyclicImageEncoder
-from irrep_actions.model.fourier import Fourier
-from irrep_actions.model.equiv_layers import SO2MLP
+from irrep_actions.model.modules.fourier import Fourier
+from irrep_actions.model.modules.equiv_layers import SO2MLP
 
 class SO2ObsEncoder(nn.Module):
     def __init__(
@@ -53,7 +53,8 @@ class SO2ObsEncoder(nn.Module):
             lmaxs=[lmax],
             N=N,
             dropout=dropout,
-            act_out=True
+            act_out=True,
+            initialize=initialize
         )
         self.out_type = self.lin.out_type
 

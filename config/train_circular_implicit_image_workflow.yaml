@@ -17,7 +17,7 @@ num_action_steps: 1
 num_latency_steps: 0
 past_action_visible: False
 keypoint_visible_rate: 1.0
-z_dim: 128 
+z_dim: 128
 lmax: 3
 N: 8
 is_harmonic: True
@@ -29,7 +29,7 @@ policy:
   num_obs_steps: ${num_obs_steps}
   num_action_steps: ${num_action_steps}
   num_neg_act_samples: 1024
-  pred_n_samples: 500
+  pred_n_samples: 1000
   optimize_negatives: False 
   sample_actions: True 
   temperature: 1.0
@@ -47,7 +47,7 @@ obs_encoder:
 energy_head:
   _target_: irrep_actions.model.energy_mlp.CircularEnergyMLP
   obs_feat_dim: ${z_dim}
-  mlp_dim: ${z_dim}
+  mlp_dim: 256
   lmax: ${lmax}
   dropout: 0.1
   num_rot: 360 
@@ -81,7 +81,7 @@ training:
   lr_warmup_steps: 500
   num_epochs: 200
   checkpoint_every: 20
-  rollout_every: 20
+  rollout_every: 1
   val_every: 1
   tqdm_interval_sec: 1.0
 

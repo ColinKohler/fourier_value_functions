@@ -54,11 +54,12 @@ class CircularImplicitPolicy(BasePolicy):
         )
 
         # Optimize actions
+        self.pred_n_samples = 5000
         mag = torch.linspace(action_stats['min'][0].item(), action_stats['max'][0].item(), self.pred_n_samples)
         mag = mag.view(1, -1, 1).repeat(B, 1, 1).view(B, -1, 1, 1).to(device)
         theta = torch.linspace(0, 2*np.pi, self.energy_head.num_rot).view(1, -1).repeat(B, 1).to(device)
         obs_feat = self.obs_encoder(nobs)
-        logits = self.energy_head.get_energy_ball(obs_feat, mag).view(B, -1)
+        logits = self.energy_head(obs_feat, mag).view(B, -1)
         action_probs = torch.softmax(logits/self.temperature, dim=-1).view(B, self.pred_n_samples, self.energy_head.num_rot)
 
         if self.sample_actions:
@@ -130,18 +131,26 @@ class CircularImplicitPolicy(BasePolicy):
 
         # Combine pos and neg samples: (B, train_n_neg+1, Ta, Da)
         targets = torch.cat([noisy_actions.unsqueeze(1), negatives], dim=1)
+        N = targets.size(1)
 
         # Randomly permute the positive and negative samples
-        permutation = torch.rand(targets.size(0), targets.size(1)).argsort(dim=1)
-        targets = targets[torch.arange(targets.size(0)).unsqueeze(-1), permutation]
+        permutation = torch.rand(B, N).argsort(dim=1)
+        targets = targets[torch.arange(B).unsqueeze(-1), permutation]
         ground_truth = (permutation == 0).nonzero()[:, 1].to(naction.device)
         one_hot = F.one_hot(ground_truth, num_classes=self.num_neg_act_samples+1).float()
 
+        # Compute ciruclar energy function for the given obs and action magnitudes
         mag = targets[:,:,:,0].unsqueeze(3)
-        theta = self.normalizer["action"].unnormalize(targets)[:,:,0,1]
         obs_feat = self.obs_encoder(nobs)
-        energy = self.energy_head(obs_feat, mag, theta)
+        energy_circle = self.energy_head(obs_feat, mag).view(-1, 360)
 
+        # Find closest theta for all actions and index the energy function at the theta
+        theta = self.normalizer["action"].unnormalize(targets)[:,:,0,1]
+        thetas = torch.linspace(0, 2*np.pi, 360).unsqueeze(0).repeat(B*N, 1).to(theta.device)
+        theta_idxs = torch.argmin((theta.view(-1,1) - thetas).abs(), dim=1)
+        energy = energy_circle[torch.arange(B*N), theta_idxs].view(B, N)
+
+        # Compute InfoNCE loss, i.e. try to predict the expert action from the randomly sampled actions
         probs = F.log_softmax(energy, dim=1)
         ebm_loss = F.kl_div(probs, one_hot, reduction='batchmean')
         grad_loss = torch.Tensor([0])
