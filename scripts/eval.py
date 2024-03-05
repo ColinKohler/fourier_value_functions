@@ -51,7 +51,7 @@ def evaluate(checkpoint: str, output_dir: str, device: str):
         cfg.task.env_runner,
         output_dir=output_dir
     )
-    runner_log = env_runner.run(policy)
+    runner_log = env_runner.run(policy, plot_energy_fn=True)
 
     # Save logs
     json_log = dict()

@@ -133,7 +133,7 @@ class CircularEnergyMLP(nn.Module):
         )
         self.circular_energy_harmonics = CircularHarmonics(lmax, num_rot)
 
-    def forward(self, obs_feat, action_magnitude):
+    def forward(self, obs_feat, action_magnitude, action_theta=None):
         ''' Compute the energy function for the desired action.
 
         '''
@@ -146,4 +146,7 @@ class CircularEnergyMLP(nn.Module):
         )
 
         w = self.energy_mlp(s_a).tensor.view(B*N, -1)
-        return self.circular_energy_harmonics.evaluate(w).view(B, N, -1)
+        if action_theta is not None:
+            return self.circular_energy_harmonics.evaluate(w, action_theta).view(B, N, -1)
+        else:
+            return self.circular_energy_harmonics.evaluate(w).view(B, N, -1)

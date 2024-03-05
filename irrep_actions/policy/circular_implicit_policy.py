@@ -1,9 +1,11 @@
+import io
 import numpy as np
 import numpy.random as npr
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Normal
+import matplotlib.pyplot as plt
 
 from irrep_actions.utils.normalizer import LinearNormalizer
 from irrep_actions.utils import torch_utils
@@ -76,7 +78,7 @@ class CircularImplicitPolicy(BasePolicy):
         y = mag * torch.sin(theta)
         actions = torch.concat([x.view(B,1), y.view(B,1)], dim=1).unsqueeze(1)
 
-        return {'action' : actions}
+        return {'action' : actions, 'energy' : action_probs}
 
     def compute_loss(self, batch):
         # Load batch
@@ -166,3 +168,27 @@ class CircularImplicitPolicy(BasePolicy):
             n_repeats = self.action_dim // value.shape[0]
             repeated_stats[key] = value.repeat(n_repeats)
         return repeated_stats
+
+    def plot_energy_fn(self, img, energy):
+        max_disp = torch.max(energy, dim=-1)[0]
+        E = energy[torch.argmax(max_disp).item()].cpu().numpy()
+
+        f = plt.figure(figsize=(10,3))
+        ax1 = f.add_subplot(111)
+        ax2 = f.add_subplot(141, projection='polar')
+
+        ax1.imshow(img[-1].transpose(1,2,0))
+        ax2.plot(np.linspace(0, 2*np.pi, E.shape[0]), E)
+        ax2.set_rticks(list())
+        ax2.grid(True)
+        ax2.set_title(f"R={torch.max(max_disp).item():.3f}", va="bottom")
+
+        io_buf = io.BytesIO()
+        f.savefig(io_buf, format='raw')
+        io_buf.seek(0)
+        img_arr = np.reshape(np.frombuffer(io_buf.getvalue(), dtype=np.uint8),
+                     newshape=(int(f.bbox.bounds[3]), int(f.bbox.bounds[2]), -1))
+        io_buf.close()
+        plt.close()
+
+        return img_arr

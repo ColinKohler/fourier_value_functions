@@ -7,6 +7,8 @@ import tqdm
 import dill
 import math
 import wandb.sdk.data_types.video as wv
+import imageio
+from pathlib import Path
 
 from irrep_actions.env.pusht.pusht_image_env import PushTImageEnv
 from irrep_actions.gym_util.async_vector_env import AsyncVectorEnv
@@ -40,7 +42,10 @@ class PushTImageRunner(BaseRunner):
         num_envs = None,
         random_goal_pose=False,
     ):
-        num_test_vis=50
+        num_test=5
+        num_train=1
+        num_envs=6
+        num_test_vis=5
         super().__init__(output_dir)
         num_envs = num_train + num_test if num_envs is None else num_envs
 
@@ -137,7 +142,7 @@ class PushTImageRunner(BaseRunner):
         self.max_steps = max_steps
         self.tqdm_interval_sec = tqdm_interval_sec
 
-    def run(self, policy: BasePolicy):
+    def run(self, policy: BasePolicy, plot_energy_fn: bool=False):
         device = policy.device
         dtype = policy.dtype
 
@@ -149,6 +154,7 @@ class PushTImageRunner(BaseRunner):
 
         all_video_paths = [None] * num_inits
         all_rewards = [None] * num_inits
+        energy_fn_plots = [list() for _ in range(num_inits)]
 
         for chunk_idx in range(num_chunks):
             start = chunk_idx * num_envs
@@ -183,7 +189,6 @@ class PushTImageRunner(BaseRunner):
                 #cropped_image = obs['image'][:,:,:,6:-6, 6:-6]
                 from torchvision.transforms.functional import resize
                 cropped_image = resize(torch.tensor(obs['image']).view(-1, 3, 96,96), (84, 84)).view(-1, 2, 3, 84, 84).numpy()
-                #from torchvision.transforms.functional import resize
 
                 x_pos = (obs['agent_pos'][:,:,0] - 255.0)
                 y_pos = (obs['agent_pos'][:,:,1] - 255.0) * -1
@@ -199,6 +204,11 @@ class PushTImageRunner(BaseRunner):
 
                 with torch.no_grad():
                     action_dict = policy.get_action(obs_dict, device)
+
+                if plot_energy_fn:
+                    for i, env_id in enumerate(range(start, end)):
+                        print(f'batch: {i} | env: {env_id}')
+                        energy_fn_plots[env_id].append(policy.plot_energy_fn(cropped_image[i], action_dict['energy'][i]))
 
                 x_act = action_dict['action'][:,:,0]
                 y_act = action_dict['action'][:,:,1] * -1
@@ -233,6 +243,11 @@ class PushTImageRunner(BaseRunner):
             if video_path is not None:
                 sim_video = wandb.Video(video_path)
                 log_data[prefix+f'sim_video_{seed}'] = sim_video
+                if plot_energy_fn:
+                    media_path = video_path.rpartition('.')[0]
+                    energy_fn_plot_path = f'{media_path}_energy_fn.gif'
+                    #log_data[prefix+f'energy_fn_{seed}'] = energy_fn_plot_path
+                    imageio.mimwrite(energy_fn_plot_path, energy_fn_plots[i])
 
         # Log aggergate metrics
         for prefix, v in max_rewards.items():
