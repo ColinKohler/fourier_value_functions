@@ -2,7 +2,7 @@ defaults:
   - _self_
   - task: pusht_lowdim 
 
-name: train_so2_harmonic_implicit_policy
+name: train_circular_implicit_lowdim_policy
 _target_: irrep_actions.workflow.implicit_workflow.ImplicitWorkflow
 
 obs_dim: ${task.obs_dim} 
@@ -10,7 +10,6 @@ action_dim: ${task.action_dim}
 keypoint_dim: ${task.keypoint_dim}
 task_name: ${task.name}
 exp_name: 'default'
-is_harmonic: True
 
 horizon: 2
 num_obs_steps: 2
@@ -20,7 +19,8 @@ past_action_visible: False
 keypoint_visible_rate: 1.0
 z_dim: 512 
 lmax: 3
-N: 16
+N: 8
+is_harmonic: True
 
 policy:
   _target_: irrep_actions.policy.circular_implicit_policy.CircularImplicitPolicy
@@ -28,20 +28,26 @@ policy:
   action_dim: ${action_dim}
   num_obs_steps: ${num_obs_steps}
   num_action_steps: ${num_action_steps}
-  action_sampling: 'dfo'
-  num_neg_act_samples: 256
-  pred_n_iter: 3
-  pred_n_samples: 5000
-  harmonic_actions: True
+  num_neg_act_samples: 1024
+  pred_n_samples: 1000
   optimize_negatives: False 
   sample_actions: True 
   temperature: 1.0
   grad_pen: False
 
-energy_mlp:
-  _target_: irrep_actions.model.energy_mlp.SO2HarmonicEnergyMLP
-  in_channels: ${eval:'(${obs_dim}*${num_obs_steps}) // 2'}
-  mid_channels: ${z_dim}
+obs_encoder:
+  _target_: irrep_actions.model.obs_encoder.SO2KeypointEncoder
+  num_obs: ${num_obs_steps}
+  in_feat: ${eval:'${obs_dim} // 2'}
+  z_dim: ${z_dim}
+  lmax: ${lmax}
+  N: ${N}
+  dropout: 0.1
+
+energy_head:
+  _target_: irrep_actions.model.energy_mlp.CircularEnergyMLP
+  obs_feat_dim: ${z_dim}
+  mlp_dim: ${z_dim}
   lmax: ${lmax}
   dropout: 0.1
   num_rot: 360 
@@ -63,7 +69,7 @@ val_dataloader:
 
 optimizer:
   _target_: torch.optim.AdamW
-  lr: 1e-3
+  lr: 5e-4
   betas: [0.95, 0.999]
   eps: 1e-8
   weight_decay: 1e-6
@@ -73,9 +79,9 @@ training:
   seed: 0
   resume: True
   lr_warmup_steps: 500
-  num_epochs: 1000
-  checkpoint_every: 50
-  rollout_every: 50
+  num_epochs: 200
+  checkpoint_every: 1
+  rollout_every: 1
   val_every: 1
   tqdm_interval_sec: 1.0
 

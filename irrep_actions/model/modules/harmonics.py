@@ -46,7 +46,7 @@ class CircularHarmonics(HarmonicFunction):
 
         return torch.stack(basis_fns).permute(1, 0, 2).float().squeeze().permute(1,0)
 
-    def evaluate(self, w: torch.Tensor, action_theta=None) -> torch.Tensor:
+    def evaluate(self, w: torch.Tensor) -> torch.Tensor:
         ''' Evaluate the harmonic function using the given coefficents and the basis functions generated at init.
 
         Args:
@@ -54,10 +54,7 @@ class CircularHarmonics(HarmonicFunction):
 
         Returns:
         '''
-        if action_theta is not None:
-            return
-        else:
-            return torch.mm(w,  self.basis_fns)
+        return torch.mm(w,  self.basis_fns)
 
     def convert_to_polar_coords(self, x: torch.Tensor) -> torch.Tensor:
         ''' Convert regular coordinates to polar coordinates.

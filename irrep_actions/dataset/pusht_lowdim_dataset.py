@@ -45,7 +45,7 @@ class PushTLowdimDataset(BaseDataset):
         action = np.concatenate((x_act[..., np.newaxis], y_act[..., np.newaxis]), axis=-1).reshape(T, 2)
 
         data = {
-            'obs': obs, # T, D_o
+            'obs': obs,
             "action": action,  # T, D_a
         }
         return data

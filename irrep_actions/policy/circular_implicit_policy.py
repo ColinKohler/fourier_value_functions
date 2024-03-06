@@ -42,9 +42,14 @@ class CircularImplicitPolicy(BasePolicy):
         self.apply(torch_utils.init_weights)
 
     def get_action(self, obs, device):
-        B = obs['image'].shape[0]
 
-        nobs = self.normalizer.normalize(obs)
+        if type(obs) is dict:
+            nobs = self.normalizer.normalize(obs)
+            B = obs['image'].shape[0]
+        else:
+            nobs = self.normalizer['obs'].normalize(obs)
+            B = obs.shape[0]
+
         Do = self.obs_dim
         Da = self.action_dim
         To = self.num_obs_steps
@@ -82,7 +87,10 @@ class CircularImplicitPolicy(BasePolicy):
 
     def compute_loss(self, batch):
         # Load batch
-        nobs = self.normalizer.normalize(batch["obs"])
+        if type(batch['obs']) is dict:
+            nobs = self.normalizer.normalize(batch["obs"])
+        else:
+            nobs = self.normalizer['obs'].normalize(batch['obs'])
         naction = self.normalizer['action'].normalize(batch["action"]).float()
 
         Do = self.obs_dim

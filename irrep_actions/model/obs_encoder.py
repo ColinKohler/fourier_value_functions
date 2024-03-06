@@ -10,6 +10,47 @@ from irrep_actions.model.vision_encoder import CyclicImageEncoder
 from irrep_actions.model.modules.fourier import Fourier
 from irrep_actions.model.modules.equiv_layers import SO2MLP
 
+class SO2KeypointEncoder(nn.Module):
+    def __init__(
+        self,
+        num_obs: int,
+        in_feat: int,
+        z_dim: int,
+        lmax: int=3,
+        N: int=16,
+        dropout: float=0.0,
+        initialize: bool=True,
+    ):
+        super().__init__()
+
+        self.G = group.so2_group()
+        self.gspace = gspaces.no_base_space(self.G)
+        self.z_dim = z_dim
+
+        self.in_type = enn.FieldType(
+            self.gspace,
+            num_obs * in_feat * [self.gspace.irrep(1)]
+        )
+        self.keypoint_enc = SO2MLP(
+            self.in_type,
+            channels=[z_dim] * 4,
+            lmaxs=[lmax] * 4,
+            N=N,
+            dropout=dropout,
+            act_out=True,
+            initialize=initialize
+        )
+        self.out_type = self.keypoint_enc.out_type
+
+    def forward(self, obs) -> torch.Tensor:
+        B, T, Do = obs.shape
+
+        x = self.in_type(obs.view(B, -1))
+        obs_feat = self.keypoint_enc(x)
+
+        return obs_feat.tensor
+
+
 class SO2ObsEncoder(nn.Module):
     def __init__(
         self,

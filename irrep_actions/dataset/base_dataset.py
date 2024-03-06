@@ -71,7 +71,7 @@ class BaseDataset(torch.utils.data.Dataset):
 
     def get_normalizer(self, data=None, mode="limits", **kwargs):
         if data is None:
-            data = self._sample_to_data(self.replay_buffer, rand_crop=False)
+            data = self._sample_to_data(self.replay_buffer)
 
         if self.harmonic_action:
             data["action"] = harmonics.convert_action_to_harmonics(data["action"])
