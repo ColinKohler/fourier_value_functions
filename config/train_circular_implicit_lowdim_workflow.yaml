@@ -36,7 +36,7 @@ policy:
   grad_pen: False
 
 obs_encoder:
-  _target_: irrep_actions.model.obs_encoder.SO2KeypointEncoder
+  _target_: irrep_actions.model.implict.obs_encoder.SO2KeypointEncoder
   num_obs: ${num_obs_steps}
   in_feat: ${eval:'${obs_dim} // 2'}
   z_dim: ${z_dim}
@@ -45,7 +45,7 @@ obs_encoder:
   dropout: 0.1
 
 energy_head:
-  _target_: irrep_actions.model.energy_mlp.CircularEnergyMLP
+  _target_: irrep_actions.model.implict.energy_mlp.CircularEnergyMLP
   obs_feat_dim: ${z_dim}
   mlp_dim: ${z_dim}
   lmax: ${lmax}

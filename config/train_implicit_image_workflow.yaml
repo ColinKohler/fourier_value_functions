@@ -35,14 +35,14 @@ policy:
   grad_pen: False
 
 obs_encoder:
-  _target_: irrep_actions.model.obs_encoder.ObsEncoder
+  _target_: irrep_actions.model.implict.obs_encoder.ObsEncoder
   num_obs: ${num_obs_steps}
   img_channels: 3
   z_dim: ${z_dim}
   dropout: 0.1
 
 energy_head:
-  _target_: irrep_actions.model.energy_mlp.EnergyMLP
+  _target_: irrep_actions.model.implict.energy_mlp.EnergyMLP
   obs_feat: ${z_dim}
   mlp_dim: 256 
   dropout: 0.1
