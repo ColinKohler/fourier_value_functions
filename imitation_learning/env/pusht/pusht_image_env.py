@@ -1,5 +1,5 @@
 from gym import spaces
-from irrep_actions.env.pusht.pusht_env import PushTEnv
+from imitation_learning.env.pusht.pusht_env import PushTEnv
 import numpy as np
 import cv2
 

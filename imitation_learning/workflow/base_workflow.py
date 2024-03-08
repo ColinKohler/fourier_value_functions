@@ -9,7 +9,7 @@ from hydra.core.hydra_config import HydraConfig
 from omegaconf import OmegaConf
 import threading
 
-from irrep_actions.utils import torch_utils
+from imitation_learning.utils import torch_utils
 
 
 class BaseWorkflow(object):

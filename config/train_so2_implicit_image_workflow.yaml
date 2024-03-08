@@ -3,7 +3,7 @@ defaults:
   - task: pusht_image 
 
 name: train_so2_implicit_image_policy
-_target_: irrep_actions.workflow.implicit_workflow.ImplicitWorkflow
+_target_: imitation_learning.workflow.implicit_workflow.ImplicitWorkflow
 
 obs_dim: ${task.image_dim} 
 action_dim: ${task.action_dim}
@@ -22,7 +22,7 @@ N: 8
 is_harmonic: False
 
 policy:
-  _target_: irrep_actions.policy.implicit_policy.ImplicitPolicy
+  _target_: imitation_learning.policy.implicit_policy.ImplicitPolicy
   obs_dim: ${obs_dim}
   action_dim: ${action_dim}
   num_obs_steps: ${num_obs_steps}
@@ -37,7 +37,7 @@ policy:
   grad_pen: False
 
 obs_encoder:
-  _target_: irrep_actions.model.implict.obs_encoder.SO2ObsEncoder
+  _target_: imitation_learning.model.implict.obs_encoder.SO2ObsEncoder
   num_obs: ${num_obs_steps}
   img_channels: 3
   z_dim: ${z_dim}
@@ -46,7 +46,7 @@ obs_encoder:
   dropout: 0.1
 
 energy_head:
-  _target_: irrep_actions.model.implict.energy_mlp.SO2EnergyMLP
+  _target_: imitation_learning.model.implict.energy_mlp.SO2EnergyMLP
   obs_feat_dim: ${z_dim}
   mlp_dim: ${z_dim}
   lmax: ${lmax}

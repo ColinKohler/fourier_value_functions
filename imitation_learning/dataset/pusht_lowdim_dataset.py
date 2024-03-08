@@ -1,5 +1,5 @@
 import numpy as np
-from irrep_actions.dataset.base_dataset import BaseDataset
+from imitation_learning.dataset.base_dataset import BaseDataset
 
 class PushTLowdimDataset(BaseDataset):
     def __init__(

@@ -5,8 +5,8 @@ sys.path.insert(0, os.path.abspath("."))
 
 import numpy as np
 import click
-from irrep_actions.dataset.replay_buffer import ReplayBuffer
-from irrep_actions.env.pusht.pusht_keypoints_env import PushTKeypointsEnv
+from imitation_learning.dataset.replay_buffer import ReplayBuffer
+from imitation_learning.env.pusht.pusht_keypoints_env import PushTKeypointsEnv
 import pygame
 
 @click.command()

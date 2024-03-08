@@ -6,10 +6,10 @@ from escnn import nn as enn
 from escnn import group
 from escnn.gspaces.r2 import GSpace2D
 
-from irrep_actions.model.vision_encoder import ImageEncoder, CyclicImageEncoder
-from irrep_actions.model.modules.fourier import Fourier
-from irrep_actions.model.modules.equiv_layers import SO2MLP
-from irrep_actions.model.modules.layers import MLP
+from imitation_learning.model.vision_encoder import ImageEncoder, CyclicImageEncoder
+from imitation_learning.model.modules.fourier import Fourier
+from imitation_learning.model.modules.equiv_layers import SO2MLP
+from imitation_learning.model.modules.layers import MLP
 
 class ObsEncoder(nn.Module):
     def __init__(

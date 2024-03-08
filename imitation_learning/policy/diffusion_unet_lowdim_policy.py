@@ -5,12 +5,12 @@ import torch.nn.functional as F
 from einops import rearrange, reduce
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 
-from irrep_actions.utils.normalizer import LinearNormalizer
-from irrep_actions.utils import torch_utils
-from irrep_actions.policy.base_policy import BasePolicy
+from imitation_learning.utils.normalizer import LinearNormalizer
+from imitation_learning.utils import torch_utils
+from imitation_learning.policy.base_policy import BasePolicy
 
-from irrep_actions.model.diffusion.conditional_unet1d import ConditionalUnet1D
-from irrep_actions.model.diffusion.mask_generator import LowdimMaskGenerator
+from imitation_learning.model.diffusion.conditional_unet1d import ConditionalUnet1D
+from imitation_learning.model.diffusion.mask_generator import LowdimMaskGenerator
 
 class DiffusionUnetPolicy(BasePolicy):
     def __init__(

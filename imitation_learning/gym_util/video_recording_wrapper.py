@@ -1,6 +1,6 @@
 import gym
 import numpy as np
-from irrep_actions.gym_util.video_recorder import VideoRecorder
+from imitation_learning.gym_util.video_recorder import VideoRecorder
 
 class VideoRecordingWrapper(gym.Wrapper):
     def __init__(self,

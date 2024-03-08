@@ -6,9 +6,9 @@ from escnn import nn as enn
 from escnn import group
 from escnn.gspaces.r2 import GSpace2D
 
-from irrep_actions.model.modules.layers import ResNetBlock
-from irrep_actions.model.modules.equiv_layers import CyclicResNetBlock, SO2ResNetBlock
-from irrep_actions.model.modules.fourier import Fourier
+from imitation_learning.model.modules.layers import ResNetBlock
+from imitation_learning.model.modules.equiv_layers import CyclicResNetBlock, SO2ResNetBlock
+from imitation_learning.model.modules.fourier import Fourier
 
 class ImageEncoder(nn.Module):
     def __init__(self, in_channels, z_dim, dropout):

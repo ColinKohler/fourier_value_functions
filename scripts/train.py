@@ -16,7 +16,7 @@ sys.stderr = open(sys.stderr.fileno(), mode="w", buffering=1)
 import hydra
 from omegaconf import OmegaConf
 import pathlib
-from irrep_actions.workflow.base_workflow import BaseWorkflow
+from imitation_learning.workflow.base_workflow import BaseWorkflow
 
 # allows arbitrary python code execution in configs using the ${eval:''} resolver
 OmegaConf.register_new_resolver("eval", eval, replace=True)

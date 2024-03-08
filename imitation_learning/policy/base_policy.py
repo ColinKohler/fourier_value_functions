@@ -1,5 +1,5 @@
-from irrep_actions.utils.module_attr_mixin import ModuleAttrMixin
-from irrep_actions.utils.normalizer import LinearNormalizer
+from imitation_learning.utils.module_attr_mixin import ModuleAttrMixin
+from imitation_learning.utils.normalizer import LinearNormalizer
 
 
 class BasePolicy(ModuleAttrMixin):

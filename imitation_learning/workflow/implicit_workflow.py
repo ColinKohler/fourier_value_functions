@@ -12,15 +12,15 @@ from typing import Optional
 from omegaconf import OmegaConf
 import wandb
 
-from irrep_actions.model.vision_encoder import ImageEncoder
-from irrep_actions.model.energy_mlp import EnergyMLP
-from irrep_actions.dataset.base_dataset import BaseDataset
-from irrep_actions.workflow.base_workflow import BaseWorkflow
-from irrep_actions.env_runner.base_runner import BaseRunner
-from irrep_actions.policy.implicit_policy import ImplicitPolicy
-from irrep_actions.utils import torch_utils
-from irrep_actions.utils.json_logger import JsonLogger
-from irrep_actions.utils.checkpoint_manager import TopKCheckpointManager
+from imitation_learning.model.vision_encoder import ImageEncoder
+from imitation_learning.model.energy_mlp import EnergyMLP
+from imitation_learning.dataset.base_dataset import BaseDataset
+from imitation_learning.workflow.base_workflow import BaseWorkflow
+from imitation_learning.env_runner.base_runner import BaseRunner
+from imitation_learning.policy.implicit_policy import ImplicitPolicy
+from imitation_learning.utils import torch_utils
+from imitation_learning.utils.json_logger import JsonLogger
+from imitation_learning.utils.checkpoint_manager import TopKCheckpointManager
 
 OmegaConf.register_new_resolver("eval", eval, replace=True)
 

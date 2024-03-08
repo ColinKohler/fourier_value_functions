@@ -20,7 +20,7 @@ import dill
 import wandb
 import json
 import argparse
-from irrep_actions.workflow.base_workflow import BaseWorkflow
+from imitation_learning.workflow.base_workflow import BaseWorkflow
 
 def evaluate(checkpoint: str, output_dir: str, device: str, plot_energy_fn: bool=False):
     if os.path.exists(output_dir):

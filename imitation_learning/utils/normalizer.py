@@ -3,8 +3,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from irrep_actions.utils.dict_of_tensor_mixin import DictOfTensorMixin
-from irrep_actions.utils import torch_utils
+from imitation_learning.utils.dict_of_tensor_mixin import DictOfTensorMixin
+from imitation_learning.utils import torch_utils
 
 
 class LinearNormalizer(DictOfTensorMixin):

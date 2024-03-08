@@ -21,9 +21,9 @@ from typing import List, Optional
 
 from gym import spaces
 from gym.envs import registration
-from irrep_actions.env.block_pushing import block_pushing
-from irrep_actions.env.block_pushing.utils import utils_pybullet
-from irrep_actions.env.block_pushing.utils.pose3d import Pose3d
+from imitation_learning.env.block_pushing import block_pushing
+from imitation_learning.env.block_pushing.utils import utils_pybullet
+from imitation_learning.env.block_pushing.utils.pose3d import Pose3d
 import numpy as np
 from scipy.spatial import transform
 import pybullet

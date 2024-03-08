@@ -9,14 +9,14 @@ import math
 import wandb.sdk.data_types.video as wv
 import imageio
 
-from irrep_actions.env.pusht.pusht_image_env import PushTImageEnv
-from irrep_actions.gym_util.async_vector_env import AsyncVectorEnv
-from irrep_actions.gym_util.multistep_wrapper import MultiStepWrapper
-from irrep_actions.gym_util.video_recording_wrapper import VideoRecordingWrapper, VideoRecorder
+from imitation_learning.env.pusht.pusht_image_env import PushTImageEnv
+from imitation_learning.gym_util.async_vector_env import AsyncVectorEnv
+from imitation_learning.gym_util.multistep_wrapper import MultiStepWrapper
+from imitation_learning.gym_util.video_recording_wrapper import VideoRecordingWrapper, VideoRecorder
 
-from irrep_actions.policy.base_policy import BasePolicy
-from irrep_actions.env_runner.base_runner import BaseRunner
-from irrep_actions.utils.torch_utils import dict_apply
+from imitation_learning.policy.base_policy import BasePolicy
+from imitation_learning.env_runner.base_runner import BaseRunner
+from imitation_learning.utils.torch_utils import dict_apply
 
 class PushTImageRunner(BaseRunner):
     def __init__(

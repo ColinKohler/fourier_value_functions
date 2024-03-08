@@ -1,6 +1,6 @@
 from typing import Optional
 import numpy as np
-from irrep_actions.dataset.replay_buffer import ReplayBuffer
+from imitation_learning.dataset.replay_buffer import ReplayBuffer
 
 
 def create_indices(

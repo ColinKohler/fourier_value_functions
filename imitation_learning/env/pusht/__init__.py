@@ -1,5 +1,5 @@
 from gym.envs.registration import register
-import irrep_actions.env.pusht
+import imitation_learning.env.pusht
 
 register(
     id='pusht-keypoints-v0',

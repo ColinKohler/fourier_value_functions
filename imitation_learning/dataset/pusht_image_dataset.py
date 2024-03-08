@@ -1,7 +1,7 @@
 import numpy as np
 
-from irrep_actions.dataset.base_dataset import BaseDataset
-from irrep_actions.utils import normalize_utils, data_augmentation
+from imitation_learning.dataset.base_dataset import BaseDataset
+from imitation_learning.utils import normalize_utils, data_augmentation
 
 class PushTImageDataset(BaseDataset):
     def __init__(

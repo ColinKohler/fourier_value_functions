@@ -5,11 +5,11 @@ import numpy as np
 import numpy.random as npr
 import pickle
 
-from irrep_actions.dataset.replay_buffer import ReplayBuffer
-from irrep_actions.utils import torch_utils
-from irrep_actions.utils import harmonics
-from irrep_actions.utils.normalizer import LinearNormalizer
-from irrep_actions.utils.sampler import SequenceSampler, get_val_mask, downsample_mask
+from imitation_learning.dataset.replay_buffer import ReplayBuffer
+from imitation_learning.utils import torch_utils
+from imitation_learning.utils import harmonics
+from imitation_learning.utils.normalizer import LinearNormalizer
+from imitation_learning.utils.sampler import SequenceSampler, get_val_mask, downsample_mask
 
 
 class BaseDataset(torch.utils.data.Dataset):

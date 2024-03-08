@@ -14,7 +14,7 @@
 # limitations under the License.
 
 """Oracle for multimodal pushing task."""
-import irrep_actions.env.block_pushing.oracles.oriented_push_oracle as oriented_push_oracle_module
+import imitation_learning.env.block_pushing.oracles.oriented_push_oracle as oriented_push_oracle_module
 import numpy as np
 from tf_agents.trajectories import policy_step
 from tf_agents.trajectories import time_step as ts

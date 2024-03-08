@@ -5,7 +5,7 @@ import pymunk
 import pygame
 from matplotlib import cm
 import cv2
-from irrep_actions.env.pusht.pymunk_override import DrawOptions
+from imitation_learning.env.pusht.pymunk_override import DrawOptions
 
 
 def farthest_point_sampling(points: np.ndarray, n_points: int, init_idx: int):

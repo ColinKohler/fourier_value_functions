@@ -5,9 +5,9 @@ from escnn import gspaces
 from escnn import nn as enn
 from escnn import group
 
-from irrep_actions.model.modules.layers import MLP
-from irrep_actions.model.modules.equiv_layers import SO2MLP
-from irrep_actions.model.modules.harmonics import CircularHarmonics
+from imitation_learning.model.modules.layers import MLP
+from imitation_learning.model.modules.equiv_layers import SO2MLP
+from imitation_learning.model.modules.harmonics import CircularHarmonics
 
 class EnergyMLP(nn.Module):
     def __init__(self, obs_feat, mlp_dim, dropout, spec_norm, initialize):

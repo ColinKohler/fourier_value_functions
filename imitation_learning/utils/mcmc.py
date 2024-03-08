@@ -1,6 +1,6 @@
 import torch
 import math
-from irrep_actions.utils import harmonics
+from imitation_learning.utils import harmonics
 
 def iterative_dfo(
     policy,

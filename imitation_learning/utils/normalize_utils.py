@@ -1,4 +1,4 @@
-from irrep_actions.utils.normalizer import SingleFieldLinearNormalizer
+from imitation_learning.utils.normalizer import SingleFieldLinearNormalizer
 import numpy as np
 
 def get_image_range_normalizer():

@@ -7,10 +7,10 @@ import torch.nn.functional as F
 from torch.distributions import Normal
 import matplotlib.pyplot as plt
 
-from irrep_actions.utils.normalizer import LinearNormalizer
-from irrep_actions.utils import torch_utils
-from irrep_actions.policy.base_policy import BasePolicy
-from irrep_actions.utils import mcmc
+from imitation_learning.utils.normalizer import LinearNormalizer
+from imitation_learning.utils import torch_utils
+from imitation_learning.policy.base_policy import BasePolicy
+from imitation_learning.utils import mcmc
 
 
 class CircularImplicitPolicy(BasePolicy):

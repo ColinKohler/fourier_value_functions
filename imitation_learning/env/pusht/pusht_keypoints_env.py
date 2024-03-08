@@ -1,7 +1,7 @@
 from typing import Dict, Sequence, Union, Optional
 from gym import spaces
-from irrep_actions.env.pusht.pusht_env import PushTEnv
-from irrep_actions.env.pusht.pymunk_keypoint_manager import PymunkKeypointManager
+from imitation_learning.env.pusht.pusht_env import PushTEnv
+from imitation_learning.env.pusht.pymunk_keypoint_manager import PymunkKeypointManager
 import numpy as np
 
 class PushTKeypointsEnv(PushTEnv):
