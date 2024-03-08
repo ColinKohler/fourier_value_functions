@@ -16,7 +16,6 @@ num_obs_steps: 2
 num_action_steps: 1
 num_latency_steps: 0
 past_action_visible: False
-keypoint_visible_rate: 1.0
 z_dim: 256
 lmax: 3
 N: 8
@@ -38,17 +37,18 @@ policy:
   grad_pen: False
 
 obs_encoder:
-  _target_: irrep_actions.model.vision_encoder.CyclicImageEncoder
-  in_channels: 3
+  _target_: irrep_actions.model.obs_encoder.SO2ObsEncoder
+  num_obs: ${num_obs_steps}
+  img_channels: 3
   z_dim: ${z_dim}
-  dropout: 0.1
   lmax: ${lmax}
   N: ${N}
+  dropout: 0.1
 
 energy_head:
-  _target_: irrep_actions.model.energy_mlp.CyclicEnergyMLP
-  in_channels: ${eval:'(${action_dim}*${num_action_steps} + ${z_dim}*${num_obs_steps})'}
-  mid_channels: ${z_dim}
+  _target_: irrep_actions.model.energy_mlp.SO2EnergyMLP
+  obs_feat_dim: ${z_dim}
+  mlp_dim: ${z_dim}
   lmax: ${lmax}
   dropout: 0.1
   N: ${N}
@@ -79,9 +79,9 @@ training:
   seed: 0
   resume: True
   lr_warmup_steps: 500
-  num_epochs: 1000
-  checkpoint_every: 50
-  rollout_every: 50
+  num_epochs: 200
+  checkpoint_every: 1
+  rollout_every: 1
   val_every: 1
   tqdm_interval_sec: 1.0
 

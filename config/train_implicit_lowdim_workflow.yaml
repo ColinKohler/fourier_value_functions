@@ -18,6 +18,7 @@ num_latency_steps: 0
 past_action_visible: False
 keypoint_visible_rate: 1.0
 z_dim: 1024
+is_harmonic: False
 
 policy:
   _target_: irrep_actions.policy.implicit_policy.ImplicitPolicy
@@ -34,9 +35,16 @@ policy:
   temperature: 1.0
   grad_pen: False
 
-energy_mlp:
+obs_encoder:
+  _target_: irrep_actions.model.obs_encoder.KeypointEncoder
+  num_obs: ${num_obs_steps}
+  in_feat: ${obs_dim}
+  z_dim: ${z_dim}
+  dropout: 0.1
+
+energy_head:
   _target_: irrep_actions.model.energy_mlp.EnergyMLP
-  in_channels: ${eval:'${action_dim}*${num_action_steps} + ${obs_dim}*${num_obs_steps}'}
+  obs_feat_dim: ${z_dim}
   mid_channels: ${z_dim}
   dropout: 0.1
   spec_norm: False
@@ -67,9 +75,9 @@ training:
   seed: 0
   resume: True
   lr_warmup_steps: 500
-  num_epochs: 1000
-  checkpoint_every: 50
-  rollout_every: 50
+  num_epochs: 200
+  checkpoint_every: 1
+  rollout_every: 1
   val_every: 1
   tqdm_interval_sec: 1.0
 

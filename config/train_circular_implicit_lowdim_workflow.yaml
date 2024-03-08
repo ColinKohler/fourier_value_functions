@@ -28,7 +28,7 @@ policy:
   action_dim: ${action_dim}
   num_obs_steps: ${num_obs_steps}
   num_action_steps: ${num_action_steps}
-  num_neg_act_samples: 1024
+  num_neg_act_samples: 256
   pred_n_samples: 1000
   optimize_negatives: False 
   sample_actions: True 
@@ -54,14 +54,14 @@ energy_head:
   N: ${N}
 
 dataloader:
-  batch_size: 128
+  batch_size: 64
   num_workers: 1
   shuffle: True
   pin_memory: True
   persistent_workers: False
 
 val_dataloader:
-  batch_size: 128
+  batch_size: 64
   num_workers: 1
   shuffle: False
   pin_memory: True
@@ -69,7 +69,7 @@ val_dataloader:
 
 optimizer:
   _target_: torch.optim.AdamW
-  lr: 5e-4
+  lr: 1e-4
   betas: [0.95, 0.999]
   eps: 1e-8
   weight_decay: 1e-6

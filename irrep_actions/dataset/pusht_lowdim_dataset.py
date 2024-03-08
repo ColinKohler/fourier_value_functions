@@ -25,6 +25,14 @@ class PushTLowdimDataset(BaseDataset):
             max_train_episodes=max_train_episodes
         )
 
+    def get_normalizer(self, mode='limits', **kwargs):
+        sample_data = self._sample_to_data(self.replay_buffer)
+        data = {
+            'keypoints' : sample_data['obs']['keypoints'],
+            'action' : sample_data['action']
+        }
+        return super().get_normalizer(data, mode=mode, **kwargs)
+
     def _sample_to_data(self, sample):
         keypoint = sample['keypoint']
         state = sample['state']
@@ -45,7 +53,9 @@ class PushTLowdimDataset(BaseDataset):
         action = np.concatenate((x_act[..., np.newaxis], y_act[..., np.newaxis]), axis=-1).reshape(T, 2)
 
         data = {
-            'obs': obs,
+            'obs': {
+                'keypoints' : obs
+            },
             "action": action,  # T, D_a
         }
         return data

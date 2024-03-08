@@ -6,9 +6,41 @@ from escnn import nn as enn
 from escnn import group
 from escnn.gspaces.r2 import GSpace2D
 
-from irrep_actions.model.vision_encoder import CyclicImageEncoder
+from irrep_actions.model.vision_encoder import ImageEncoder, CyclicImageEncoder
 from irrep_actions.model.modules.fourier import Fourier
 from irrep_actions.model.modules.equiv_layers import SO2MLP
+from irrep_actions.model.modules.layers import MLP
+
+class ObsEncoder(nn.Module):
+    def __init__(
+        self,
+        num_obs: int,
+        img_channels: int,
+        z_dim: int,
+        dropout: float=0.0,
+        initialize: bool=True,
+    ):
+        super().__init__()
+
+        self.image_encoder = ImageEncoder(img_channels, z_dim, dropout)
+        self.lin = MLP(
+            [num_obs * z_dim + num_obs * 2] + [z_dim],
+            dropout=dropout,
+            act_out=True,
+            spec_norm=False
+        )
+
+    def forward(self, obs) -> torch.Tensor:
+        B, T, C, H, W = obs['image'].shape
+
+        img_feat = self.image_encoder(obs['image'].view(B*T, C, H, W)).view(B, -1)
+        state = obs['agent_pos'].view(B, -1)
+
+        img_feat_state =  torch.cat([img_feat, state], dim=-1)
+        obs_feat = self.lin(img_feat_state)
+
+        return obs_feat
+
 
 class SO2KeypointEncoder(nn.Module):
     def __init__(
@@ -43,9 +75,9 @@ class SO2KeypointEncoder(nn.Module):
         self.out_type = self.keypoint_enc.out_type
 
     def forward(self, obs) -> torch.Tensor:
-        B, T, Do = obs.shape
+        B, T, Do = obs['keypoints'].shape
 
-        x = self.in_type(obs.view(B, -1))
+        x = self.in_type(obs['keypoints'].view(B, -1))
         obs_feat = self.keypoint_enc(x)
 
         return obs_feat.tensor

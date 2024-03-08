@@ -7,6 +7,7 @@ import tqdm
 import dill
 import math
 import wandb.sdk.data_types.video as wv
+import imageio
 
 from irrep_actions.env.pusht.pusht_keypoints_env import PushTKeypointsEnv
 from irrep_actions.gym_util.async_vector_env import AsyncVectorEnv
@@ -40,6 +41,10 @@ class PushTKeypointsRunner(BaseRunner):
         num_envs = None,
         random_goal_pose=False,
     ):
+        num_test=5
+        num_train=1
+        num_envs=6
+        num_test_vis=5
         super().__init__(output_dir)
         num_envs = num_train + num_test if num_envs is None else num_envs
 
@@ -141,7 +146,7 @@ class PushTKeypointsRunner(BaseRunner):
         self.max_steps = max_steps
         self.tqdm_interval_sec = tqdm_interval_sec
 
-    def run(self, policy: BasePolicy):
+    def run(self, policy: BasePolicy, plot_energy_fn: bool=False):
         device = policy.device
         dtype = policy.dtype
 
@@ -153,6 +158,7 @@ class PushTKeypointsRunner(BaseRunner):
 
         all_video_paths = [None] * num_inits
         all_rewards = [None] * num_inits
+        energy_fn_plots = [list() for _ in range(num_inits)]
 
         for chunk_idx in range(num_chunks):
             start = chunk_idx * num_envs
@@ -186,20 +192,23 @@ class PushTKeypointsRunner(BaseRunner):
                 B = obs.shape[0]
                 Do = obs.shape[-1] // 2
                 obs_dict = {
-                    'obs' : obs[..., :self.num_obs_steps, :Do].astype(np.float32),
-                    'obs_mask' : obs[..., :self.num_obs_steps, Do:] > 0.5
+                    'keypoints' : obs[..., :self.num_obs_steps, :Do].astype(np.float32),
                 }
 
                 if self.past_action and (past_action is not None):
                     obs['past_action'] = past_action[:, -(self.num_obs_steps-1):].astype(np.float32)
 
                 obs_dict = dict_apply(obs_dict, lambda x: torch.from_numpy(x).to(device))
-                x_obs = (obs_dict['obs'].reshape(B,-1,2)[:,:,0] - 255.0)
-                y_obs = (obs_dict['obs'].reshape(B,-1,2)[:,:,1] - 255.0) * -1.
-                obs_dict['obs'] = torch.concatenate((x_obs.unsqueeze(-1), y_obs.unsqueeze(-1)), dim=-1).view(B, -1).view(B,2,Do)
+                x_obs = (obs_dict['keypoints'].reshape(B,-1,2)[:,:,0] - 255.0)
+                y_obs = (obs_dict['keypoints'].reshape(B,-1,2)[:,:,1] - 255.0) * -1.
+                obs_dict['keypoints'] = torch.concatenate((x_obs.unsqueeze(-1), y_obs.unsqueeze(-1)), dim=-1).view(B, -1).view(B,2,Do)
 
                 with torch.no_grad():
                     action_dict = policy.get_action(obs_dict, device)
+
+                if plot_energy_fn:
+                    for i, env_id in enumerate(range(start, end)):
+                        energy_fn_plots[env_id].append(policy.plot_energy_fn(None, action_dict['energy'][i]))
 
                 x_act = action_dict['action'][:,:,0]
                 y_act = action_dict['action'][:,:,1] * -1
@@ -234,6 +243,11 @@ class PushTKeypointsRunner(BaseRunner):
             if video_path is not None:
                 sim_video = wandb.Video(video_path)
                 log_data[prefix+f'sim_video_{seed}'] = sim_video
+                if plot_energy_fn:
+                    media_path = video_path.rpartition('.')[0]
+                    energy_fn_plot_path = f'{media_path}_energy_fn.gif'
+                    #log_data[prefix+f'energy_fn_{seed}'] = energy_fn_plot_path
+                    imageio.mimwrite(energy_fn_plot_path, energy_fn_plots[i])
 
         # Log aggergate metrics
         for prefix, v in max_rewards.items():

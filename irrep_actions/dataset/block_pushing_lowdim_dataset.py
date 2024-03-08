@@ -33,7 +33,9 @@ class BlockPushingLowdimDataset(BaseDataset):
             obs[:, 8:10] = 0
 
         data = {
-            'obs': obs, # T, D_o
+            'obs': {
+                'keypoints' : obs, # T, D_o
+            },
             "action": sample["action"],  # T, D_a
         }
         return data

@@ -8,7 +8,6 @@ import dill
 import math
 import wandb.sdk.data_types.video as wv
 import imageio
-from pathlib import Path
 
 from irrep_actions.env.pusht.pusht_image_env import PushTImageEnv
 from irrep_actions.gym_util.async_vector_env import AsyncVectorEnv
@@ -42,10 +41,7 @@ class PushTImageRunner(BaseRunner):
         num_envs = None,
         random_goal_pose=False,
     ):
-        num_test=5
-        num_train=1
-        num_envs=6
-        num_test_vis=5
+        num_envs=1
         super().__init__(output_dir)
         num_envs = num_train + num_test if num_envs is None else num_envs
 
@@ -207,7 +203,6 @@ class PushTImageRunner(BaseRunner):
 
                 if plot_energy_fn:
                     for i, env_id in enumerate(range(start, end)):
-                        print(f'batch: {i} | env: {env_id}')
                         energy_fn_plots[env_id].append(policy.plot_energy_fn(cropped_image[i], action_dict['energy'][i]))
 
                 x_act = action_dict['action'][:,:,0]
@@ -226,6 +221,7 @@ class PushTImageRunner(BaseRunner):
 
             all_video_paths[this_global_slice] = env.render()[this_local_slice]
             all_rewards[this_global_slice] = env.call('get_attr', 'reward')[this_local_slice]
+            print(np.max(all_rewards[this_global_slice]))
 
         # Logging
         max_rewards = collections.defaultdict(list)

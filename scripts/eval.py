@@ -22,7 +22,7 @@ import json
 import argparse
 from irrep_actions.workflow.base_workflow import BaseWorkflow
 
-def evaluate(checkpoint: str, output_dir: str, device: str):
+def evaluate(checkpoint: str, output_dir: str, device: str, plot_energy_fn: bool=False):
     if os.path.exists(output_dir):
         inp = input("Output directory already exists. Overwrite existing dataset? (y/n)")
         if inp == "y":
@@ -51,7 +51,7 @@ def evaluate(checkpoint: str, output_dir: str, device: str):
         cfg.task.env_runner,
         output_dir=output_dir
     )
-    runner_log = env_runner.run(policy, plot_energy_fn=True)
+    runner_log = env_runner.run(policy, plot_energy_fn=plot_energy_fn)
 
     # Save logs
     json_log = dict()
@@ -78,5 +78,11 @@ if __name__ == '__main__':
         default='cuda',
         help='Device to use: (cpu, cuda, cuda:0)'
     )
+    parser.add_argument(
+        '--plot_energy_fn',
+        default=False,
+        action='store_true',
+        help='Plot the energy function alongside the env images. Only works on circular models.'
+    )
     args = parser.parse_args()
-    evaluate(args.checkpoint, args.output_dir, args.device)
+    evaluate(args.checkpoint, args.output_dir, args.device, args.plot_energy_fn)

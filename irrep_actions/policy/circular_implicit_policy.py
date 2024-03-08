@@ -43,12 +43,8 @@ class CircularImplicitPolicy(BasePolicy):
 
     def get_action(self, obs, device):
 
-        if type(obs) is dict:
-            nobs = self.normalizer.normalize(obs)
-            B = obs['image'].shape[0]
-        else:
-            nobs = self.normalizer['obs'].normalize(obs)
-            B = obs.shape[0]
+        nobs = self.normalizer.normalize(obs)
+        B = list(obs.values())[0].shape[0]
 
         Do = self.obs_dim
         Da = self.action_dim
@@ -61,7 +57,6 @@ class CircularImplicitPolicy(BasePolicy):
         )
 
         # Optimize actions
-        self.pred_n_samples = 5000
         mag = torch.linspace(action_stats['min'][0].item(), action_stats['max'][0].item(), self.pred_n_samples)
         mag = mag.view(1, -1, 1).repeat(B, 1, 1).view(B, -1, 1, 1).to(device)
         theta = torch.linspace(0, 2*np.pi, self.energy_head.num_rot).view(1, -1).repeat(B, 1).to(device)
@@ -87,10 +82,7 @@ class CircularImplicitPolicy(BasePolicy):
 
     def compute_loss(self, batch):
         # Load batch
-        if type(batch['obs']) is dict:
-            nobs = self.normalizer.normalize(batch["obs"])
-        else:
-            nobs = self.normalizer['obs'].normalize(batch['obs'])
+        nobs = self.normalizer.normalize(batch['obs'])
         naction = self.normalizer['action'].normalize(batch["action"]).float()
 
         Do = self.obs_dim
@@ -152,13 +144,13 @@ class CircularImplicitPolicy(BasePolicy):
         # Compute ciruclar energy function for the given obs and action magnitudes
         mag = targets[:,:,:,0].unsqueeze(3)
         obs_feat = self.obs_encoder(nobs)
-        energy_circle = self.energy_head(obs_feat, mag).view(-1, 360)
+        theta = self.normalizer["action"].unnormalize(targets)[:,:,0,1]
+        energy = self.energy_head(obs_feat, mag).view(B*N, -1)
 
         # Find closest theta for all actions and index the energy function at the theta
-        theta = self.normalizer["action"].unnormalize(targets)[:,:,0,1]
         thetas = torch.linspace(0, 2*np.pi, 360).unsqueeze(0).repeat(B*N, 1).to(theta.device)
         theta_idxs = torch.argmin((theta.view(-1,1) - thetas).abs(), dim=1)
-        energy = energy_circle[torch.arange(B*N), theta_idxs].view(B, N)
+        energy = energy[torch.arange(B*N), theta_idxs].view(B, N)
 
         # Compute InfoNCE loss, i.e. try to predict the expert action from the randomly sampled actions
         probs = F.log_softmax(energy, dim=1)
@@ -185,7 +177,8 @@ class CircularImplicitPolicy(BasePolicy):
         ax1 = f.add_subplot(111)
         ax2 = f.add_subplot(141, projection='polar')
 
-        ax1.imshow(img[-1].transpose(1,2,0))
+        if img is not None:
+            ax1.imshow(img[-1].transpose(1,2,0))
         ax2.plot(np.linspace(0, 2*np.pi, E.shape[0]), E)
         ax2.set_rticks(list())
         ax2.grid(True)

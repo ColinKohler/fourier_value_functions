@@ -2,7 +2,7 @@ defaults:
   - _self_
   - task: pusht_image
 
-name: train_implicit_policy
+name: train_implicit_image_policy
 _target_: irrep_actions.workflow.implicit_workflow.ImplicitWorkflow
 
 obs_dim: ${task.image_dim}
@@ -16,7 +16,6 @@ num_obs_steps: 2
 num_action_steps: 1
 num_latency_steps: 0
 past_action_visible: False
-keypoint_visible_rate: 1.0
 z_dim: 256
 is_harmonic: False
 
@@ -36,27 +35,28 @@ policy:
   grad_pen: False
 
 obs_encoder:
-  _target_: irrep_actions.model.vision_encoder.ImageEncoder
-  in_channels: 3
+  _target_: irrep_actions.model.obs_encoder.ObsEncoder
+  num_obs: ${num_obs_steps}
+  img_channels: 3
   z_dim: ${z_dim}
   dropout: 0.1
 
 energy_head:
   _target_: irrep_actions.model.energy_mlp.EnergyMLP
-  in_channels: ${eval:'${action_dim}*${num_action_steps} + ${z_dim}*${num_obs_steps}'}
-  mid_channels: [1024, 1024, 1024, 1024]
+  obs_feat: ${z_dim}
+  mlp_dim: 256 
   dropout: 0.1
   spec_norm: False
 
 dataloader:
-  batch_size: 128
+  batch_size: 64
   num_workers: 1
   shuffle: True
   pin_memory: True
   persistent_workers: False
 
 val_dataloader:
-  batch_size: 128
+  batch_size: 64
   num_workers: 1
   shuffle: False
   pin_memory: True
@@ -74,9 +74,9 @@ training:
   seed: 0
   resume: True
   lr_warmup_steps: 500
-  num_epochs: 1000
-  checkpoint_every: 50
-  rollout_every: 50
+  num_epochs: 200
+  checkpoint_every: 1
+  rollout_every: 1
   val_every: 1
   tqdm_interval_sec: 1.0
 

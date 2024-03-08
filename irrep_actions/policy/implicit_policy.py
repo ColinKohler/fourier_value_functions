@@ -43,15 +43,10 @@ class ImplicitPolicy(BasePolicy):
         self.energy_head = energy_head
         self.apply(torch_utils.init_weights)
 
-    def forward(self, obs, action):
-        B, T, C, W, H = obs.shape
-        z = self.obs_encoder(obs.view(B*T, C, W, H)).view(B, T, -1)
-        return self.energy_head(z, action)
-
     def get_action(self, obs, device):
-        B = obs['obs'].shape[0]
+        nobs = self.normalizer.normalize(obs)
+        B = list(obs.values())[0].shape[0]
 
-        nobs = self.normalizer['obs'].normalize(obs['obs'])
         Do = self.obs_dim
         Da = self.action_dim
         To = self.num_obs_steps
@@ -63,27 +58,36 @@ class ImplicitPolicy(BasePolicy):
         )
 
         # Optimize actions
-        actions = action_dist.sample((B, self.pred_n_samples, Ta)).to(
-            dtype=nobs.dtype
-        )
+        actions = action_dist.sample((B, self.pred_n_samples, Ta))
 
+        obs_feat = self.obs_encoder(nobs)
+        self.action_sampling = 'dense'
+        self.pred_n_samples = 600**2
         if self.action_sampling == 'dfo':
             action_probs, actions = mcmc.iterative_dfo(
-                self,
-                nobs,
+                self.energy_head,
+                obs_feat,
                 actions,
                 [action_stats['min'], action_stats['max']],
                 normalizer=self.normalizer
             )
         elif self.action_sampling == 'langevin':
             action_probs, actions = mcmc.langevin_actions(
-                self,
-                nobs,
+                self.energy_head,
+                obs_feat,
                 actions,
                 [action_stats['min'], action_stats['max']],
                 num_iterations=100,
                 normalizer=self.normalizer
             )
+        elif self.action_sampling == 'dense':
+            x = np.linspace(-1, 1, int(np.sqrt(self.pred_n_samples)))
+            y = np.linspace(-1, 1, int(np.sqrt(self.pred_n_samples)))
+            xv, yv = np.meshgrid(x, y)
+            actions = torch.tensor(np.dstack([xv, yv]).reshape(-1, 2)).to(device)
+            actions = actions.view(1,600**2, 1, 2).repeat(B,1,1,1).float()
+            logits = self.energy_head(obs_feat, actions)
+            action_probs = torch.softmax(logits, dim=-1)
         else:
             raise ValueError('Invalid action sampling suggested.')
 
@@ -98,8 +102,8 @@ class ImplicitPolicy(BasePolicy):
 
     def compute_loss(self, batch):
         # Load batch
-        nobs = batch["obs"].float()
-        naction = batch["action"].float()
+        nobs = self.normalizer.normalize(batch['obs'])
+        naction = self.normalizer['action'].normalize(batch["action"]).float()
 
         Do = self.obs_dim
         Da = self.action_dim
@@ -107,7 +111,6 @@ class ImplicitPolicy(BasePolicy):
         Ta = self.num_action_steps
         B = naction.shape[0]
 
-        nobs = nobs[:, :To]
         start = To - 1
         end = start + Ta
         naction = naction[:, start:end]
@@ -168,7 +171,8 @@ class ImplicitPolicy(BasePolicy):
         ground_truth = (permutation == 0).nonzero()[:, 1].to(naction.device)
         one_hot = F.one_hot(ground_truth, num_classes=self.num_neg_act_samples+1).float()
 
-        energy = self.forward(nobs, targets)
+        obs_feat = self.obs_encoder(nobs)
+        energy = self.energy_head(obs_feat, targets)
 
         probs = F.log_softmax(energy, dim=1)
         ebm_loss = F.kl_div(probs, one_hot, reduction='batchmean')

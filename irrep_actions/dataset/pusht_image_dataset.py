@@ -31,9 +31,10 @@ class PushTImageDataset(BaseDataset):
         )
 
     def get_normalizer(self, mode="limits", **kwargs):
+        sample_data = self._sample_to_data(self.replay_buffer)
         data = {
-            'action': self.replay_buffer['action'],
-            'agent_pos': self.replay_buffer['state'][...,:2]
+            'action': sample_data['action'],
+            'agent_pos': sample_data['obs']['agent_pos']
         }
         normalizer = super().get_normalizer(data, mode=mode, **kwargs)
         normalizer['image'] = normalize_utils.get_image_range_normalizer()

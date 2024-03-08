@@ -2,7 +2,7 @@ defaults:
   - _self_
   - task: pusht_lowdim 
 
-name: train_so2_implicit_policy
+name: train_so2_implicit_lowdim_policy
 _target_: irrep_actions.workflow.implicit_workflow.ImplicitWorkflow
 
 obs_dim: ${task.obs_dim} 
@@ -19,7 +19,8 @@ past_action_visible: False
 keypoint_visible_rate: 1.0
 z_dim: 512
 lmax: 3
-N: 16
+N: 8
+is_harmonic: True
 
 policy:
   _target_: irrep_actions.policy.implicit_policy.ImplicitPolicy
@@ -36,10 +37,19 @@ policy:
   temperature: 1.0
   grad_pen: False
 
-energy_mlp:
+obs_encoder:
+  _target_: irrep_actions.model.obs_encoder.SO2KeypointEncoder
+  num_obs: ${num_obs_steps}
+  in_feat: ${eval:'${obs_dim} // 2'}
+  z_dim: ${z_dim}
+  lmax: ${lmax}
+  N: ${N}
+  dropout: 0.1
+
+energy_head :
   _target_: irrep_actions.model.energy_mlp.SO2EnergyMLP
-  in_channels: ${eval:'(${action_dim}*${num_action_steps} + ${obs_dim}*${num_obs_steps}) // 2'}
-  mid_channels: ${z_dim}
+  obs_feat_dim: ${z_dim}
+  mlp_dim: ${z_dim}
   lmax: ${lmax}
   dropout: 0.1
   N: ${N}
