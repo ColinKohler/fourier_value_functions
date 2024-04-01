@@ -37,7 +37,7 @@ policy:
   grad_pen: False
 
 obs_encoder:
-  _target_: imitation_learning.model.implict.obs_encoder.SO2ObsEncoder
+  _target_: imitation_learning.model.implicit.obs_encoder.SO2ObsEncoder
   num_obs: ${num_obs_steps}
   img_channels: 3
   z_dim: ${z_dim}
@@ -46,7 +46,7 @@ obs_encoder:
   dropout: 0.1
 
 energy_head:
-  _target_: imitation_learning.model.implict.energy_mlp.SO2EnergyMLP
+  _target_: imitation_learning.model.implicit.energy_mlp.SO2EnergyMLP
   obs_feat_dim: ${z_dim}
   mlp_dim: ${z_dim}
   lmax: ${lmax}

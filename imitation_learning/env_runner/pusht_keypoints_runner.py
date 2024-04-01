@@ -41,10 +41,6 @@ class PushTKeypointsRunner(BaseRunner):
         num_envs = None,
         random_goal_pose=False,
     ):
-        num_test=5
-        num_train=1
-        num_envs=6
-        num_test_vis=5
         super().__init__(output_dir)
         num_envs = num_train + num_test if num_envs is None else num_envs
 
@@ -212,7 +208,7 @@ class PushTKeypointsRunner(BaseRunner):
 
                 x_act = action_dict['action'][:,:,0]
                 y_act = action_dict['action'][:,:,1] * -1
-                action_dict['action'] =  torch.concatenate((x_act, y_act), dim=-1).view(B,1,2)
+                action_dict['action'] =  torch.concatenate((x_act, y_act), dim=-1).view(B,self.num_action_steps,2)
                 action_dict = dict_apply(action_dict, lambda x: x.to('cpu').numpy())
                 action = action_dict['action'][:, self.num_latency_steps:]
 

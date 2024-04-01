@@ -1,6 +1,5 @@
-from imitation_learning.utils.module_attr_mixin import ModuleAttrMixin
-from imitation_learning.utils.normalizer import LinearNormalizer
-
+from imitation_learning.model.common.module_attr_mixin import ModuleAttrMixin
+from imitation_learning.model.common.normalizer import LinearNormalizer
 
 class BasePolicy(ModuleAttrMixin):
     def __init__(self, obs_dim, action_dim, num_obs_steps, num_action_steps):

@@ -3,7 +3,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from imitation_learning.utils.dict_of_tensor_mixin import DictOfTensorMixin
+from imitation_learning.model.common.dict_of_tensor_mixin import DictOfTensorMixin
 from imitation_learning.utils import torch_utils
 
 

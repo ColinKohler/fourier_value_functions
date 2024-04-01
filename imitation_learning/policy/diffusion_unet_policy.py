@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from einops import rearrange, reduce
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 
-from imitation_learning.utils.normalizer import LinearNormalizer
+from imitation_learning.model.common.normalizer import LinearNormalizer
 from imitation_learning.utils import torch_utils
 from imitation_learning.policy.base_policy import BasePolicy
 
@@ -17,6 +17,7 @@ class DiffusionUnetPolicy(BasePolicy):
         self,
         model: ConditionalUnet1D,
         noise_scheduler: DDPMScheduler,
+        horizon: int,
         obs_dim: int,
         action_dim: int,
         num_obs_steps: int,
@@ -34,15 +35,17 @@ class DiffusionUnetPolicy(BasePolicy):
 
         if pred_action_steps_only:
             assert obs_as_global_cond
+
         self.model = model
         self.noise_scheduler = noise_scheduler
         self.mask_generator = LowdimMaskGenerator(
             action_dim=action_dim,
             obs_dim=0 if (obs_as_local_cond or obs_as_global_cond) else obs_dim,
-            max_n_obs_steps=n_obs_steps,
+            max_n_obs_steps=num_obs_steps,
             fix_obs_steps=True,
             action_visible=False
         )
+        self.horizon = horizon
         self.obs_as_local_cond = obs_as_local_cond
         self.obs_as_global_cond = obs_as_global_cond
         self.pred_action_steps_only = pred_action_steps_only
@@ -53,65 +56,56 @@ class DiffusionUnetPolicy(BasePolicy):
             num_inference_steps = noise_scheduler.config.num_train_timesteps
         self.num_inference_steps = num_inference_steps
 
-    # ========= inference  ============
-    def conditional_sample(self,
-            condition_data, condition_mask,
-            local_cond=None, global_cond=None,
-            generator=None,
-            # keyword arguments to scheduler.step
-            **kwargs
-            ):
-        model = self.model
-        scheduler = self.noise_scheduler
-
+    def conditional_sample(
+        self,
+        condition_data,
+        condition_mask,
+        local_cond=None,
+        global_cond=None,
+        generator=None,
+        # keyword arguments to scheduler.step
+        **kwargs
+    ):
+        # Sample random trajectory
         trajectory = torch.randn(
             size=condition_data.shape,
             dtype=condition_data.dtype,
             device=condition_data.device,
             generator=generator)
 
-        # set step values
-        scheduler.set_timesteps(self.num_inference_steps)
-
-        for t in scheduler.timesteps:
+        self.noise_scheduler.set_timesteps(self.num_inference_steps)
+        for t in self.noise_scheduler.timesteps:
             # 1. apply conditioning
             trajectory[condition_mask] = condition_data[condition_mask]
 
             # 2. predict model output
-            model_output = model(trajectory, t,
-                local_cond=local_cond, global_cond=global_cond)
+            model_output = self.model(
+                trajectory,
+                t,
+                local_cond=local_cond,
+                global_cond=global_cond
+            )
 
             # 3. compute previous image: x_t -> x_t-1
-            trajectory = scheduler.step(
-                model_output, t, trajectory,
+            trajectory = self.noise_scheduler.step(
+                model_output,
+                t,
+                trajectory,
                 generator=generator,
                 **kwargs
-                ).prev_sample
+            ).prev_sample
 
-        # finally make sure conditioning is enforced
         trajectory[condition_mask] = condition_data[condition_mask]
-
         return trajectory
 
+    def get_action(self, obs, device):
+        nobs = self.normalizer.normalize(obs)['keypoints']
+        B = list(obs.values())[0].shape[0]
 
-    def predict_action(self, obs_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
-        """
-        obs_dict: must include "obs" key
-        result: must include "action" key
-        """
-
-        assert 'obs' in obs_dict
-        assert 'past_action' not in obs_dict # not implemented yet
-        nobs = self.normalizer['obs'].normalize(obs_dict['obs'])
-        B, _, Do = nobs.shape
-        To = self.n_obs_steps
-        assert Do == self.obs_dim
-        T = self.horizon
+        Do = self.obs_dim
         Da = self.action_dim
-
-        # build input
-        device = self.device
-        dtype = self.dtype
+        To = self.num_obs_steps
+        T = self.horizon
 
         # handle different ways of passing observation
         local_cond = None
@@ -119,23 +113,23 @@ class DiffusionUnetPolicy(BasePolicy):
         if self.obs_as_local_cond:
             # condition through local feature
             # all zero except first To timesteps
-            local_cond = torch.zeros(size=(B,T,Do), device=device, dtype=dtype)
+            local_cond = torch.zeros(size=(B,T,Do), device=device, dtype=self.dtype)
             local_cond[:,:To] = nobs[:,:To]
             shape = (B, T, Da)
-            cond_data = torch.zeros(size=shape, device=device, dtype=dtype)
+            cond_data = torch.zeros(size=shape, device=device, dtype=self.dtype)
             cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
         elif self.obs_as_global_cond:
             # condition throught global feature
             global_cond = nobs[:,:To].reshape(nobs.shape[0], -1)
             shape = (B, T, Da)
             if self.pred_action_steps_only:
-                shape = (B, self.n_action_steps, Da)
-            cond_data = torch.zeros(size=shape, device=device, dtype=dtype)
+                shape = (B, self.num_action_steps, Da)
+            cond_data = torch.zeros(size=shape, device=device, dtype=self.dtype)
             cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
         else:
             # condition through impainting
             shape = (B, T, Da+Do)
-            cond_data = torch.zeros(size=shape, device=device, dtype=dtype)
+            cond_data = torch.zeros(size=shape, device=device, dtype=self.dtype)
             cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
             cond_data[:,:To,Da:] = nobs[:,:To]
             cond_mask[:,:To,Da:] = True
@@ -159,7 +153,7 @@ class DiffusionUnetPolicy(BasePolicy):
             start = To
             if self.oa_step_convention:
                 start = To - 1
-            end = start + self.n_action_steps
+            end = start + self.num_action_steps
             action = action_pred[:,start:end]
 
         result = {
@@ -168,22 +162,17 @@ class DiffusionUnetPolicy(BasePolicy):
         }
         if not (self.obs_as_local_cond or self.obs_as_global_cond):
             nobs_pred = nsample[...,Da:]
-            obs_pred = self.normalizer['obs'].unnormalize(nobs_pred)
+            obs_pred = self.normalizer.unnormalize(nobs_pred)
             action_obs_pred = obs_pred[:,start:end]
             result['action_obs_pred'] = action_obs_pred
             result['obs_pred'] = obs_pred
         return result
 
-    # ========= training  ============
-    def set_normalizer(self, normalizer: LinearNormalizer):
-        self.normalizer.load_state_dict(normalizer.state_dict())
-
     def compute_loss(self, batch):
         # normalize input
         assert 'valid_mask' not in batch
-        nbatch = self.normalizer.normalize(batch)
-        obs = nbatch['obs']
-        action = nbatch['action']
+        obs = self.normalizer.normalize(batch['obs'])['keypoints']
+        action = self.normalizer['action'].normalize(batch["action"]).float()
 
         # handle different ways of passing observation
         local_cond = None
@@ -192,16 +181,16 @@ class DiffusionUnetPolicy(BasePolicy):
         if self.obs_as_local_cond:
             # zero out observations after n_obs_steps
             local_cond = obs
-            local_cond[:,self.n_obs_steps:,:] = 0
+            local_cond[:,self.num_obs_steps:,:] = 0
         elif self.obs_as_global_cond:
-            global_cond = obs[:,:self.n_obs_steps,:].reshape(
+            global_cond = obs[:,:self.num_obs_steps,:].reshape(
                 obs.shape[0], -1)
             if self.pred_action_steps_only:
-                To = self.n_obs_steps
+                To = self.num_obs_steps
                 start = To
                 if self.oa_step_convention:
                     start = To - 1
-                end = start + self.n_action_steps
+                end = start + self.num_action_steps
                 trajectory = action[:,start:end]
         else:
             trajectory = torch.cat([action, obs], dim=-1)
@@ -217,13 +206,14 @@ class DiffusionUnetPolicy(BasePolicy):
         bsz = trajectory.shape[0]
         # Sample a random timestep for each image
         timesteps = torch.randint(
-            0, self.noise_scheduler.config.num_train_timesteps,
-            (bsz,), device=trajectory.device
+            0,
+            self.noise_scheduler.config.num_train_timesteps,
+            (bsz,),
+            device=trajectory.device
         ).long()
         # Add noise to the clean images according to the noise magnitude at each timestep
         # (this is the forward diffusion process)
-        noisy_trajectory = self.noise_scheduler.add_noise(
-            trajectory, noise, timesteps)
+        noisy_trajectory = self.noise_scheduler.add_noise(trajectory, noise, timesteps)
 
         # compute loss mask
         loss_mask = ~condition_mask
@@ -247,4 +237,5 @@ class DiffusionUnetPolicy(BasePolicy):
         loss = loss * loss_mask.type(loss.dtype)
         loss = reduce(loss, 'b ... -> b (...)', 'mean')
         loss = loss.mean()
+
         return loss

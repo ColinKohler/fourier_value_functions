@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Normal
 
-from imitation_learning.utils.normalizer import LinearNormalizer
+from imitation_learning.model.common.normalizer import LinearNormalizer
 from imitation_learning.utils import torch_utils
 from imitation_learning.policy.base_policy import BasePolicy
 from imitation_learning.utils import mcmc
@@ -61,8 +61,8 @@ class ImplicitPolicy(BasePolicy):
         actions = action_dist.sample((B, self.pred_n_samples, Ta))
 
         obs_feat = self.obs_encoder(nobs)
-        self.action_sampling = 'dense'
-        self.pred_n_samples = 600**2
+        #self.action_sampling = 'dense'
+        #self.pred_n_samples = 600**2
         if self.action_sampling == 'dfo':
             action_probs, actions = mcmc.iterative_dfo(
                 self.energy_head,

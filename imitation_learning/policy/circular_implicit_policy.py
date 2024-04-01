@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from torch.distributions import Normal
 import matplotlib.pyplot as plt
 
-from imitation_learning.utils.normalizer import LinearNormalizer
+from imitation_learning.model.common.normalizer import LinearNormalizer
 from imitation_learning.utils import torch_utils
 from imitation_learning.policy.base_policy import BasePolicy
 from imitation_learning.utils import mcmc

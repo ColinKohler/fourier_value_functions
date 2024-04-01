@@ -6,7 +6,7 @@ from escnn import nn as enn
 from escnn import group
 from escnn.gspaces.r2 import GSpace2D
 
-from imitation_learning.model.vision_encoder import ImageEncoder, CyclicImageEncoder
+from imitation_learning.model.implicit.vision_encoder import ImageEncoder, CyclicImageEncoder
 from imitation_learning.model.modules.fourier import Fourier
 from imitation_learning.model.modules.equiv_layers import SO2MLP
 from imitation_learning.model.modules.layers import MLP

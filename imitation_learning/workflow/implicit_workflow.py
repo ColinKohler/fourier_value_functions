@@ -12,8 +12,8 @@ from typing import Optional
 from omegaconf import OmegaConf
 import wandb
 
-from imitation_learning.model.vision_encoder import ImageEncoder
-from imitation_learning.model.energy_mlp import EnergyMLP
+from imitation_learning.model.implicit.vision_encoder import ImageEncoder
+from imitation_learning.model.implicit.energy_mlp import EnergyMLP
 from imitation_learning.dataset.base_dataset import BaseDataset
 from imitation_learning.workflow.base_workflow import BaseWorkflow
 from imitation_learning.env_runner.base_runner import BaseRunner

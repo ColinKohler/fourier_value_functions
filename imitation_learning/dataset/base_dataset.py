@@ -8,7 +8,7 @@ import pickle
 from imitation_learning.dataset.replay_buffer import ReplayBuffer
 from imitation_learning.utils import torch_utils
 from imitation_learning.utils import harmonics
-from imitation_learning.utils.normalizer import LinearNormalizer
+from imitation_learning.model.common.normalizer import LinearNormalizer
 from imitation_learning.utils.sampler import SequenceSampler, get_val_mask, downsample_mask
 
 

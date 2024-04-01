@@ -36,14 +36,14 @@ policy:
   grad_pen: False
 
 obs_encoder:
-  _target_: imitation_learning.model.implict.obs_encoder.KeypointEncoder
+  _target_: imitation_learning.model.implicit.obs_encoder.KeypointEncoder
   num_obs: ${num_obs_steps}
   in_feat: ${obs_dim}
   z_dim: ${z_dim}
   dropout: 0.1
 
 energy_head:
-  _target_: imitation_learning.model.implict.energy_mlp.EnergyMLP
+  _target_: imitation_learning.model.implicit.energy_mlp.EnergyMLP
   obs_feat_dim: ${z_dim}
   mid_channels: ${z_dim}
   dropout: 0.1
