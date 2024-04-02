@@ -42,7 +42,7 @@ class LiftLowdimRunner(BaseRunner):
         num_envs=None
     ):
         super().__init__(output_dir)
-        num_envs = num_train + num_test if num_envs is None else num_evs
+        num_envs = num_train + num_test if num_envs is None else num_envs
 
         task_fps = 10
         steps_per_render = max(10 // fps, 1)

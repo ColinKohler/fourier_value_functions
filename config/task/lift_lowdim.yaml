@@ -6,7 +6,6 @@ keypoint_dim: 3
 
 env_runner:
   _target_: imitation_learning.env_runner.lift_lowdim_runner.LiftLowdimRunner
-  keypoint_visible_rate: ${keypoint_visible_rate}
   num_train: 10
   num_train_vis: 2
   train_start_seed: 0
@@ -16,9 +15,7 @@ env_runner:
   max_steps: 500
   num_obs_steps: ${num_obs_steps}
   num_action_steps: ${num_action_steps}
-  num_latency_steps: ${num_latency_steps}
   fps: 10
-  agent_keypoints: False
   past_action: ${past_action_visible}
   num_envs: 30
 
