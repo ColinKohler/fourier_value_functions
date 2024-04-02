@@ -1,0 +1,117 @@
+defaults:
+  - _self_
+  - task: lift_lowdim 
+
+name: train_cylinderical_implicit_lowdim_policy
+_target_: imitation_learning.workflow.implicit_workflow.ImplicitWorkflow
+
+obs_dim: ${task.obs_dim} 
+action_dim: ${task.action_dim}
+keypoint_dim: ${task.keypoint_dim}
+task_name: ${task.name}
+exp_name: 'default'
+
+horizon: 2
+num_obs_steps: 2
+num_action_steps: 1
+num_latency_steps: 0
+past_action_visible: False
+keypoint_visible_rate: 1.0
+z_dim: 512 
+lmax: 3
+N: 8
+is_harmonic: True
+
+policy:
+  _target_: imitation_learning.policy.cylinderical_implicit_policy.CylindericalImplicitPolicy
+  obs_dim: ${obs_dim}
+  action_dim: ${action_dim}
+  num_obs_steps: ${num_obs_steps}
+  num_action_steps: ${num_action_steps}
+  num_neg_act_samples: 256
+  pred_n_samples: 1000
+  optimize_negatives: False 
+  sample_actions: True 
+  temperature: 1.0
+  grad_pen: False
+
+obs_encoder:
+  _target_: imitation_learning.model.implicit.obs_encoder.SO2KeypointEncoder2
+  num_obs: ${num_obs_steps}
+  in_feat: ${eval:'${obs_dim} // 3'}
+  z_dim: ${z_dim}
+  lmax: ${lmax}
+  N: ${N}
+  dropout: 0.1
+
+energy_head:
+  _target_: imitation_learning.model.implicit.energy_mlp.CylindericalEnergyMLP
+  obs_feat_dim: ${z_dim}
+  mlp_dim: ${z_dim}
+  lmax: ${lmax}
+  dropout: 0.1
+  num_rot: 360 
+  N: ${N}
+
+dataloader:
+  batch_size: 64
+  num_workers: 1
+  shuffle: True
+  pin_memory: True
+  persistent_workers: False
+
+val_dataloader:
+  batch_size: 64
+  num_workers: 1
+  shuffle: False
+  pin_memory: True
+  persistent_workers: False
+
+optimizer:
+  _target_: torch.optim.AdamW
+  lr: 1e-4
+  betas: [0.95, 0.999]
+  eps: 1e-8
+  weight_decay: 1e-6
+
+training:
+  device: 'cuda:0'
+  seed: 0
+  resume: True
+  lr_warmup_steps: 500
+  num_epochs: 200
+  checkpoint_every: 1
+  rollout_every: 1
+  val_every: 1
+  tqdm_interval_sec: 1.0
+
+logging:
+  project: ${task_name}
+  resume: True
+  mode: online
+  name: ${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}
+  tags: ["${name}", "${task_name}", "${exp_name}"]
+  id: null
+  group: null
+
+checkpoint:
+  topk:
+    monitor_key: test_mean_score
+    mode: max
+    k: 5
+    format_str: 'epoch={epoch:04d}-test_mean_score={test_mean_score:.3f}.ckpt'
+  save_last_checkpoint: True
+  save_last_snapshot: False
+
+multi_run:
+  run_dir: data/outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_${name}_${task_name}
+  wandb_name_base: ${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}
+
+hydra:
+  job:
+    override_dirname: ${name}
+  run:
+    dir: data/outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_${name}_${task_name}
+  sweep:
+    dir: data/outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_${name}_${task_name}
+    subdir: ${hydra.job.num}

@@ -1,0 +1,34 @@
+name: lift_lowdim 
+
+obs_dim: 6 # block pos + gripper pos 
+action_dim: 4 # (x,y,z,gripper)
+keypoint_dim: 3
+
+env_runner:
+  _target_: imitation_learning.env_runner.lift_lowdim_runner.LiftLowdimRunner
+  keypoint_visible_rate: ${keypoint_visible_rate}
+  num_train: 10
+  num_train_vis: 2
+  train_start_seed: 0
+  num_test: 50
+  num_test_vis: 4
+  test_start_seed: 100000
+  max_steps: 500
+  num_obs_steps: ${num_obs_steps}
+  num_action_steps: ${num_action_steps}
+  num_latency_steps: ${num_latency_steps}
+  fps: 10
+  agent_keypoints: False
+  past_action: ${past_action_visible}
+  num_envs: 30
+
+dataset:
+  _target_: imitation_learning.dataset.robosuite_lowdim_dataset.RobosuiteLowdimDataset
+  path: data/lift_10
+  horizon: ${horizon}
+  pad_before: ${eval:'${num_obs_steps}-1+${num_latency_steps}'}
+  pad_after: ${eval:'${num_action_steps}-1'}
+  seed: 0
+  harmonic_action: ${is_harmonic}
+  val_ratio: 0.02
+  max_train_episodes: 9
