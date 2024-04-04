@@ -13,7 +13,7 @@ from imitation_learning.policy.base_policy import BasePolicy
 from imitation_learning.utils import mcmc
 
 
-class DiskImplicitPolicy(BasePolicy):
+class RingImplicitPolicy(BasePolicy):
     def __init__(
         self,
         obs_encoder: nn.Module,
@@ -144,7 +144,16 @@ class DiskImplicitPolicy(BasePolicy):
         r = targets[:,:,0,0]
         phi = self.normalizer["action"].unnormalize(targets)[:,:,0,1]
         obs_feat = self.obs_encoder(nobs)
-        energy = self.energy_head(obs_feat, r, phi)
+        energy = self.energy_head(obs_feat).view(B, 1, self.energy_head.num_radii, self.energy_head.num_phi)
+        energy = energy.repeat(1,N,1,1).view(B*N, self.energy_head.num_radii, self.energy_head.num_phi)
+
+        # Find closest theta for all actions and index the energy function at the theta
+        max_r = action_stats["max"][0]
+        rs = torch.linspace(action_stats["min"][0], max_r, self.energy_head.num_radii).unsqueeze(0).repeat(B*N, 1).to(r.device)
+        r_idxs = torch.argmin((r.view(-1,1) - rs).abs(), dim=1)
+        phis = torch.linspace(0, 2*np.pi, self.energy_head.num_phi).unsqueeze(0).repeat(B*N, 1).to(phi.device)
+        phi_idxs = torch.argmin((phi.view(-1,1) - phis).abs(), dim=1)
+        energy = energy[torch.arange(B*N), r_idxs, phi_idxs].view(B, N)
 
         # Compute InfoNCE loss, i.e. try to predict the expert action from the randomly sampled actions
         probs = F.log_softmax(energy, dim=1)
