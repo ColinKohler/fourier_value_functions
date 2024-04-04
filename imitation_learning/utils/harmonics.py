@@ -8,7 +8,7 @@ def get_energy(W, theta, lmax):
     B = circular_harmonics(lmax, theta)
     return torch.bmm(W.view(-1, 1, lmax * 2 + 1), B)
 
-def convert_action_to_harmonics(action):
+def convert_to_polar(action):
     r = np.sqrt(action[:, 0] ** 2 + action[:, 1] ** 2)
     theta = np.arctan2(action[:, 1], (action[:, 0]))
     theta[np.where(theta < 0)] += 2 * np.pi

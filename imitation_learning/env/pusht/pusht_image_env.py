@@ -1,4 +1,4 @@
-from gym import spaces
+from gymnasium import spaces
 from imitation_learning.env.pusht.pusht_env import PushTEnv
 import numpy as np
 import cv2

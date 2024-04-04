@@ -82,8 +82,11 @@ class RobosuiteLowdimDataset(torch.utils.data.Dataset):
         if data is None:
             data = self._sample_to_data(self.replay_buffer)
 
-        #if self.harmonic_action:
-        #    data["action"] = harmonics.convert_action_to_harmonics(data["action"])
+        if self.harmonic_action:
+            xy = data["action"][:,:2]
+            zg = data["action"][:,2:]
+            polar_xy = harmonics.convert_to_polar(xy)
+            data["action"] = np.concatenate([polar_xy, zg], axis=-1)
         data = {
             'keypoints': data['obs']['keypoints'],
             'action': data['action']
@@ -101,7 +104,10 @@ class RobosuiteLowdimDataset(torch.utils.data.Dataset):
         data = self._sample_to_data(sample)
 
         if self.harmonic_action:
-            data["action"] = harmonics.convert_action_to_harmonics(data["action"])
+            xy = data["action"][:,:2]
+            zg = data["action"][:,2:]
+            polar_xy = harmonics.convert_to_polar(xy)
+            data["action"] = np.concatenate([polar_xy, zg], axis=-1)
 
         torch_data = torch_utils.dict_apply(data, torch.from_numpy)
 

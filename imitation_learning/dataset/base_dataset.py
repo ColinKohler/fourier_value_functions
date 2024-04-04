@@ -74,7 +74,7 @@ class BaseDataset(torch.utils.data.Dataset):
             data = self._sample_to_data(self.replay_buffer)
 
         if self.harmonic_action:
-            data["action"] = harmonics.convert_action_to_harmonics(data["action"])
+            data["action"] = harmonics.convert_to_polar(data["action"])
 
         normalizer = LinearNormalizer()
         normalizer.fit(data=data, last_n_dims=1, mode=mode, **kwargs)
@@ -88,7 +88,7 @@ class BaseDataset(torch.utils.data.Dataset):
         data = self._sample_to_data(sample)
 
         if self.harmonic_action:
-            data["action"] = harmonics.convert_action_to_harmonics(data["action"])
+            data["action"] = harmonics.convert_to_polar(data["action"])
 
         torch_data = torch_utils.dict_apply(data, torch.from_numpy)
 

@@ -4,7 +4,7 @@ Disabled auto-reset after done
 Added render method.
 """
 
-
+from typing import Any
 import numpy as np
 import multiprocessing as mp
 import time
@@ -12,15 +12,15 @@ import sys
 from enum import Enum
 from copy import deepcopy
 
-from gym import logger
-from gym.vector.vector_env import VectorEnv
-from gym.error import (
+from gymnasium import logger
+from gymnasium.vector.vector_env import VectorEnv
+from gymnasium.error import (
     AlreadyPendingCallError,
     NoAsyncCallError,
     ClosedEnvironmentError,
     CustomSpaceError,
 )
-from gym.vector.utils import (
+from gymnasium.vector.utils import (
     create_shared_memory,
     create_empty_array,
     write_to_shared_memory,
@@ -186,8 +186,27 @@ class AsyncVectorEnv(VectorEnv):
         _, successes = zip(*[pipe.recv() for pipe in self.parent_pipes])
         self._raise_if_errors(successes)
 
-    def reset_async(self):
+
+    def reset(
+        self,
+        *,
+        seed: int | list[int] | None = None,
+        options: dict[str, Any] | None = None,
+    ):
+        self.reset_async(seed=seed, options=options)
+        return self.reset_wait()
+
+    def reset_async(self, seed=None, options=None):
         self._assert_is_running()
+
+        if seed is None:
+            seed = [None for _ in range(self.num_envs)]
+        elif isinstance(seed, int):
+            seed = [seed + i for i in range(self.num_envs)]
+        assert (
+            len(seed) == self.num_envs
+        ), f"If seeds are passed as a list the length must match num_envs={self.num_envs} but got length={len(seed)}."
+
         if self._state != AsyncState.DEFAULT:
             raise AlreadyPendingCallError(
                 "Calling `reset_async` while waiting "
@@ -195,8 +214,9 @@ class AsyncVectorEnv(VectorEnv):
                 self._state.value,
             )
 
-        for pipe in self.parent_pipes:
-            pipe.send(("reset", None))
+        for pipe, env_seed in zip(self.parent_pipes, seed):
+            env_kwargs = {"seed": env_seed, "options": options}
+            pipe.send(("reset", env_kwargs))
         self._state = AsyncState.WAITING_RESET
 
     def reset_wait(self, timeout=None):
@@ -231,7 +251,7 @@ class AsyncVectorEnv(VectorEnv):
 
         if not self.shared_memory:
             self.observations = concatenate(
-                results, self.observations, self.single_observation_space
+                self.single_observation_space, results, self.observations,
             )
 
         return deepcopy(self.observations) if self.copy else self.observations
@@ -294,7 +314,7 @@ class AsyncVectorEnv(VectorEnv):
 
         if not self.shared_memory:
             self.observations = concatenate(
-                observations_list, self.observations, self.single_observation_space
+                self.single_observation_space, observations_list, self.observations,
             )
 
         return (

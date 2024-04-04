@@ -1,5 +1,5 @@
 from typing import Dict, Sequence, Union, Optional
-from gym import spaces
+from gymnasium import spaces
 from imitation_learning.env.pusht.pusht_env import PushTEnv
 from imitation_learning.env.pusht.pymunk_keypoint_manager import PymunkKeypointManager
 import numpy as np

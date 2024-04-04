@@ -60,7 +60,7 @@ class SO2KeypointEncoder2(nn.Module):
 
         self.in_type = enn.FieldType(
             self.gspace,
-            num_obs * in_feat * [self.gspace.irrep(1), self.gspace.irrep(0)]
+            num_obs * [self.gspace.irrep(1), self.gspace.irrep(0), self.gspace.irrep(1), self.gspace.irrep(0), self.gspace.irrep(0)]
         )
         self.keypoint_enc = SO2MLP(
             self.in_type,

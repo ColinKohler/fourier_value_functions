@@ -13,7 +13,7 @@ from imitation_learning.policy.base_policy import BasePolicy
 from imitation_learning.utils import mcmc
 
 
-class CylindericalImplicitPolicy(BasePolicy):
+class DiskImplicitPolicy(BasePolicy):
     def __init__(
         self,
         obs_encoder: nn.Module,
@@ -57,26 +57,25 @@ class CylindericalImplicitPolicy(BasePolicy):
         )
 
         # Optimize actions
-        xy_mag = torch.linspace(action_stats['min'][0].item(), action_stats['max'][0].item(), self.pred_n_samples)
-        z_mag = torch.linspace(action_stats['min'][1].item(), action_stats['max'][1].item(), self.pred_n_samples)
-        mag = mag.view(1, -1, 1).repeat(B, 1, 1).view(B, -1, 1, 1).to(device)
-        theta = torch.linspace(0, 2*np.pi, self.energy_head.num_rot).view(1, -1).repeat(B, 1).to(device)
+        r = torch.linspace(action_stats['min'][0].item(), action_stats['max'][0].item(), self.energy_head.num_radii).view(1,-1).repeat(B,1).to(device)
+        phi = torch.linspace(0, 2*np.pi, self.energy_head.num_phi).view(1, -1).repeat(B, 1).to(device)
         obs_feat = self.obs_encoder(nobs)
-        logits = self.energy_head(obs_feat, mag).view(B, -1)
-        action_probs = torch.softmax(logits/self.temperature, dim=-1).view(B, self.pred_n_samples, self.energy_head.num_rot)
+        logits = self.energy_head(obs_feat).view(B, self.energy_head.num_radii, self.energy_head.num_phi)
+        action_probs = torch.softmax(logits/self.temperature, dim=-1).view(B, self.energy_head.num_radii, self.energy_head.num_phi)
 
         if self.sample_actions:
             flat_indexes = torch.multinomial(action_probs.flatten(start_dim=-2), num_samples=1, replacement=True).squeeze()
         else:
             flat_indexes = torch.argmax(action_probs.flatten(start_dim=-2), dim=-1)
-        mag_idx = flat_indexes.div(action_probs.shape[-1], rounding_mode='floor')
-        theta_idx = torch.remainder(flat_indexes, action_probs.shape[-1])
-        actions = torch.vstack([mag[torch.arange(B),mag_idx,0,0], theta[torch.arange(B), theta_idx]]).permute(1,0).view(B,1,2)
 
-        mag = self.normalizer["action"].unnormalize(actions)[:,:,0]
-        theta = actions[:,:,1]
-        x = mag * torch.cos(theta)
-        y = mag * torch.sin(theta)
+        r_idx = flat_indexes.div(action_probs.shape[-1], rounding_mode='floor')
+        phi_idx = torch.remainder(flat_indexes, action_probs.shape[-1])
+        actions = torch.vstack([r[torch.arange(B),r_idx], phi[torch.arange(B), phi_idx]]).permute(1,0).view(B,1,2)
+
+        r = self.normalizer["action"].unnormalize(actions)[:,:,0]
+        phi = actions[:,:,1]
+        x = r * torch.cos(phi)
+        y = r * torch.sin(phi)
         actions = torch.concat([x.view(B,1), y.view(B,1)], dim=1).unsqueeze(1)
 
         return {'action' : actions, 'energy' : action_probs}
@@ -120,8 +119,6 @@ class CylindericalImplicitPolicy(BasePolicy):
                 logits = self.get_energy_ball(nobs, mag).view(B, -1)
             action_probs = torch.softmax(logits/2., dim=-1).view(B, 1000, self.energy_head.num_rot)
 
-            flat_indexes = torch.multinomial(action_probs.flatten(start_dim=-2), num_samples=self.num_neg_act_samples, replacement=True)
-            mag_idx = flat_indexes.view(-1).div(action_probs.shape[-1], rounding_mode='floor')
             theta_idx = torch.remainder(flat_indexes.view(-1), action_probs.shape[-1])
             negatives = torch.vstack([
                 mag.repeat(self.num_neg_act_samples, 1, 1, 1)[torch.arange(B*self.num_neg_act_samples),mag_idx,0,0],
@@ -143,19 +140,20 @@ class CylindericalImplicitPolicy(BasePolicy):
         one_hot = F.one_hot(ground_truth, num_classes=self.num_neg_act_samples+1).float()
 
         # Compute ciruclar energy function for the given obs and action magnitudes
-        r = targets[:,:,:,0].unsqueeze(3)
-        z = targets[:,:,:,2].unsqueeze(3)
-        g = targets[:,:,:,3].unsqueeze(3)
-        act = torch.concat([r, z, g], dim=-1)
+        #r = self.normalizer["action"].unnormalize(targets)[:,:,0,0]
+        r = targets[:,:,0,0]
+        phi = self.normalizer["action"].unnormalize(targets)[:,:,0,1]
         obs_feat = self.obs_encoder(nobs)
-        theta = self.normalizer["action"].unnormalize(targets)[:,:,0,1]
-        energy = self.energy_head(obs_feat, act).view(B*N, -1)
+        energy = self.energy_head(obs_feat).view(B, 1, self.energy_head.num_radii, self.energy_head.num_phi)
+        energy = energy.repeat(1,N,1,1).view(B*N, self.energy_head.num_radii, self.energy_head.num_phi)
 
         # Find closest theta for all actions and index the energy function at the theta
-        # TODO: Remove this to stop the weirdness w/binning
-        thetas = torch.linspace(0, 2*np.pi, 360).unsqueeze(0).repeat(B*N, 1).to(theta.device)
-        theta_idxs = torch.argmin((theta.view(-1,1) - thetas).abs(), dim=1)
-        energy = energy[torch.arange(B*N), theta_idxs].view(B, N)
+        max_r = action_stats["max"][0]
+        rs = torch.linspace(action_stats["min"][0], max_r, self.energy_head.num_radii).unsqueeze(0).repeat(B*N, 1).to(r.device)
+        r_idxs = torch.argmin((r.view(-1,1) - rs).abs(), dim=1)
+        phis = torch.linspace(0, 2*np.pi, self.energy_head.num_phi).unsqueeze(0).repeat(B*N, 1).to(phi.device)
+        phi_idxs = torch.argmin((phi.view(-1,1) - phis).abs(), dim=1)
+        energy = energy[torch.arange(B*N), r_idxs, phi_idxs].view(B, N)
 
         # Compute InfoNCE loss, i.e. try to predict the expert action from the randomly sampled actions
         probs = F.log_softmax(energy, dim=1)

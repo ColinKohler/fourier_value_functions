@@ -1,8 +1,8 @@
 import os
 os.environ["SDL_VIDEODRIVER"] = "dummy"
 
-import gym
-from gym import spaces
+import gymnasium as gym
+from gymnasium import spaces
 
 import collections
 import numpy as np
@@ -90,7 +90,7 @@ class PushTEnv(gym.Env):
         self.latest_action = None
         self.reset_to_state = reset_to_state
 
-    def reset(self):
+    def reset(self, seed, options):
         seed = self._seed
         self._setup()
         if self.block_cog is not None:

@@ -7,11 +7,11 @@ import tqdm
 import dill
 import math
 import wandb.sdk.data_types.video as wv
-from imitation_learning.gym_util.async_vector_env import AsyncVectorEnv
-from imitation_learning.gym_util.sync_vector_env import SyncVectorEnv
 from imitation_learning.gym_util.multistep_wrapper import MultiStepWrapper
 from imitation_learning.gym_util.video_recording_wrapper import VideoRecordingWrapper, VideoRecorder
-from gym.wrappers import FlattenObservation
+from gymnasium.wrappers import FlattenObservation
+#from gymnasium.vector import AsyncVectorEnv, SyncVectorEnv
+from imitation_learning.gym_util.async_vector_env import AsyncVectorEnv
 
 from imitation_learning.policy.base_policy import BasePolicy
 from imitation_learning.utils.torch_utils import dict_apply
@@ -19,6 +19,7 @@ from imitation_learning.env_runner.base_runner import BaseRunner
 
 from franka_gym.robosuite_env import FrankaRobosuiteEnv
 from franka_gym.configs.default import FrankaGymConfig
+from franka_gym.configs.franka_gym_configs import FrankaLiftConfig, FrankaPushConfig
 
 class LiftLowdimRunner(BaseRunner):
     def __init__(
@@ -46,14 +47,13 @@ class LiftLowdimRunner(BaseRunner):
 
         task_fps = 10
         steps_per_render = max(10 // fps, 1)
-        config = FrankaGymConfig()
 
         def env_fn():
             return MultiStepWrapper(
                 VideoRecordingWrapper(
-                    FlattenObservation(
-                        FrankaRobosuiteEnv("LiftEnv", config)
-                    ),
+                    #FlattenObservation(
+                    FrankaRobosuiteEnv("LiftEnv", FrankaLiftConfig()),
+                    #),
                     video_recoder=VideoRecorder.create_h264(
                         fps=fps,
                         codec='h264',
@@ -127,7 +127,7 @@ class LiftLowdimRunner(BaseRunner):
             env_init_fn_dills.append(dill.dumps(init_fn))
 
         env = AsyncVectorEnv(env_fns)
-        # env = SyncVectorEnv(env_fns)
+        #env = SyncVectorEnv(env_fns)
 
         self.env = env
         self.env_fns = env_fns

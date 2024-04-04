@@ -17,7 +17,7 @@ env_runner:
   num_action_steps: ${num_action_steps}
   fps: 10
   past_action: ${past_action_visible}
-  num_envs: 30
+  num_envs: 10
 
 dataset:
   _target_: imitation_learning.dataset.robosuite_lowdim_dataset.RobosuiteLowdimDataset
