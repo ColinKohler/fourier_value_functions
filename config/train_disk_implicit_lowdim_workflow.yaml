@@ -19,6 +19,7 @@ past_action_visible: False
 keypoint_visible_rate: 1.0
 z_dim: 512 
 lmax: 3
+radial_freq: 3
 N: 8
 is_harmonic: True
 
@@ -48,8 +49,11 @@ energy_head:
   _target_: imitation_learning.model.implicit.energy_mlp.DiskEnergyMLP
   obs_feat_dim: ${z_dim}
   mlp_dim: ${z_dim}
-  lmax: ${lmax}
+  radial_freq: ${radial_freq}
+  angular_freq: ${lmax}
   dropout: 0.1
+  # TODO: Probably want this to be determined differently
+  max_radius: 15.0
   num_radii: 100
   num_phi: 360 
   N: ${N}

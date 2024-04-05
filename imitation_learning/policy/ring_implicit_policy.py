@@ -140,20 +140,15 @@ class RingImplicitPolicy(BasePolicy):
         one_hot = F.one_hot(ground_truth, num_classes=self.num_neg_act_samples+1).float()
 
         # Compute ciruclar energy function for the given obs and action magnitudes
-        #r = self.normalizer["action"].unnormalize(targets)[:,:,0,0]
         r = targets[:,:,0,0]
-        phi = self.normalizer["action"].unnormalize(targets)[:,:,0,1]
-        obs_feat = self.obs_encoder(nobs)
-        energy = self.energy_head(obs_feat).view(B, 1, self.energy_head.num_radii, self.energy_head.num_phi)
-        energy = energy.repeat(1,N,1,1).view(B*N, self.energy_head.num_radii, self.energy_head.num_phi)
-
-        # Find closest theta for all actions and index the energy function at the theta
         max_r = action_stats["max"][0]
         rs = torch.linspace(action_stats["min"][0], max_r, self.energy_head.num_radii).unsqueeze(0).repeat(B*N, 1).to(r.device)
         r_idxs = torch.argmin((r.view(-1,1) - rs).abs(), dim=1)
-        phis = torch.linspace(0, 2*np.pi, self.energy_head.num_phi).unsqueeze(0).repeat(B*N, 1).to(phi.device)
-        phi_idxs = torch.argmin((phi.view(-1,1) - phis).abs(), dim=1)
-        energy = energy[torch.arange(B*N), r_idxs, phi_idxs].view(B, N)
+        phi = self.normalizer["action"].unnormalize(targets)[:,:,0,1]
+        polar_act = torch.concatenate([r_idxs.view(B,N,1), phi.view(B,N,1)], axis=2)
+
+        obs_feat = self.obs_encoder(nobs)
+        energy = self.energy_head(obs_feat, polar_act).view(B, N)
 
         # Compute InfoNCE loss, i.e. try to predict the expert action from the randomly sampled actions
         probs = F.log_softmax(energy, dim=1)

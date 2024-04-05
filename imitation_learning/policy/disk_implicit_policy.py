@@ -140,11 +140,11 @@ class DiskImplicitPolicy(BasePolicy):
         one_hot = F.one_hot(ground_truth, num_classes=self.num_neg_act_samples+1).float()
 
         # Compute ciruclar energy function for the given obs and action magnitudes
-        #r = self.normalizer["action"].unnormalize(targets)[:,:,0,0]
-        r = targets[:,:,0,0]
+        r = self.normalizer["action"].unnormalize(targets)[:,:,0,0]
         phi = self.normalizer["action"].unnormalize(targets)[:,:,0,1]
+        polar_act = torch.concatenate([r.view(B,N,1), phi.view(B,N,1)], axis=2)
         obs_feat = self.obs_encoder(nobs)
-        energy = self.energy_head(obs_feat, r, phi)
+        energy = self.energy_head(obs_feat, polar_act)
 
         # Compute InfoNCE loss, i.e. try to predict the expert action from the randomly sampled actions
         probs = F.log_softmax(energy, dim=1)

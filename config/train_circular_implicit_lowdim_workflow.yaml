@@ -50,7 +50,7 @@ energy_head:
   mlp_dim: ${z_dim}
   lmax: ${lmax}
   dropout: 0.1
-  num_rot: 360 
+  num_phi: 360 
   N: ${N}
 
 dataloader:
