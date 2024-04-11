@@ -1,5 +1,9 @@
 import numpy as np
+
 from imitation_learning.dataset.base_dataset import BaseDataset
+from imitation_learning.utils import harmonics
+from imitation_learning.model.common.normalizer import LinearNormalizer, SingleFieldLinearNormalizer
+
 
 class PushTLowdimDataset(BaseDataset):
     def __init__(
@@ -31,7 +35,16 @@ class PushTLowdimDataset(BaseDataset):
             'keypoints' : sample_data['obs']['keypoints'],
             'action' : sample_data['action']
         }
-        return super().get_normalizer(data, mode=mode, **kwargs)
+        if self.harmonic_action:
+            data["action"] = harmonics.convert_to_polar(data["action"])
+
+        normalizer = super().get_normalizer(data, mode=mode, **kwargs)
+
+        act_norm = SingleFieldLinearNormalizer()
+        act_norm.fit(data=data['action'], output_min=0, output_max=1)
+        normalizer['action'] = act_norm
+
+        return normalizer
 
     def _sample_to_data(self, sample):
         keypoint = sample['keypoint']

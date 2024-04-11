@@ -204,6 +204,7 @@ class DiskEnergyMLP(nn.Module):
         self,
         obs_feat_dim,
         mlp_dim,
+        lmax,
         radial_freq,
         angular_freq,
         dropout,
@@ -214,6 +215,7 @@ class DiskEnergyMLP(nn.Module):
         initialize=True
     ):
         super().__init__()
+        self.lmax = lmax
         self.radial_freq = radial_freq
         self.angular_freq = angular_freq
         self.max_radius = max_radius
@@ -222,7 +224,7 @@ class DiskEnergyMLP(nn.Module):
 
         self.G = group.so2_group()
         self.gspace = gspaces.no_base_space(self.G)
-        rho = self.G.spectral_regular_representation(*self.G.bl_irreps(L=angular_freq))
+        rho = self.G.spectral_regular_representation(*self.G.bl_irreps(L=self.lmax))
 
         self.in_type = enn.FieldType(
             self.gspace,
@@ -232,8 +234,8 @@ class DiskEnergyMLP(nn.Module):
 
         self.energy_mlp = SO2MLP(
             self.in_type,
-            channels=[mlp_dim] * 4,
-            lmaxs=[radial_freq] * 4,
+            channels=[mlp_dim] * 8,
+            lmaxs=[radial_freq] * 8,
             out_type=out_type,
             N=N,
             dropout=dropout,

@@ -154,6 +154,9 @@ class PushTEnv(gym.Env):
     def render(self, mode):
         return self._render_frame(mode)
 
+    def render2(self, mode):
+        return self._render_frame(mode)
+
     def teleop_agent(self):
         TeleopAgent = collections.namedtuple('TeleopAgent', ['act'])
         def act(obs):

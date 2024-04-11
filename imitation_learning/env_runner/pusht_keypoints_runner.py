@@ -42,7 +42,10 @@ class PushTKeypointsRunner(BaseRunner):
         random_goal_pose=False,
     ):
         super().__init__(output_dir)
-        num_envs = num_train + num_test if num_envs is None else num_envs
+        num_train=0
+        num_test=1
+        num_envs=1
+        #num_envs = num_train + num_test if num_envs is None else num_envs
 
         env_num_obs_steps = num_obs_steps + num_latency_steps
         env_num_action_steps = num_action_steps
@@ -204,7 +207,9 @@ class PushTKeypointsRunner(BaseRunner):
 
                 if plot_energy_fn:
                     for i, env_id in enumerate(range(start, end)):
-                        energy_fn_plots[env_id].append(policy.plot_energy_fn(None, action_dict['energy'][i]))
+                        img = env.call_each('render2', args_list=[('rgb_array', ) for x in range(1)])[0]
+                        img = img.reshape(1,96,96,3).transpose(0,3,1,2)
+                        energy_fn_plots[env_id].append(policy.plot_energy_fn(img, action_dict['energy'][i]))
 
                 x_act = action_dict['action'][:,:,0]
                 y_act = action_dict['action'][:,:,1] * -1

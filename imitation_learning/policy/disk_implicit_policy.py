@@ -34,7 +34,9 @@ class DiskImplicitPolicy(BasePolicy):
         self.pred_n_samples = pred_n_samples
         self.optimize_negatives = optimize_negatives
         self.sample_actions = sample_actions
-        self.temperature = temperature
+        #self.sample_actions = False
+        #self.temperature = temperature
+        self.temperature = 0.5
         self.grad_pen = grad_pen
 
         self.obs_encoder = obs_encoder
@@ -62,6 +64,7 @@ class DiskImplicitPolicy(BasePolicy):
         obs_feat = self.obs_encoder(nobs)
         logits = self.energy_head(obs_feat).view(B, self.energy_head.num_radii, self.energy_head.num_phi)
         action_probs = torch.softmax(logits/self.temperature, dim=-1).view(B, self.energy_head.num_radii, self.energy_head.num_phi)
+        #action_probs[:,:10,:] = 0
 
         if self.sample_actions:
             flat_indexes = torch.multinomial(action_probs.flatten(start_dim=-2), num_samples=1, replacement=True).squeeze()
@@ -98,7 +101,7 @@ class DiskImplicitPolicy(BasePolicy):
         # Add noise to positive samples and observations
         action_noise = torch.normal(
             mean=0,
-            std=1e-4,
+            std=1e-3,
             size=naction.shape,
             dtype=naction.dtype,
             device=naction.device,
@@ -140,11 +143,17 @@ class DiskImplicitPolicy(BasePolicy):
         one_hot = F.one_hot(ground_truth, num_classes=self.num_neg_act_samples+1).float()
 
         # Compute ciruclar energy function for the given obs and action magnitudes
-        r = self.normalizer["action"].unnormalize(targets)[:,:,0,0]
+        r = targets[:,:,0,1]
         phi = self.normalizer["action"].unnormalize(targets)[:,:,0,1]
         polar_act = torch.concatenate([r.view(B,N,1), phi.view(B,N,1)], axis=2)
         obs_feat = self.obs_encoder(nobs)
         energy = self.energy_head(obs_feat, polar_act)
+        #energy = self.energy_head(obs_feat).view(B,1,100,360).repeat(1,N,1,1).view(B*N,100,360)
+        #rs = torch.linspace(0, 1.0, self.energy_head.num_radii).unsqueeze(0).repeat(B*N, 1).to(r.device)
+        #r_idxs = torch.argmin((r.view(-1,1) - rs).abs(), dim=1)
+        #phis = torch.linspace(0, 2*np.pi, self.energy_head.num_phi).unsqueeze(0).repeat(B*N, 1).to(r.device)
+        #phi_idxs = torch.argmin((phi.view(-1,1) - phis).abs(), dim=1)
+        #energy = energy[torch.arange(B*N), r_idxs, phi_idxs].view(B,N)
 
         # Compute InfoNCE loss, i.e. try to predict the expert action from the randomly sampled actions
         probs = F.log_softmax(energy, dim=1)
@@ -164,8 +173,13 @@ class DiskImplicitPolicy(BasePolicy):
         return repeated_stats
 
     def plot_energy_fn(self, img, energy):
-        max_disp = torch.max(energy, dim=-1)[0]
-        E = energy[torch.argmax(max_disp).item()].cpu().numpy()
+        action_stats = self.get_action_stats()
+        r = torch.linspace(action_stats['min'][0].item(), action_stats['max'][0].item(), self.energy_head.num_radii)
+        phi = torch.linspace(0, 2*np.pi, self.energy_head.num_phi)
+
+        flat_indexes = torch.argmax(energy.flatten())
+        r_idx = flat_indexes.div(energy.shape[-1], rounding_mode='floor')
+        phi_idx = torch.remainder(flat_indexes, energy.shape[-1])
 
         f = plt.figure(figsize=(10,3))
         ax1 = f.add_subplot(111)
@@ -173,10 +187,11 @@ class DiskImplicitPolicy(BasePolicy):
 
         if img is not None:
             ax1.imshow(img[-1].transpose(1,2,0))
-        ax2.plot(np.linspace(0, 2*np.pi, E.shape[0]), E)
-        ax2.set_rticks(list())
-        ax2.grid(True)
-        ax2.set_title(f"R={torch.max(max_disp).item():.3f}", va="bottom")
+        ax2.pcolormesh(phi,r,energy.cpu())
+        ax2.scatter(phi[phi_idx], r[r_idx], c='red', s=5)
+        ax2.grid(False)
+        ax2.set_yticklabels([])
+        ax2.set_xticklabels([])
 
         io_buf = io.BytesIO()
         f.savefig(io_buf, format='raw')

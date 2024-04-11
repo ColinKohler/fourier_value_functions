@@ -1,5 +1,6 @@
 import numpy as np
-from scipy.special import jv
+from scipy.special import jv, jn_zeros, jnp_zeros
+from zernike import RZern, FitZern
 
 import torch
 from torch import nn
@@ -66,9 +67,13 @@ class DiskHarmonics(HarmonicFunction):
 
     def Psi(self, n, m, r, phi):
         # Radial basis function
-        k = n**2+m
-        N = self.max_radius**2 / 2 * jv(m+1, k*self.max_radius)**2
-        R = (1 / np.sqrt(N) * jv(m, k*r.cpu())).to(r.device)
+        x_nm = jnp_zeros(m, n)
+        #x_nm = jn_zeros(m, n)
+        k_nm = x_nm / self.max_radius
+
+        #N = self.max_radius**2 / 2 * jv(m + 1, x_nm[n-1])**2
+        N = ((self.max_radius**2.)/2.)*(1. - (m**2.)/(x_nm[n-1]**2.))*(jv(m, x_nm[n-1])**2.)
+        R = (1 / np.sqrt(N) * jv(m, k_nm[n-1]*r.cpu())).to(r.device)
 
         # Angular basis function
         if m == 0:
@@ -83,9 +88,10 @@ class DiskHarmonics(HarmonicFunction):
 
     def Psi2(self, n, m, r, phi):
         # Radial basis function
-        k = n**2+m
-        N = self.max_radius**2 / 2 * jv(m+1, k*self.max_radius)**2
-        R = (1 / np.sqrt(N) * jv(m, k*r.cpu())).to(r.device)
+        x_nm = jn_zeros(m, n)
+        k_nm = x_nm / self.max_radius
+        N = self.max_radius**2 / 2 * jv(m+1, x_nm[n-1])**2
+        R = (1 / np.sqrt(N) * jv(m, k_nm[n-1]*r.cpu())).to(r.device)
 
         # Angular basis function
         if m == 0:
@@ -118,6 +124,37 @@ class DiskHarmonics(HarmonicFunction):
             for m in range(self.angular_frequency+1):
                 basis_fns.extend(self.Psi2(n, m, radii, phis))
         return torch.stack(basis_fns).view(self.radial_frequency, 2*self.angular_frequency+1, -1)
+
+    def evaluate(
+        self,
+        coeffs: torch.Tensor,
+        radii: torch.Tensor=None,
+        phis: torch.Tensor=None
+    ) -> torch.Tensor:
+        if radii is not None:
+            basis_fns = self.generate_basis_fns(radii, phis)
+            return torch.einsum("inm,inm->i", coeffs, basis_fns.permute(2,0,1))
+        else:
+            return torch.einsum("inm,tnm->it", coeffs, self.basis_fns.permute(2,0,1))
+
+class ZernikePolynomialHarmonics(HarmonicFunction):
+    def __init__(
+        self,
+        radial_frequency: int,
+        angular_frequency: int,
+        max_radius: float,
+        num_radii: int=None,
+        num_phi: int=None,
+    ):
+        super().__init__()
+
+        self.radial_frequency = radial_frequency
+        self.angular_frequency = angular_frequency
+        self.max_radius = max_radius
+        self.num_radii = num_radii
+        self.num_phi = num_phi
+
+        self.basis_fns = nn.Parameter(self.generate_basis_fns2())
 
     def evaluate(
         self,
