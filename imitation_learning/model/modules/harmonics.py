@@ -1,6 +1,5 @@
 import numpy as np
 from scipy.special import jv, jn_zeros, jnp_zeros
-from zernike import RZern, FitZern
 
 import torch
 from torch import nn

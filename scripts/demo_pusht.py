@@ -33,7 +33,7 @@ def main(output, render_size, control_hz):
 
     # create PushT env with keypoints
     kp_kwargs = PushTKeypointsEnv.generate_keypoint_manager_params()
-    env = PushTKeypointsEnv(render_size=render_size, render_action=False, random_goal_pose=True, **kp_kwargs)
+    env = PushTKeypointsEnv(render_size=render_size, render_action=False, random_goal_pose=False, **kp_kwargs)
     agent = env.teleop_agent()
     clock = pygame.time.Clock()
 
@@ -48,7 +48,7 @@ def main(output, render_size, control_hz):
         env.seed(seed)
 
         # reset env and get observations (including info and render for recording)
-        obs = env.reset()
+        obs = env.reset(seed, None)
         info = env._get_info()
         img = env.render(mode='human')
 

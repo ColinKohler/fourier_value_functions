@@ -1,5 +1,5 @@
 import os
-os.environ["SDL_VIDEODRIVER"] = "dummy"
+#os.environ["SDL_VIDEODRIVER"] = "dummy"
 
 import gymnasium as gym
 from gymnasium import spaces
@@ -120,7 +120,6 @@ class PushTEnv(gym.Env):
             self.latest_action = action
             for i in range(n_steps):
                 # Step PD control.
-                #breakpoint()
                 self.agent.velocity = self.k_p * ((self.agent.position + action) - self.agent.position)    # P control works too.
                 #self.agent.velocity = self.k_p * (action - self.agent.position)    # P control works too.
 

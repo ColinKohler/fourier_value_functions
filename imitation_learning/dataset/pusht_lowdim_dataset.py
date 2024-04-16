@@ -35,6 +35,7 @@ class PushTLowdimDataset(BaseDataset):
             'keypoints' : sample_data['obs']['keypoints'],
             'action' : sample_data['action']
         }
+        breakpoint()
         if self.harmonic_action:
             data["action"] = harmonics.convert_to_polar(data["action"])
 
