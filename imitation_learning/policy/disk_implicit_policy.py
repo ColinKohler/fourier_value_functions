@@ -35,8 +35,8 @@ class DiskImplicitPolicy(BasePolicy):
         self.optimize_negatives = optimize_negatives
         self.sample_actions = sample_actions
         #self.sample_actions = False
-        #self.temperature = temperature
-        self.temperature = 0.5
+        self.temperature = temperature
+        #self.temperature = 0.5
         self.grad_pen = grad_pen
 
         self.obs_encoder = obs_encoder
@@ -148,12 +148,6 @@ class DiskImplicitPolicy(BasePolicy):
         polar_act = torch.concatenate([r.view(B,N,1), phi.view(B,N,1)], axis=2)
         obs_feat = self.obs_encoder(nobs)
         energy = self.energy_head(obs_feat, polar_act)
-        #energy = self.energy_head(obs_feat).view(B,1,100,360).repeat(1,N,1,1).view(B*N,100,360)
-        #rs = torch.linspace(0, 1.0, self.energy_head.num_radii).unsqueeze(0).repeat(B*N, 1).to(r.device)
-        #r_idxs = torch.argmin((r.view(-1,1) - rs).abs(), dim=1)
-        #phis = torch.linspace(0, 2*np.pi, self.energy_head.num_phi).unsqueeze(0).repeat(B*N, 1).to(r.device)
-        #phi_idxs = torch.argmin((phi.view(-1,1) - phis).abs(), dim=1)
-        #energy = energy[torch.arange(B*N), r_idxs, phi_idxs].view(B,N)
 
         # Compute InfoNCE loss, i.e. try to predict the expert action from the randomly sampled actions
         probs = F.log_softmax(energy, dim=1)

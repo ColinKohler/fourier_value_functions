@@ -2,7 +2,7 @@ defaults:
   - _self_
   - task: pusht_image
 
-name: train_circular_implicit_image_policy
+name: train_disk_implicit_image_policy
 _target_: imitation_learning.workflow.implicit_workflow.ImplicitWorkflow
 
 obs_dim: ${task.image_dim} 
@@ -18,19 +18,21 @@ num_latency_steps: 0
 past_action_visible: False
 z_dim: 128
 lmax: 3
+radial_freq: 1
+angular_freq: 3
 N: 8
 is_harmonic: True
 
 policy:
-  _target_: imitation_learning.policy.circular_implicit_policy.CircularImplicitPolicy
+  _target_: imitation_learning.policy.disk_implicit_policy.DiskImplicitPolicy
   obs_dim: ${obs_dim}
   action_dim: ${action_dim}
   num_obs_steps: ${num_obs_steps}
   num_action_steps: ${num_action_steps}
-  num_neg_act_samples: 1024
+  num_neg_act_samples: 256
   pred_n_samples: 1000
   optimize_negatives: False 
-  sample_actions: True 
+  sample_actions: True
   temperature: 1.0
   grad_pen: False
 
@@ -44,12 +46,16 @@ obs_encoder:
   dropout: 0.1
 
 energy_head:
-  _target_: imitation_learning.model.implicit.energy_mlp.CircularEnergyMLP
+  _target_: imitation_learning.model.implicit.energy_mlp.DiskEnergyMLP
   obs_feat_dim: ${z_dim}
-  mlp_dim: 256
+  mlp_dim: 256 
   lmax: ${lmax}
+  radial_freq: ${radial_freq}
+  angular_freq: ${angular_freq}
   dropout: 0.1
-  num_phi: 360 
+  max_radius: 1.0
+  num_radii: 100
+  num_phi: 360
   N: ${N}
 
 dataloader:
@@ -68,7 +74,7 @@ val_dataloader:
 
 optimizer:
   _target_: torch.optim.AdamW
-  lr: 5e-4
+  lr: 1e-4
   betas: [0.95, 0.999]
   eps: 1e-8
   weight_decay: 1e-6
@@ -78,8 +84,8 @@ training:
   seed: 0
   resume: True
   lr_warmup_steps: 500
-  num_epochs: 200
-  checkpoint_every: 20
+  num_epochs: 1000
+  checkpoint_every: 1
   rollout_every: 1
   val_every: 1
   tqdm_interval_sec: 1.0
@@ -97,7 +103,7 @@ checkpoint:
   topk:
     monitor_key: test_mean_score
     mode: max
-    k: 5
+    k: 2
     format_str: 'epoch={epoch:04d}-test_mean_score={test_mean_score:.3f}.ckpt'
   save_last_checkpoint: True
   save_last_snapshot: False

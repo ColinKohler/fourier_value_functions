@@ -25,7 +25,7 @@ env_runner:
 
 dataset:
   _target_: imitation_learning.dataset.pusht_lowdim_dataset.PushTLowdimDataset
-  path: 10_hz_test 
+  path: data/pusht_100 
   horizon: ${horizon}
   pad_before: ${eval:'${num_obs_steps}-1+${num_latency_steps}'}
   pad_after: ${eval:'${num_action_steps}-1'}

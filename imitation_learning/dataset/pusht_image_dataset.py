@@ -1,7 +1,9 @@
 import numpy as np
 
 from imitation_learning.dataset.base_dataset import BaseDataset
+from imitation_learning.utils import harmonics
 from imitation_learning.utils import normalize_utils, data_augmentation
+from imitation_learning.model.common.normalizer import LinearNormalizer, SingleFieldLinearNormalizer
 
 class PushTImageDataset(BaseDataset):
     def __init__(
@@ -36,7 +38,16 @@ class PushTImageDataset(BaseDataset):
             'action': sample_data['action'],
             'agent_pos': sample_data['obs']['agent_pos']
         }
+
+        if self.harmonic_action:
+            data["action"] = harmonics.convert_to_polar(data["action"])
+
         normalizer = super().get_normalizer(data, mode=mode, **kwargs)
+
+        act_norm = SingleFieldLinearNormalizer()
+        act_norm.fit(data=data['action'], output_min=0.1, output_max=1)
+        normalizer['action'] = act_norm
+
         normalizer['image'] = normalize_utils.get_image_range_normalizer()
 
         return normalizer

@@ -19,7 +19,7 @@ past_action_visible: False
 keypoint_visible_rate: 1.0
 z_dim: 512
 lmax: 3
-radial_freq: 2
+radial_freq: 1
 angular_freq: 3
 N: 16
 is_harmonic: True
@@ -56,7 +56,7 @@ energy_head:
   dropout: 0.1
   max_radius: 1.0
   num_radii: 100
-  num_phi: 360 
+  num_phi: 360
   N: ${N}
 
 dataloader:

@@ -41,7 +41,7 @@ class PushTImageRunner(BaseRunner):
         num_envs = None,
         random_goal_pose=False,
     ):
-        num_envs=1
+        #num_envs=1
         super().__init__(output_dir)
         num_envs = num_train + num_test if num_envs is None else num_envs
 
@@ -221,7 +221,6 @@ class PushTImageRunner(BaseRunner):
 
             all_video_paths[this_global_slice] = env.render()[this_local_slice]
             all_rewards[this_global_slice] = env.call('get_attr', 'reward')[this_local_slice]
-            print(np.max(all_rewards[this_global_slice]))
 
         # Logging
         max_rewards = collections.defaultdict(list)
