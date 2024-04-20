@@ -64,7 +64,6 @@ class DiskImplicitPolicy(BasePolicy):
         obs_feat = self.obs_encoder(nobs)
         logits = self.energy_head(obs_feat).view(B, self.energy_head.num_radii, self.energy_head.num_phi)
         action_probs = torch.softmax(logits/self.temperature, dim=-1).view(B, self.energy_head.num_radii, self.energy_head.num_phi)
-        #action_probs[:,:10,:] = 0
 
         if self.sample_actions:
             flat_indexes = torch.multinomial(action_probs.flatten(start_dim=-2), num_samples=1, replacement=True).squeeze()
@@ -115,18 +114,17 @@ class DiskImplicitPolicy(BasePolicy):
         )
 
         if self.optimize_negatives:
-            mag = torch.linspace(action_stats['min'][0].item(), action_stats['max'][0].item(), 1000)
-            mag = mag.view(1, -1, 1).repeat(B, 1, 1).view(B, -1, 1, 1).to(nobs.device)
-            theta = torch.linspace(0, 2*np.pi, self.energy_head.num_rot).view(1, -1).repeat(B, 1).to(nobs.device)
+            r = torch.linspace(action_stats['min'][0].item(), action_stats['max'][0].item(), self.energy_head.num_radii).view(1,-1).repeat(B*self.num_neg_act_samples,1).to(naction.device)
+            phi = torch.linspace(0, 2*np.pi, self.energy_head.num_phi).view(1, -1).repeat(B*self.num_neg_act_samples, 1).to(naction.device)
             with torch.no_grad():
-                logits = self.get_energy_ball(nobs, mag).view(B, -1)
-            action_probs = torch.softmax(logits/2., dim=-1).view(B, 1000, self.energy_head.num_rot)
+                obs_feat = self.obs_encoder(nobs)
+                logits = self.energy_head(obs_feat).view(B, self.energy_head.num_radii, self.energy_head.num_phi)
+            action_probs = torch.softmax(logits/2., dim=-1).view(B, self.energy_head.num_radii, self.energy_head.num_phi)
+            flat_indexes = torch.multinomial(action_probs.flatten(start_dim=-2), num_samples=self.num_neg_act_samples, replacement=False).squeeze()
 
-            theta_idx = torch.remainder(flat_indexes.view(-1), action_probs.shape[-1])
-            negatives = torch.vstack([
-                mag.repeat(self.num_neg_act_samples, 1, 1, 1)[torch.arange(B*self.num_neg_act_samples),mag_idx,0,0],
-                theta.repeat(self.num_neg_act_samples, 1)[torch.arange(B*self.num_neg_act_samples), theta_idx]
-            ]).permute(1,0).view(B,self.num_neg_act_samples,Ta,2)
+            r_idx = flat_indexes.div(action_probs.shape[-1], rounding_mode='floor')
+            phi_idx = torch.remainder(flat_indexes, action_probs.shape[-1])
+            negatives = torch.vstack([r[torch.arange(B*self.num_neg_act_samples),r_idx.view(-1)], phi[torch.arange(B*self.num_neg_act_samples), phi_idx.view(-1)]]).permute(1,0).view(B,self.num_neg_act_samples, 1, 2)
         else:
             negatives = action_dist.sample((B, self.num_neg_act_samples, Ta)).to(
                 dtype=naction.dtype

@@ -6,8 +6,7 @@ import numpy.random as npr
 import pickle
 
 from imitation_learning.dataset.replay_buffer import ReplayBuffer
-from imitation_learning.utils import torch_utils
-from imitation_learning.utils import harmonics
+from imitation_learning.utils import torch_utils, action_utils
 from imitation_learning.model.common.normalizer import LinearNormalizer
 from imitation_learning.utils.sampler import SequenceSampler, get_val_mask, downsample_mask
 
@@ -20,7 +19,7 @@ class BaseDataset(torch.utils.data.Dataset):
         pad_before: int = 0,
         pad_after: int = 0,
         buffer_keys: list = ['obs', 'action'],
-        harmonic_action: bool = False,
+        action_coords: str = "rectangular",
         seed: int = 0,
         val_ratio: float = 0.0,
         max_train_episodes: int = None,
@@ -53,7 +52,7 @@ class BaseDataset(torch.utils.data.Dataset):
         self.horizon = horizon
         self.pad_before = pad_before
         self.pad_after = pad_after
-        self.harmonic_action = harmonic_action
+        self.action_coords = action_coords
 
         self.normalizer = self.get_normalizer()
 
@@ -73,9 +72,6 @@ class BaseDataset(torch.utils.data.Dataset):
         if data is None:
             data = self._sample_to_data(self.replay_buffer)
 
-        #if self.harmonic_action:
-        #    data["action"] = harmonics.convert_to_polar(data["action"])
-
         normalizer = LinearNormalizer()
         normalizer.fit(data=data, last_n_dims=1, mode=mode, **kwargs)
         return normalizer
@@ -86,9 +82,7 @@ class BaseDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         sample = self.sampler.sample_sequence(idx)
         data = self._sample_to_data(sample)
-
-        if self.harmonic_action:
-            data["action"] = harmonics.convert_to_polar(data["action"])
+        data["action"] = action_utils.convert_action_coords(data["action"], self.action_coords)
 
         torch_data = torch_utils.dict_apply(data, torch.from_numpy)
 

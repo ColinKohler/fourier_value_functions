@@ -18,11 +18,11 @@ num_latency_steps: 0
 past_action_visible: False
 keypoint_visible_rate: 1.0
 z_dim: 512
-lmax: 3
-radial_freq: 1
-angular_freq: 3
+lmax: 5
+radial_freq: 5
+angular_freq: 1
 N: 16
-is_harmonic: True
+action_coords: "polar"
 
 policy:
   _target_: imitation_learning.policy.disk_implicit_policy.DiskImplicitPolicy
@@ -30,7 +30,7 @@ policy:
   action_dim: ${action_dim}
   num_obs_steps: ${num_obs_steps}
   num_action_steps: ${num_action_steps}
-  num_neg_act_samples: 256
+  num_neg_act_samples: 256 
   pred_n_samples: 1000
   optimize_negatives: False 
   sample_actions: True

@@ -7,7 +7,8 @@ from escnn import group
 
 from imitation_learning.model.modules.layers import MLP
 from imitation_learning.model.modules.equiv_layers import SO2MLP
-from imitation_learning.model.modules.harmonics import CircularHarmonics, DiskHarmonics
+from imitation_learning.model.modules.harmonics.circular_harmonics import CircularHarmonics
+from imitation_learning.model.modules.harmonics.disk_harmonics import DiskHarmonics
 
 class EnergyMLP(nn.Module):
     def __init__(self, obs_feat, mlp_dim, dropout, spec_norm, initialize):
@@ -235,7 +236,7 @@ class DiskEnergyMLP(nn.Module):
         self.energy_mlp = SO2MLP(
             self.in_type,
             channels=[mlp_dim] * 8,
-            lmaxs=[radial_freq] * 8,
+            lmaxs=[self.lmax] * 8,
             out_type=out_type,
             N=N,
             dropout=dropout,

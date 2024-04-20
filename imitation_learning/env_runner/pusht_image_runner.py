@@ -41,8 +41,10 @@ class PushTImageRunner(BaseRunner):
         num_envs = None,
         random_goal_pose=False,
     ):
-        #num_envs=1
         super().__init__(output_dir)
+        #num_train=0
+        #num_test=1
+        #num_envs=1
         num_envs = num_train + num_test if num_envs is None else num_envs
 
         env_num_obs_steps = num_obs_steps + num_latency_steps
@@ -184,7 +186,7 @@ class PushTImageRunner(BaseRunner):
                 B, T, C, H, W = obs['image'].shape
                 #cropped_image = obs['image'][:,:,:,6:-6, 6:-6]
                 from torchvision.transforms.functional import resize
-                cropped_image = resize(torch.tensor(obs['image']).view(-1, 3, 96,96), (84, 84)).view(-1, 2, 3, 84, 84).numpy()
+                cropped_image = resize(torch.tensor(obs['image']).view(-1, 3, 96,96), (84, 84), antialias=True).view(-1, 2, 3, 84, 84).numpy()
 
                 x_pos = (obs['agent_pos'][:,:,0] - 255.0)
                 y_pos = (obs['agent_pos'][:,:,1] - 255.0) * -1

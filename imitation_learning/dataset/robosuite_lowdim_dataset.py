@@ -11,7 +11,7 @@ import tqdm
 from imitation_learning.dataset.replay_buffer import ReplayBuffer
 from imitation_learning.utils import torch_utils
 from imitation_learning.utils import harmonics
-from imitation_learning.model.common.normalizer import LinearNormalizer
+from imitation_learning.model.common.normalizer import LinearNormalizer, SingleFieldLinearNormalizer
 from imitation_learning.utils.sampler import SequenceSampler, get_val_mask, downsample_mask
 
 class RobosuiteLowdimDataset(torch.utils.data.Dataset):
@@ -81,12 +81,9 @@ class RobosuiteLowdimDataset(torch.utils.data.Dataset):
     def get_normalizer(self, data=None, mode="limits", **kwargs):
         if data is None:
             data = self._sample_to_data(self.replay_buffer)
-
-        if self.harmonic_action:
-            xy = data["action"][:,:2]
-            zg = data["action"][:,2:]
-            polar_xy = harmonics.convert_to_polar(xy)
-            data["action"] = np.concatenate([polar_xy, zg], axis=-1)
+        cylinderical_action = action_utils.convert_to_polar(data["action"][:3], action_coords)
+        gripper_action = data["action"][:,3]
+        data["action"] = np.concatenate([cylinderical_action, gripper_action], axis=-1)
         data = {
             'keypoints': data['obs']['keypoints'],
             'action': data['action']
@@ -94,6 +91,11 @@ class RobosuiteLowdimDataset(torch.utils.data.Dataset):
 
         normalizer = LinearNormalizer()
         normalizer.fit(data=data, last_n_dims=1, mode=mode, **kwargs)
+
+        act_norm = SingleFieldLinearNormalizer()
+        act_norm.fit(data=data['action'], output_min=0.1, output_max=1)
+        normalizer['action'] = act_norm
+
         return normalizer
 
     def __len__(self) -> int:
@@ -103,11 +105,9 @@ class RobosuiteLowdimDataset(torch.utils.data.Dataset):
         sample = self.sampler.sample_sequence(idx)
         data = self._sample_to_data(sample)
 
-        if self.harmonic_action:
-            xy = data["action"][:,:2]
-            zg = data["action"][:,2:]
-            polar_xy = harmonics.convert_to_polar(xy)
-            data["action"] = np.concatenate([polar_xy, zg], axis=-1)
+        cylinderical_action = action_utils.convert_to_polar(data["action"][:3], action_coords)
+        gripper_action = data["action"][:,3]
+        data["action"] = np.concatenate([cylinderical_action, gripper_action], axis=-1)
 
         torch_data = torch_utils.dict_apply(data, torch.from_numpy)
 

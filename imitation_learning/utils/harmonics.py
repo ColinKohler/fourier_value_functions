@@ -15,10 +15,6 @@ def convert_to_polar(action):
 
     return np.concatenate((r[:,None], theta[:,None]), axis=1)
 
-def convert_harmonics_to_action(harmonics):
-    pass
-
-
 def circular_harmonics(L, theta):
     B = [
         torch.tensor(
@@ -30,7 +26,6 @@ def circular_harmonics(L, theta):
         B.append(torch.sin(l * theta) / np.sqrt(np.pi))
 
     return torch.stack(B).permute(1, 0, 2).float()
-
 
 def spherical_harmonics(lmax: int, x: torch.Tensor) -> torch.Tensor:
     x = F.normalize(x, dim=-1)

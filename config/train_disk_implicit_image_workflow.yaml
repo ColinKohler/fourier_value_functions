@@ -20,8 +20,8 @@ z_dim: 128
 lmax: 3
 radial_freq: 1
 angular_freq: 3
-N: 8
-is_harmonic: True
+N: 16
+action_coords: "polar"
 
 policy:
   _target_: imitation_learning.policy.disk_implicit_policy.DiskImplicitPolicy
@@ -31,7 +31,7 @@ policy:
   num_action_steps: ${num_action_steps}
   num_neg_act_samples: 256
   pred_n_samples: 1000
-  optimize_negatives: False 
+  optimize_negatives: False
   sample_actions: True
   temperature: 1.0
   grad_pen: False
@@ -48,7 +48,7 @@ obs_encoder:
 energy_head:
   _target_: imitation_learning.model.implicit.energy_mlp.DiskEnergyMLP
   obs_feat_dim: ${z_dim}
-  mlp_dim: 256 
+  mlp_dim: 512 
   lmax: ${lmax}
   radial_freq: ${radial_freq}
   angular_freq: ${angular_freq}
@@ -85,8 +85,8 @@ training:
   resume: True
   lr_warmup_steps: 500
   num_epochs: 1000
-  checkpoint_every: 1
-  rollout_every: 1
+  checkpoint_every: 20
+  rollout_every: 20
   val_every: 1
   tqdm_interval_sec: 1.0
 

@@ -1,7 +1,7 @@
 import numpy as np
 
 from imitation_learning.dataset.base_dataset import BaseDataset
-from imitation_learning.utils import harmonics
+from imitation_learning.utils import action_utils
 from imitation_learning.model.common.normalizer import LinearNormalizer, SingleFieldLinearNormalizer
 
 
@@ -12,7 +12,7 @@ class PushTLowdimDataset(BaseDataset):
         horizon=1,
         pad_before=0,
         pad_after=0,
-        harmonic_action: bool = False,
+        action_coords: str = "rectangular",
         seed=0,
         val_ratio=0.0,
         max_train_episodes=None,
@@ -23,7 +23,7 @@ class PushTLowdimDataset(BaseDataset):
             pad_before=pad_before,
             pad_after=pad_after,
             buffer_keys=['keypoint', 'state' , 'action'],
-            harmonic_action=harmonic_action,
+            action_coords=action_coords,
             seed=seed,
             val_ratio=val_ratio,
             max_train_episodes=max_train_episodes
@@ -35,9 +35,7 @@ class PushTLowdimDataset(BaseDataset):
             'keypoints' : sample_data['obs']['keypoints'],
             'action' : sample_data['action']
         }
-
-        if self.harmonic_action:
-            data["action"] = harmonics.convert_to_polar(data["action"])
+        data["action"] = action_utils.convert_action_coords(data["action"], self.action_coords)
 
         normalizer = super().get_normalizer(data, mode=mode, **kwargs)
 

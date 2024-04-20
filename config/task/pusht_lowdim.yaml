@@ -30,6 +30,6 @@ dataset:
   pad_before: ${eval:'${num_obs_steps}-1+${num_latency_steps}'}
   pad_after: ${eval:'${num_action_steps}-1'}
   seed: 0
-  harmonic_action: ${is_harmonic}
+  action_coords: ${action_coords}
   val_ratio: 0.02
   max_train_episodes: 90
