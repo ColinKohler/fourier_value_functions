@@ -18,8 +18,8 @@ num_latency_steps: 0
 past_action_visible: False
 keypoint_visible_rate: 1.0
 z_dim: 512
-lmax: 5
-radial_freq: 1
+lmax: 3
+radial_freq: 2
 angular_freq: 3
 N: 16
 action_coords: "polar"
@@ -60,14 +60,14 @@ energy_head:
   N: ${N}
 
 dataloader:
-  batch_size: 64
+  batch_size: 256
   num_workers: 1
   shuffle: True
   pin_memory: True
   persistent_workers: False
 
 val_dataloader:
-  batch_size: 64
+  batch_size: 256
   num_workers: 1
   shuffle: False
   pin_memory: True

@@ -60,7 +60,7 @@ def get_Rnm(r: torch.Tensor, m: int, knm: float, Nnm: float) -> torch.Tensor:
         knm - Corresponding k Fourier mode for n and m.
         Nnm - Corresponding normalisation constant.
     """
-    return (1. / math.sqrt(Nnm)) * torch.from_numpy(bessel.get_Jm(m, knm * r.numpy()))
+    return (1. / math.sqrt(Nnm)) * torch.from_numpy(bessel.get_Jm(m, knm * r.cpu().numpy()))
 
 def get_Phi_m(m: int, phi: torch.Tensor) -> torch.Tensor:
     """ Angular component of the polar basis function.
@@ -88,7 +88,7 @@ def get_Psi_nm(n: int, m: int, r: torch.Tensor, phi: torch.Tensor, knm: float, N
         Nnm - Corresponding normalisation constant.
     """
     Phi_m = get_Phi_m(m, phi)
-    Rnm = get_Rnm(r, m, knm, Nnm)
+    Rnm = get_Rnm(r, m, knm, Nnm).to(r.device)
     Psi_nm = Phi_m * Rnm
 
     return Psi_nm
@@ -114,7 +114,7 @@ class DiskHarmonics(HarmonicFunction):
 
         self.init()
 
-    def init(self) -> torch.Tensor:
+    def init(self) -> None:
         """ Initialize the intermediate variables and basis functions. """
         self.r2d, self.p2d = grid.polargrid(self.max_radius, self.num_radii, self.num_phi)
         self.dr = self.r2d[0][1] - self.r2d[0][0]
@@ -186,11 +186,25 @@ class DiskHarmonics(HarmonicFunction):
         B = Pnm.size(0)
 
         if radii is not None:
-            breakpoint()
-            f = torch.zeros((B,) +  radii.shape)
-            for i in range(Pnm.size(1)):
-                Psi = get_Psi_nm(self.n2d_flat[i], self.m2d_flat[i], radii, phis, self.knm_flat[i], self.Nnm.flat[i])
-                f += torch.einsum("n,nxy->nxy", Pnm[:,i], Psi[:,i])
+            f = torch.zeros((B,) + radii.shape[1:]).to(Pnm.device)
+            li = 0
+            for i in range(Pnm.size(1)//2 -1):
+                Psi = get_Psi_nm(
+                    self.n2d_flat[i].item(),
+                    self.m2d_flat[i].item(),
+                    radii,
+                    phis,
+                    self.knm_flat[i].item(),
+                    self.Nnm_flat[i]
+                ).to(radii.device)
+
+                if self.m2d_flat[i] == 0:
+                    f += torch.einsum("n,nrp->nrp", Pnm[:,li], Psi)
+                    li += 1
+                else:
+                    f += torch.einsum("n,nrp->nrp", Pnm[:,li], Psi[0])
+                    f += torch.einsum("n,nrp->nrp", Pnm[:,li+1], Psi[1])
+                    li += 2
             return f
         else:
             Psi = self.Psi.repeat(B,1,1,1).to(Pnm.device)
