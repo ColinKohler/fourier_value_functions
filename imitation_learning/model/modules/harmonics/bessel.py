@@ -1,7 +1,7 @@
 import numpy.typing as npt
 
 import numpy as np
-from scipy import optimize
+import torch
 from scipy.special import jv as scipy_jv
 from scipy.special import jvp as scipy_jvp
 from scipy.special import jn_zeros as scipy_jn_zeros

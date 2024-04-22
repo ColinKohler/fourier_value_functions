@@ -1,9 +1,7 @@
 from typing import Tuple
-import numpy.typing as npt
+import torch
 
-import numpy as np
-
-def grid1D(boxsize: float, ngrid: int, origin: float=0.) -> Tuple[npt.NDArray, npt.NDArray]:
+def grid1D(boxsize: float, ngrid: int, origin: float=0.) -> Tuple[torch.Tensor, torch.Tensor]:
     """ Returns the x coordinates of a cartesian grid.
 
     Args:
@@ -11,11 +9,11 @@ def grid1D(boxsize: float, ngrid: int, origin: float=0.) -> Tuple[npt.NDArray, n
         ngrid : Grid division along one axis.
         origin : Start point of the grid.
     """
-    xedges = np.linspace(0., boxsize, ngrid + 1) + origin
-    x = 0.5*(xedges[1:] + xedges[:-1])
+    xedges = torch.linspace(0., boxsize, ngrid + 1) + origin
+    x = 0.5 * (xedges[1:] + xedges[:-1])
     return xedges, x
 
-def polargrid(Rmax: float, Nr: int, Nphi: int) -> Tuple[npt.NDArray, npt.NDArray]:
+def polargrid(Rmax: float, Nr: int, Nphi: int) -> Tuple[torch.Tensor, torch.Tensor]:
     """ Returns a 2D polar grid.
 
     Args:
@@ -24,19 +22,19 @@ def polargrid(Rmax: float, Nr: int, Nphi: int) -> Tuple[npt.NDArray, npt.NDArray
         Nphi- Number of elements along the angular axis.
     """
     redges, r = grid1D(Rmax, Nr)
-    pedges, p = grid1D(2.*np.pi, Nphi)
-    p2d, r2d = np.meshgrid(p, r, indexing='ij')
-    return p2d, r2d
+    pedges, p = grid1D(2.0 * torch.pi, Nphi)
+    r2d, p2d = torch.meshgrid(r, p, indexing='ij')
+    return r2d, p2d
 
-def wrap_polar(f: npt.NDArray) -> npt.NDArray:
+def wrap_polar(f: torch.Tensor) -> torch.Tensor:
     """ Wraps polar grid, which is useful for plotting purposes.
 
     Args:
         f - Field polar grid.
     """
-    return np.concatenate([f, np.array([f[0]])])
+    return torch.concatenate([f, torch.array([f[0]])])
 
-def unwrap_polar(f: npt.NDArray) -> npt.NDArray:
+def unwrap_polar(f: torch.Tensor) -> torch.Tensor:
     """ Unwraps polar grid.
 
     Args:
@@ -44,17 +42,17 @@ def unwrap_polar(f: npt.NDArray) -> npt.NDArray:
     """
     return f[:-1]
 
-def wrap_phi(p2d: npt.NDArray) -> npt.NDArray:
+def wrap_phi(p2d: torch.Tensor) -> torch.Tensor:
     """ Wraps polar grid, which is useful for plotting purposes.
 
     Args:
         p2d - Phi grid.
     """
     p2d = wrap_polar(p2d)
-    p2d[-1] = 2.*np.pi
+    p2d[-1] = 2.0 * torch.pi
     return p2d
 
-def unwrap_phi(f: npt.NDArray) -> npt.NDArray:
+def unwrap_phi(f: torch.Tensor) -> torch.Tensor:
     """ Unwraps polar grid.
 
     Args:

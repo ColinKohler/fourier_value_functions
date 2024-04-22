@@ -252,13 +252,13 @@ class DiskEnergyMLP(nn.Module):
         B, Dz = obs_feat.shape
 
         s = self.in_type(obs_feat)
-        w = self.energy_mlp(s).tensor.view(B, self.radial_freq, self.angular_freq*2+1)
+        Pnm = self.energy_mlp(s).tensor.view(B, self.radial_freq, self.angular_freq*2+1)
         if polar_actions is not None:
             B, N, _ = polar_actions.shape
-            w = w.unsqueeze(1).repeat(1,N,1,1).view(B*N,self.radial_freq, self.angular_freq*2+1)
-            return self.disk_harmonics.evaluate(w, polar_actions[:,:,0].view(B*N,-1), polar_actions[:,:,1].view(B*N, -1)).view(B, N)
+            Pnm = Pnm.unsqueeze(1).repeat(1,N,1,1).view(B*N,self.radial_freq, self.angular_freq*2+1)
+            return self.disk_harmonics.evaluate(Pnm, polar_actions[:,:,0].view(B*N,-1), polar_actions[:,:,1].view(B*N, -1)).view(B, N)
         else:
-            return self.disk_harmonics.evaluate(w)
+            return self.disk_harmonics.evaluate(Pnm.squeeze())
 
 
 class CylindericalEnergyMLP(nn.Module):
