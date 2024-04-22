@@ -2,7 +2,7 @@ defaults:
   - _self_
   - task: lift_lowdim 
 
-name: train_cylinderical_implicit_lowdim_policy
+name: train_cylindrical_implicit_lowdim_policy
 _target_: imitation_learning.workflow.implicit_workflow.ImplicitWorkflow
 
 obs_dim: ${task.obs_dim} 
@@ -19,11 +19,14 @@ past_action_visible: False
 keypoint_visible_rate: 1.0
 z_dim: 512 
 lmax: 3
-N: 8
-is_harmonic: True
+radial_freq: 1
+angular_freq: 3
+height_freq: 1
+N: 16
+action_coords: "cylindrical"
 
 policy:
-  _target_: imitation_learning.policy.cylinderical_implicit_policy.CylindericalImplicitPolicy
+  _target_: imitation_learning.policy.cylindrical_implicit_policy.CylindricalImplicitPolicy
   obs_dim: ${obs_dim}
   action_dim: ${action_dim}
   num_obs_steps: ${num_obs_steps}
@@ -45,23 +48,30 @@ obs_encoder:
   dropout: 0.1
 
 energy_head:
-  _target_: imitation_learning.model.implicit.energy_mlp.CylindericalEnergyMLP
+  _target_: imitation_learning.model.implicit.energy_mlp.CylindricalEnergyMLP
   obs_feat_dim: ${z_dim}
   mlp_dim: ${z_dim}
   lmax: ${lmax}
+  radial_freq: ${radial_freq}
+  angular_freq: ${angular_freq}
+  height_freq: ${height_freq}
   dropout: 0.1
-  num_rot: 360 
+  max_radius: 1.0
+  max_height: 1.0
+  num_radii: 100
+  num_phi: 360 
+  num_height: 100
   N: ${N}
 
 dataloader:
-  batch_size: 64
+  batch_size: 256
   num_workers: 1
   shuffle: True
   pin_memory: True
   persistent_workers: False
 
 val_dataloader:
-  batch_size: 64
+  batch_size: 256
   num_workers: 1
   shuffle: False
   pin_memory: True
@@ -79,9 +89,9 @@ training:
   seed: 0
   resume: True
   lr_warmup_steps: 500
-  num_epochs: 200
-  checkpoint_every: 1
-  rollout_every: 1
+  num_epochs: 1000
+  checkpoint_every: 10
+  rollout_every: 10
   val_every: 1
   tqdm_interval_sec: 1.0
 

@@ -9,8 +9,7 @@ import h5py
 import tqdm
 
 from imitation_learning.dataset.replay_buffer import ReplayBuffer
-from imitation_learning.utils import torch_utils
-from imitation_learning.utils import harmonics
+from imitation_learning.utils import torch_utils, action_utils
 from imitation_learning.model.common.normalizer import LinearNormalizer, SingleFieldLinearNormalizer
 from imitation_learning.utils.sampler import SequenceSampler, get_val_mask, downsample_mask
 
@@ -22,7 +21,7 @@ class RobosuiteLowdimDataset(torch.utils.data.Dataset):
         pad_before=0,
         pad_after=0,
         obs_eef_target: bool = True,
-        harmonic_action: bool = False,
+        action_coords: str = "cylindrical",
         seed=0,
         val_ratio=0.0,
         max_train_episodes=None,
@@ -30,6 +29,7 @@ class RobosuiteLowdimDataset(torch.utils.data.Dataset):
         super().__init__()
 
         self.obs_eef_target = obs_eef_target
+        self.action_coords = action_coords
 
         self.replay_buffer = ReplayBuffer.create_empty_numpy()
         pbar = tqdm.tqdm(total=len(os.listdir(path)), desc="Loading hdf5 to ReplayBuffer")
@@ -62,7 +62,6 @@ class RobosuiteLowdimDataset(torch.utils.data.Dataset):
         self.horizon = horizon
         self.pad_before = pad_before
         self.pad_after = pad_after
-        self.harmonic_action = harmonic_action
 
         self.normalizer = self.get_normalizer()
 
@@ -81,15 +80,15 @@ class RobosuiteLowdimDataset(torch.utils.data.Dataset):
     def get_normalizer(self, data=None, mode="limits", **kwargs):
         if data is None:
             data = self._sample_to_data(self.replay_buffer)
-        cylinderical_action = action_utils.convert_to_polar(data["action"][:3], action_coords)
+        cylindrical_action = action_utils.convert_action_coords(data["action"][:,:3], self.action_coords)
         gripper_action = data["action"][:,3]
-        data["action"] = np.concatenate([cylinderical_action, gripper_action], axis=-1)
         data = {
             'keypoints': data['obs']['keypoints'],
-            'action': data['action']
+            'action': np.concatenate([cylindrical_action, gripper_action], axis=-1)
         }
 
         normalizer = LinearNormalizer()
+        normalizer = super().get_normalizer(data, mode=mode, **kwargs)
         normalizer.fit(data=data, last_n_dims=1, mode=mode, **kwargs)
 
         act_norm = SingleFieldLinearNormalizer()
@@ -105,9 +104,9 @@ class RobosuiteLowdimDataset(torch.utils.data.Dataset):
         sample = self.sampler.sample_sequence(idx)
         data = self._sample_to_data(sample)
 
-        cylinderical_action = action_utils.convert_to_polar(data["action"][:3], action_coords)
+        cylindrical_action = action_utils.convert_action_coords(data["action"][:3], self.action_coords)
         gripper_action = data["action"][:,3]
-        data["action"] = np.concatenate([cylinderical_action, gripper_action], axis=-1)
+        data["action"] = np.concatenate([cylindrical_action, gripper_action], axis=-1)
 
         torch_data = torch_utils.dict_apply(data, torch.from_numpy)
 

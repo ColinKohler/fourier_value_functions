@@ -261,11 +261,33 @@ class DiskEnergyMLP(nn.Module):
             return self.disk_harmonics.evaluate(Pnm.reshape(B,-1))
 
 
-class CylindericalEnergyMLP(nn.Module):
-    def __init__(self, obs_feat_dim, mlp_dim, lmax, dropout, N=16, num_phi=360, initialize=True):
+class CylindricalEnergyMLP(nn.Module):
+    def __init__(
+        self,
+        obs_feat_dim,
+        mlp_dim,
+        lmax,
+        radial_freq,
+        angular_freq,
+        height_freq,
+        dropout,
+        N=16,
+        max_radius=1.0,
+        max_height=1.0,
+        num_radii=100,
+        num_phi=360,
+        num_height=100,
+        initialize=True
+    ):
         super().__init__()
         self.Lmax = lmax
+        self.radial_freq = radial_freq
+        self.angular_freq = angular_freq
+        self.height_freq = height_freq
+        self.max_radius = max_radius
+        self.num_radii = num_radii
         self.num_phi = num_phi
+        self.num_height = num_height
 
         self.G = group.so2_group()
         self.gspace = gspaces.no_base_space(self.G)
@@ -273,7 +295,7 @@ class CylindericalEnergyMLP(nn.Module):
 
         self.in_type = enn.FieldType(
             self.gspace,
-            obs_feat_dim * [rho] + 3 * [self.gspace.irrep(0)] # [obs_feat_dim, r, z, g]
+            obs_feat_dim * [rho] + 2 * [self.gspace.irrep(0)] # [obs_feat_dim, z, g]
         )
         out_type = enn.FieldType(self.gspace, [self.gspace.irrep(l) for l in range(self.Lmax+1)])
 
@@ -287,13 +309,13 @@ class CylindericalEnergyMLP(nn.Module):
             act_out = False,
             initialize=initialize
         )
-        self.circular_harmonics = CircularHarmonics(lmax, num_phi)
+        self.disk_harmonics = DiskHarmonics(radial_freq, angular_freq, max_radius, num_radii, num_phi)
 
-    def forward(self, obs_feat, action, action_theta=None):
+    def forward(self, obs_feat, zg_action, rp_action):
         ''' Compute the energy function for the desired action.
 
         '''
-        B, N, Ta, Da = action.shape
+        B, N, Ta, Da = zg_action.shape
         B, Dz = obs_feat.shape
 
         s = obs_feat.reshape(B, 1, -1).expand(-1, N, -1)
@@ -301,8 +323,8 @@ class CylindericalEnergyMLP(nn.Module):
             torch.cat([s, action.reshape(B, N, -1)], dim=-1).reshape(B*N, -1)
         )
 
-        w = self.energy_mlp(s_a).tensor.view(B*N, -1)
-        if action_theta is not None:
-            return self.circular_harmonics.evaluate(w, action_theta).view(B, N)
+        Pnm = self.energy_mlp(s_a).tensor.view(B*N, self.radial_freq, self.angular_freq*2+1).permute(0,2,1)
+        if rp_action is not None:
+            return self.disk_harmonics.evaluate(Pnm.reshape(B*N,-1), rp_action[:,:,0].view(B*N,1,1), rp_action[:,:,1].view(B*N, 1, 1)).view(B, N)
         else:
-            return self.circular_harmonics.evaluate(w).view(B, N, -1)
+            return self.disk_harmonics.evaluate(Pnm.reshape(B,-1))

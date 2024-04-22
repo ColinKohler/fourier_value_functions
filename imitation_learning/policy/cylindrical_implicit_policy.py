@@ -13,7 +13,7 @@ from imitation_learning.policy.base_policy import BasePolicy
 from imitation_learning.utils import mcmc
 
 
-class CylindericalImplicitPolicy(BasePolicy):
+class CylindricalImplicitPolicy(BasePolicy):
     def __init__(
         self,
         obs_encoder: nn.Module,
@@ -60,10 +60,10 @@ class CylindericalImplicitPolicy(BasePolicy):
         xy_mag = torch.linspace(action_stats['min'][0].item(), action_stats['max'][0].item(), self.pred_n_samples)
         z_mag = torch.linspace(action_stats['min'][1].item(), action_stats['max'][1].item(), self.pred_n_samples)
         mag = mag.view(1, -1, 1).repeat(B, 1, 1).view(B, -1, 1, 1).to(device)
-        theta = torch.linspace(0, 2*np.pi, self.energy_head.num_rot).view(1, -1).repeat(B, 1).to(device)
+        theta = torch.linspace(0, 2*np.pi, self.energy_head.num_phi).view(1, -1).repeat(B, 1).to(device)
         obs_feat = self.obs_encoder(nobs)
         logits = self.energy_head(obs_feat, mag).view(B, -1)
-        action_probs = torch.softmax(logits/self.temperature, dim=-1).view(B, self.pred_n_samples, self.energy_head.num_rot)
+        action_probs = torch.softmax(logits/self.temperature, dim=-1).view(B, self.pred_n_samples, self.energy_head.num_phi)
 
         if self.sample_actions:
             flat_indexes = torch.multinomial(action_probs.flatten(start_dim=-2), num_samples=1, replacement=True).squeeze()
@@ -99,7 +99,7 @@ class CylindericalImplicitPolicy(BasePolicy):
         # Add noise to positive samples and observations
         action_noise = torch.normal(
             mean=0,
-            std=1e-4,
+            std=1e-3,
             size=naction.shape,
             dtype=naction.dtype,
             device=naction.device,
@@ -115,10 +115,10 @@ class CylindericalImplicitPolicy(BasePolicy):
         if self.optimize_negatives:
             mag = torch.linspace(action_stats['min'][0].item(), action_stats['max'][0].item(), 1000)
             mag = mag.view(1, -1, 1).repeat(B, 1, 1).view(B, -1, 1, 1).to(nobs.device)
-            theta = torch.linspace(0, 2*np.pi, self.energy_head.num_rot).view(1, -1).repeat(B, 1).to(nobs.device)
+            theta = torch.linspace(0, 2*np.pi, self.energy_head.num_phi).view(1, -1).repeat(B, 1).to(nobs.device)
             with torch.no_grad():
                 logits = self.get_energy_ball(nobs, mag).view(B, -1)
-            action_probs = torch.softmax(logits/2., dim=-1).view(B, 1000, self.energy_head.num_rot)
+            action_probs = torch.softmax(logits/2., dim=-1).view(B, 1000, self.energy_head.num_phi)
 
             flat_indexes = torch.multinomial(action_probs.flatten(start_dim=-2), num_samples=self.num_neg_act_samples, replacement=True)
             mag_idx = flat_indexes.view(-1).div(action_probs.shape[-1], rounding_mode='floor')
@@ -144,18 +144,14 @@ class CylindericalImplicitPolicy(BasePolicy):
 
         # Compute ciruclar energy function for the given obs and action magnitudes
         r = targets[:,:,:,0].unsqueeze(3)
+        phi = self.normalizer["action"].unnormalize(targets)[:,:,0,1]
         z = targets[:,:,:,2].unsqueeze(3)
         g = targets[:,:,:,3].unsqueeze(3)
-        act = torch.concat([r, z, g], dim=-1)
+        Pnm_act_in = torch.concat([z, g], dim=-1)
+        Pnm_act_out = torch.concat([r, phi], dim=-1)
         obs_feat = self.obs_encoder(nobs)
-        theta = self.normalizer["action"].unnormalize(targets)[:,:,0,1]
-        energy = self.energy_head(obs_feat, act).view(B*N, -1)
-
-        # Find closest theta for all actions and index the energy function at the theta
-        # TODO: Remove this to stop the weirdness w/binning
-        thetas = torch.linspace(0, 2*np.pi, 360).unsqueeze(0).repeat(B*N, 1).to(theta.device)
-        theta_idxs = torch.argmin((theta.view(-1,1) - thetas).abs(), dim=1)
-        energy = energy[torch.arange(B*N), theta_idxs].view(B, N)
+        energy = self.energy_head(obs_feat, Pnm_act_in, Pnm_act_out)
+        breakpoint()
 
         # Compute InfoNCE loss, i.e. try to predict the expert action from the randomly sampled actions
         probs = F.log_softmax(energy, dim=1)

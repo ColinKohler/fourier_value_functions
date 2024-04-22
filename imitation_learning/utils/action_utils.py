@@ -5,8 +5,8 @@ def convert_action_coords(action, coord_type):
         return action
     elif coord_type == "polar":
         return convert_to_polar(action)
-    elif coord_type == "cylinderical":
-        return convert_to_cylinderical(action)
+    elif coord_type == "cylindrical":
+        return convert_to_cylindrical(action)
     else:
         raise ValueError("Invalid action coordindates specified.")
 
@@ -17,7 +17,7 @@ def convert_to_polar(action):
 
     return np.concatenate((r[:,None], theta[:,None]), axis=1)
 
-def convert_to_cylinderical(action):
+def convert_to_cylindrical(action):
     r = np.sqrt(action[:, 0] ** 2 + action[:, 1] ** 2)
     theta = np.arctan2(action[:, 1], (action[:, 0]))
     theta[np.where(theta < 0)] += 2 * np.pi

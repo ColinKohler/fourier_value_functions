@@ -19,7 +19,7 @@ past_action_visible: False
 keypoint_visible_rate: 1.0
 z_dim: 512
 lmax: 3
-radial_freq: 2
+radial_freq: 10
 angular_freq: 3
 N: 16
 action_coords: "polar"
