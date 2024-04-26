@@ -23,4 +23,4 @@ def convert_to_cylindrical(action):
     theta[np.where(theta < 0)] += 2 * np.pi
     z = action[:,2]
 
-    return np.concatenate((r[:,None], theta[:,None]), axis=1)
+    return np.concatenate((r[:,None], theta[:,None], z[:,None]), axis=1)

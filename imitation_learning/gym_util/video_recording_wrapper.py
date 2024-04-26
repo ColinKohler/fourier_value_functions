@@ -6,7 +6,6 @@ class VideoRecordingWrapper(gym.Wrapper):
     def __init__(self,
             env,
             video_recoder: VideoRecorder,
-            mode='rgb_array',
             file_path=None,
             steps_per_render=1,
             **kwargs
@@ -16,7 +15,6 @@ class VideoRecordingWrapper(gym.Wrapper):
         """
         super().__init__(env)
 
-        self.mode = mode
         self.render_kwargs = kwargs
         self.steps_per_render = steps_per_render
         self.file_path = file_path
@@ -39,13 +37,12 @@ class VideoRecordingWrapper(gym.Wrapper):
             if not self.video_recoder.is_ready():
                 self.video_recoder.start(self.file_path)
 
-            frame = self.env.render(
-                mode=self.mode, **self.render_kwargs)
+            frame = self.env.render()
             assert frame.dtype == np.uint8
             self.video_recoder.write_frame(frame)
         return result
 
-    def render(self, mode='rgb_array', **kwargs):
+    def render(self, **kwargs):
         if self.video_recoder.is_ready():
             self.video_recoder.stop()
         return self.file_path

@@ -17,9 +17,9 @@ num_action_steps: 1
 num_latency_steps: 0
 past_action_visible: False
 z_dim: 128
-lmax: 3
+lmax: 5
 radial_freq: 1
-angular_freq: 3
+angular_freq: 5
 N: 16
 action_coords: "polar"
 
@@ -49,13 +49,15 @@ energy_head:
   _target_: imitation_learning.model.implicit.energy_mlp.DiskEnergyMLP
   obs_feat_dim: ${z_dim}
   mlp_dim: 512 
+  num_layers: 8
   lmax: ${lmax}
   radial_freq: ${radial_freq}
   angular_freq: ${angular_freq}
   dropout: 0.1
-  max_radius: 1.0
-  num_radii: 100
+  max_radius: 1.1
+  num_radii: 1000
   num_phi: 360
+  boundary: "zero"
   N: ${N}
 
 dataloader:
@@ -74,7 +76,7 @@ val_dataloader:
 
 optimizer:
   _target_: torch.optim.AdamW
-  lr: 1e-4
+  lr: 5e-4
   betas: [0.95, 0.999]
   eps: 1e-8
   weight_decay: 1e-6

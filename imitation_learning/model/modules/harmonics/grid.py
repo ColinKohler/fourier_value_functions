@@ -26,6 +26,23 @@ def polargrid(Rmax: float, Nr: int, Nphi: int) -> Tuple[torch.Tensor, torch.Tens
     r2d, p2d = torch.meshgrid(r, p, indexing='ij')
     return r2d, p2d
 
+def cylinder_grid(Rmax: float, Zmax: float, Nr: int, Nphi: int, Nz: int) -> Tuple[torch.Tensor, torch.Tensor]:
+    """ Returns a 3D cylinder grid.
+
+    Args:
+        Rmax - Maximum radius.
+        Zmax - Maximum height.
+        Nr - Number of elements along the radial axis.
+        Nphi - Number of elements along the angular axis.
+        Nz - Number of elements alongthe axial axis
+    """
+    redges, r = grid1D(Rmax, Nr)
+    pedges, p = grid1D(2.0 * torch.pi, Nphi)
+    zedges, z = grid1D(Zmax, Nz)
+    r2d, p2d, z2d = torch.meshgrid(r, p, z, indexing='ij')
+    return r2d, p2d, z2d
+
+
 def wrap_polar(f: torch.Tensor) -> torch.Tensor:
     """ Wraps polar grid, which is useful for plotting purposes.
 

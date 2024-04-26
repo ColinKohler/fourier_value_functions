@@ -21,7 +21,7 @@ z_dim: 512
 lmax: 3
 radial_freq: 1
 angular_freq: 3
-height_freq: 1
+axial_freq: 1
 N: 16
 action_coords: "cylindrical"
 
@@ -54,24 +54,24 @@ energy_head:
   lmax: ${lmax}
   radial_freq: ${radial_freq}
   angular_freq: ${angular_freq}
-  height_freq: ${height_freq}
+  axial_freq: ${axial_freq}
   dropout: 0.1
   max_radius: 1.0
   max_height: 1.0
   num_radii: 100
-  num_phi: 360 
+  num_phi: 36
   num_height: 100
   N: ${N}
 
 dataloader:
-  batch_size: 256
+  batch_size: 64 
   num_workers: 1
   shuffle: True
   pin_memory: True
   persistent_workers: False
 
 val_dataloader:
-  batch_size: 256
+  batch_size: 64 
   num_workers: 1
   shuffle: False
   pin_memory: True
@@ -90,8 +90,8 @@ training:
   resume: True
   lr_warmup_steps: 500
   num_epochs: 1000
-  checkpoint_every: 10
-  rollout_every: 10
+  checkpoint_every: 100
+  rollout_every: 100
   val_every: 1
   tqdm_interval_sec: 1.0
 

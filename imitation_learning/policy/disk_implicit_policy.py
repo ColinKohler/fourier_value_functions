@@ -62,7 +62,7 @@ class DiskImplicitPolicy(BasePolicy):
         r = torch.linspace(action_stats['min'][0].item(), action_stats['max'][0].item(), self.energy_head.num_radii).view(1,-1).repeat(B,1).to(device)
         phi = torch.linspace(0, 2*np.pi, self.energy_head.num_phi).view(1, -1).repeat(B, 1).to(device)
         obs_feat = self.obs_encoder(nobs)
-        logits = self.energy_head(obs_feat).view(B, self.energy_head.num_radii, self.energy_head.num_phi)
+        logits = self.energy_head(obs_feat).view(B, -1)
         action_probs = torch.softmax(logits/self.temperature, dim=-1).view(B, self.energy_head.num_radii, self.energy_head.num_phi)
 
         if self.sample_actions:
@@ -142,7 +142,12 @@ class DiskImplicitPolicy(BasePolicy):
 
         # Compute ciruclar energy function for the given obs and action magnitudes
         r = targets[:,:,0,0]
+        #rs = torch.linspace(action_stats["min"][0], 1.0, self.energy_head.num_radii).unsqueeze(0).repeat(B*N, 1).to(r.device)
+        #r_idxs = torch.argmin((r.view(-1,1) - rs).abs(), dim=1)
         phi = self.normalizer["action"].unnormalize(targets)[:,:,0,1]
+        #phis = torch.linspace(0, 2*np.pi, self.energy_head.num_radii).unsqueeze(0).repeat(B*N, 1).to(r.device)
+        #phi_idxs = torch.argmin((phi.view(-1,1) - phis).abs(), dim=1)
+        #polar_act = torch.concatenate([rs[np.arange(B*N), r_idxs].view(B,N,1), phis[np.arange(B*N), phi_idxs].view(B,N,1)], axis=2)
         polar_act = torch.concatenate([r.view(B,N,1), phi.view(B,N,1)], axis=2)
 
         obs_feat = self.obs_encoder(nobs)

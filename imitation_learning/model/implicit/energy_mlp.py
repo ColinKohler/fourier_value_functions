@@ -9,6 +9,7 @@ from imitation_learning.model.modules.layers import MLP
 from imitation_learning.model.modules.equiv_layers import SO2MLP
 from imitation_learning.model.modules.harmonics.circular_harmonics import CircularHarmonics
 from imitation_learning.model.modules.harmonics.disk_harmonics import DiskHarmonics
+from imitation_learning.model.modules.harmonics.cylindrical_harmonics import CylindricalHarmonics
 
 class EnergyMLP(nn.Module):
     def __init__(self, obs_feat, mlp_dim, dropout, spec_norm, initialize):
@@ -206,6 +207,7 @@ class DiskEnergyMLP(nn.Module):
         obs_feat_dim,
         mlp_dim,
         lmax,
+        num_layers,
         radial_freq,
         angular_freq,
         dropout,
@@ -213,15 +215,18 @@ class DiskEnergyMLP(nn.Module):
         N=16,
         num_radii=100,
         num_phi=360,
+        boundary='zero',
         initialize=True
     ):
         super().__init__()
+        self.num_layers = num_layers
         self.lmax = lmax
         self.radial_freq = radial_freq
         self.angular_freq = angular_freq
         self.max_radius = max_radius
         self.num_phi = num_phi
         self.num_radii = num_radii
+        self.boundary = boundary
 
         self.G = group.so2_group()
         self.gspace = gspaces.no_base_space(self.G)
@@ -235,15 +240,15 @@ class DiskEnergyMLP(nn.Module):
 
         self.energy_mlp = SO2MLP(
             self.in_type,
-            channels=[mlp_dim] * 8,
-            lmaxs=[self.lmax] * 8,
+            channels=[mlp_dim] * num_layers,
+            lmaxs=[self.lmax] * num_layers,
             out_type=out_type,
             N=N,
             dropout=dropout,
             act_out = False,
             initialize=initialize
         )
-        self.disk_harmonics = DiskHarmonics(radial_freq, angular_freq, max_radius, num_radii, num_phi)
+        self.disk_harmonics = DiskHarmonics(radial_freq, angular_freq, max_radius, num_radii, num_phi, boundary=boundary)
 
     def forward(self, obs_feat, polar_actions=None):
         ''' Compute the energy function for the desired action.
@@ -267,9 +272,10 @@ class CylindricalEnergyMLP(nn.Module):
         obs_feat_dim,
         mlp_dim,
         lmax,
+        num_layers,
         radial_freq,
         angular_freq,
-        height_freq,
+        axial_freq,
         dropout,
         N=16,
         max_radius=1.0,
@@ -281,9 +287,10 @@ class CylindricalEnergyMLP(nn.Module):
     ):
         super().__init__()
         self.Lmax = lmax
+        self.num_layers = num_layers
         self.radial_freq = radial_freq
         self.angular_freq = angular_freq
-        self.height_freq = height_freq
+        self.axial_freq = axial_freq
         self.max_radius = max_radius
         self.num_radii = num_radii
         self.num_phi = num_phi
@@ -295,36 +302,51 @@ class CylindricalEnergyMLP(nn.Module):
 
         self.in_type = enn.FieldType(
             self.gspace,
-            obs_feat_dim * [rho] + 2 * [self.gspace.irrep(0)] # [obs_feat_dim, z, g]
+            obs_feat_dim * [rho] + [self.gspace.irrep(0)] # [obs_feat_dim, g]
         )
-        out_type = enn.FieldType(self.gspace, [self.gspace.irrep(l) for l in range(self.Lmax+1)])
+        out_type = enn.FieldType(self.gspace, radial_freq * axial_freq * [self.gspace.irrep(l) for l in range(angular_freq+1)])
 
         self.energy_mlp = SO2MLP(
             self.in_type,
-            channels=[mlp_dim] * 4,
-            lmaxs=[lmax] * 4,
+            channels=[mlp_dim] * num_layers,
+            lmaxs=[lmax] * num_layers,
             out_type=out_type,
             N=N,
             dropout=dropout,
             act_out = False,
             initialize=initialize
         )
-        self.disk_harmonics = DiskHarmonics(radial_freq, angular_freq, max_radius, num_radii, num_phi)
+        self.cylindrical_harmonics = CylindricalHarmonics(
+            radial_freq,
+            angular_freq,
+            axial_freq,
+            max_radius,
+            max_height,
+            num_radii,
+            num_phi,
+            num_height,
+            boundary='zero'
+        )
 
-    def forward(self, obs_feat, zg_action, rp_action):
+    def forward(self, obs_feat, implicit_act, energy_coords=None):
         ''' Compute the energy function for the desired action.
 
         '''
-        B, N, Ta, Da = zg_action.shape
+        B, N, Ta, Da = implicit_act.shape
         B, Dz = obs_feat.shape
 
         s = obs_feat.reshape(B, 1, -1).expand(-1, N, -1)
         s_a = self.in_type(
-            torch.cat([s, action.reshape(B, N, -1)], dim=-1).reshape(B*N, -1)
+            torch.cat([s, implicit_act.reshape(B, N, -1)], dim=-1).reshape(B*N, -1)
         )
 
-        Pnm = self.energy_mlp(s_a).tensor.view(B*N, self.radial_freq, self.angular_freq*2+1).permute(0,2,1)
-        if rp_action is not None:
-            return self.disk_harmonics.evaluate(Pnm.reshape(B*N,-1), rp_action[:,:,0].view(B*N,1,1), rp_action[:,:,1].view(B*N, 1, 1)).view(B, N)
+        Pnm = self.energy_mlp(s_a).tensor.view(B*N, self.radial_freq, self.axial_freq, self.angular_freq*2+1).permute(0,2,1,3)
+        if energy_coords is not None:
+            return self.cylindrical_harmonics.evaluate(
+                Pnm.reshape(B*N,-1),
+                energy_coords[:,:,0,0].view(B*N,1,1,1),
+                energy_coords[:,:,0,1].view(B*N,1,1,1),
+                energy_coords[:,:,0,2].view(B*N,1,1,1),
+            ).view(B, N)
         else:
-            return self.disk_harmonics.evaluate(Pnm.reshape(B,-1))
+            return self.cylindrical_harmonics.evaluate(Pnm.reshape(B*N,-1)).view(B, N, self.num_radii, self.num_phi, self.num_height)

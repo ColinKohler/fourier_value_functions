@@ -40,7 +40,9 @@ class PushTEnv(gym.Env):
             render_size=96,
             reset_to_state=None,
             random_goal_pose=False,
+            render_mode='rgb_array'
         ):
+        self.render_mode = render_mode
         self._seed = None
         self.seed()
         self.window_size = ws = 512  # The size of the PyGame window
@@ -148,13 +150,13 @@ class PushTEnv(gym.Env):
         observation = self._get_obs()
         info = self._get_info()
 
-        return observation, reward, done, info
+        return observation, reward, done, False, info
 
-    def render(self, mode):
-        return self._render_frame(mode)
+    def render(self):
+        return self._render_frame()
 
-    def render2(self, mode):
-        return self._render_frame(mode)
+    def render2(self):
+        return self._render_frame()
 
     def teleop_agent(self):
         TeleopAgent = collections.namedtuple('TeleopAgent', ['act'])
@@ -201,13 +203,13 @@ class PushTEnv(gym.Env):
             'n_contacts': n_contact_points_per_step}
         return info
 
-    def _render_frame(self, mode):
+    def _render_frame(self):
 
-        if self.window is None and mode == "human":
+        if self.window is None and self.render_mode == "human":
             pygame.init()
             pygame.display.init()
             self.window = pygame.display.set_mode((self.window_size, self.window_size))
-        if self.clock is None and mode == "human":
+        if self.clock is None and self.render_mode == "human":
             self.clock = pygame.time.Clock()
 
         canvas = pygame.Surface((self.window_size, self.window_size))
@@ -226,7 +228,7 @@ class PushTEnv(gym.Env):
         # Draw agent and block.
         self.space.debug_draw(draw_options)
 
-        if mode == "human":
+        if self.render_mode == "human":
             # The following line copies our drawings from `canvas` to the visible window
             self.window.blit(canvas, canvas.get_rect())
             pygame.event.pump()

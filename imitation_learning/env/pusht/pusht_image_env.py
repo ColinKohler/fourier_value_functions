@@ -37,7 +37,7 @@ class PushTImageEnv(PushTEnv):
         self.render_cache = None
 
     def _get_obs(self):
-        img = super()._render_frame(mode='rgb_array')
+        img = super()._render_frame()
 
         agent_pos = np.array(self.agent.position)
         img_obs = np.moveaxis(img.astype(np.float32) / 255, -1, 0)

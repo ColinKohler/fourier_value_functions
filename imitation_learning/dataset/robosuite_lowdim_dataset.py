@@ -84,16 +84,16 @@ class RobosuiteLowdimDataset(torch.utils.data.Dataset):
         gripper_action = data["action"][:,3]
         data = {
             'keypoints': data['obs']['keypoints'],
-            'action': np.concatenate([cylindrical_action, gripper_action], axis=-1)
+             "energy_coords": cylindrical_action,
+             "implicit_act": gripper_action.reshape(-1, 1),
         }
 
         normalizer = LinearNormalizer()
-        normalizer = super().get_normalizer(data, mode=mode, **kwargs)
         normalizer.fit(data=data, last_n_dims=1, mode=mode, **kwargs)
 
         act_norm = SingleFieldLinearNormalizer()
-        act_norm.fit(data=data['action'], output_min=0.1, output_max=1)
-        normalizer['action'] = act_norm
+        act_norm.fit(data=data['energy_coords'], output_min=0.1, output_max=1)
+        normalizer['energy_coords'] = act_norm
 
         return normalizer
 
@@ -104,9 +104,15 @@ class RobosuiteLowdimDataset(torch.utils.data.Dataset):
         sample = self.sampler.sample_sequence(idx)
         data = self._sample_to_data(sample)
 
-        cylindrical_action = action_utils.convert_action_coords(data["action"][:3], self.action_coords)
+        cylindrical_action = action_utils.convert_action_coords(data["action"][:,:3], self.action_coords)
         gripper_action = data["action"][:,3]
-        data["action"] = np.concatenate([cylindrical_action, gripper_action], axis=-1)
+        data = {
+            'obs': {
+                'keypoints': data['obs']['keypoints'],
+            },
+            "energy_coords": cylindrical_action,
+            "implicit_act": gripper_action.reshape(-1, 1),
+        }
 
         torch_data = torch_utils.dict_apply(data, torch.from_numpy)
 

@@ -89,7 +89,7 @@ class AsyncVectorEnv(VectorEnv):
         daemon=True,
         worker=None,
     ):
-        ctx = mp.get_context(context)
+        ctx = mp.get_context("spawn")
         self.env_fns = env_fns
         self.shared_memory = shared_memory
         self.copy = copy
@@ -310,7 +310,7 @@ class AsyncVectorEnv(VectorEnv):
         results, successes = zip(*[pipe.recv() for pipe in self.parent_pipes])
         self._raise_if_errors(successes)
         self._state = AsyncState.DEFAULT
-        observations_list, rewards, dones, infos = zip(*results)
+        observations_list, rewards, dones, timeouts, infos = zip(*results)
 
         if not self.shared_memory:
             self.observations = concatenate(
@@ -321,6 +321,7 @@ class AsyncVectorEnv(VectorEnv):
             deepcopy(self.observations) if self.copy else self.observations,
             np.array(rewards),
             np.array(dones, dtype=np.bool_),
+            np.array(timeouts, dtype=np.bool_),
             infos,
         )
 
@@ -590,10 +591,10 @@ def _worker(index, env_fn, pipe, parent_pipe, shared_memory, error_queue):
                 observation = env.reset()
                 pipe.send((observation, True))
             elif command == "step":
-                observation, reward, done, info = env.step(data)
+                observation, reward, done, timeout, info = env.step(data)
                 # if done:
                 #     observation = env.reset()
-                pipe.send(((observation, reward, done, info), True))
+                pipe.send(((observation, reward, done, timeout, info), True))
             elif command == "seed":
                 env.seed(data)
                 pipe.send((None, True))
@@ -647,13 +648,13 @@ def _worker_shared_memory(index, env_fn, pipe, parent_pipe, shared_memory, error
                 )
                 pipe.send((None, True))
             elif command == "step":
-                observation, reward, done, info = env.step(data)
+                observation, reward, done, timeout, info = env.step(data)
                 # if done:
                 #     observation = env.reset()
                 write_to_shared_memory(
                     index, observation, shared_memory, observation_space
                 )
-                pipe.send(((None, reward, done, info), True))
+                pipe.send(((None, reward, done, timeout, info), True))
             elif command == "seed":
                 env.seed(data)
                 pipe.send((None, True))

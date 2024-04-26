@@ -9,9 +9,8 @@ import math
 import wandb.sdk.data_types.video as wv
 from imitation_learning.gym_util.multistep_wrapper import MultiStepWrapper
 from imitation_learning.gym_util.video_recording_wrapper import VideoRecordingWrapper, VideoRecorder
-from gymnasium.wrappers import FlattenObservation
-#from gymnasium.vector import AsyncVectorEnv, SyncVectorEnv
 from imitation_learning.gym_util.async_vector_env import AsyncVectorEnv
+#from gymnasium.vector import AsyncVectorEnv
 
 from imitation_learning.policy.base_policy import BasePolicy
 from imitation_learning.utils.torch_utils import dict_apply
@@ -40,7 +39,7 @@ class LiftLowdimRunner(BaseRunner):
         abs_action=False,
         obs_eef_target=True,
         tqdm_interval_sec=5.0,
-        num_envs=None
+        num_envs=None,
     ):
         super().__init__(output_dir)
         num_envs = num_train + num_test if num_envs is None else num_envs
@@ -51,9 +50,7 @@ class LiftLowdimRunner(BaseRunner):
         def env_fn():
             return MultiStepWrapper(
                 VideoRecordingWrapper(
-                    #FlattenObservation(
-                    FrankaRobosuiteEnv("LiftEnv", FrankaLiftConfig()),
-                    #),
+                    FrankaRobosuiteEnv("LiftEnv", FrankaLiftConfig(), render_mode='rgb_array', enable_render=True),
                     video_recoder=VideoRecorder.create_h264(
                         fps=fps,
                         codec='h264',
@@ -69,6 +66,27 @@ class LiftLowdimRunner(BaseRunner):
                 n_action_steps=num_action_steps,
                 max_episode_steps=max_steps
             )
+
+        def dummy_env_fn():
+            return MultiStepWrapper(
+                VideoRecordingWrapper(
+                    FrankaRobosuiteEnv("LiftEnv", FrankaLiftConfig(), render_mode='rgb_array', enable_render=False),
+                    video_recoder=VideoRecorder.create_h264(
+                        fps=fps,
+                        codec='h264',
+                        input_pix_fmt='rgb24',
+                        crf=crf,
+                        thread_type='FRAME',
+                        thread_count=1
+                    ),
+                    file_path=None,
+                    steps_per_render=steps_per_render
+                ),
+                n_obs_steps=num_obs_steps,
+                n_action_steps=num_action_steps,
+                max_episode_steps=max_steps
+            )
+
 
         env_fns = [env_fn] * num_envs
         env_seeds = list()
@@ -126,7 +144,7 @@ class LiftLowdimRunner(BaseRunner):
             env_prefixs.append('test/')
             env_init_fn_dills.append(dill.dumps(init_fn))
 
-        env = AsyncVectorEnv(env_fns)
+        env = AsyncVectorEnv(env_fns, dummy_env_fn=dummy_env_fn)
         #env = SyncVectorEnv(env_fns)
 
         self.env = env
@@ -144,7 +162,7 @@ class LiftLowdimRunner(BaseRunner):
         self.obs_eef_target = obs_eef_target
 
 
-    def run(self, policy: BasePolicy):
+    def run(self, policy: BasePolicy, plot_energy_fn=False):
         device = policy.device
         dtype = policy.dtype
         env = self.env
@@ -186,10 +204,13 @@ class LiftLowdimRunner(BaseRunner):
             done = False
             while not done:
                 # create obs dict
-                if not self.obs_eef_target:
-                    obs[...,8:10] = 0
+                obj_pos = obs['cube_pose'].reshape(-1,2,4,4)[:,:,:3,-1].reshape(-1,2,3)
+                eef_pos = obs['eef_pose'].reshape(-1,2,4,4)[:,:,:3,-1].reshape(-1,2,3)
+                gripper_q = obs['gripper_q'][:,:,0].reshape(-1,2,1)
+                np_obs = np.concatenate([obj_pos, eef_pos, gripper_q], axis=-1)
+
                 np_obs_dict = {
-                    'obs': obs.astype(np.float32)
+                    'keypoints': np_obs.astype(np.float32)
                 }
                 if self.past_action and (past_action is not None):
                     # TODO: not tested
@@ -211,7 +232,7 @@ class LiftLowdimRunner(BaseRunner):
                 action = np_action_dict['action']
 
                 # step env
-                obs, reward, done, info = env.step(action)
+                obs, reward, done, timeout, info = env.step(action)
                 done = np.all(done)
                 past_action = action
 
@@ -232,14 +253,6 @@ class LiftLowdimRunner(BaseRunner):
         prefix_counts = collections.defaultdict(lambda : 0)
 
         log_data = dict()
-        # results reported in the paper are generated using the commented out line below
-        # which will only report and average metrics from first num_envs initial condition and seeds
-        # fortunately this won't invalidate our conclusion since
-        # 1. This bug only affects the variance of metrics, not their mean
-        # 2. All baseline methods are evaluated using the same code
-        # to completely reproduce reported numbers, uncomment this line:
-        # for i in range(len(self.env_fns)):
-        # and comment out this line
         for i in range(num_inits):
             seed = self.env_seeds[i]
             prefix = self.env_prefixs[i]

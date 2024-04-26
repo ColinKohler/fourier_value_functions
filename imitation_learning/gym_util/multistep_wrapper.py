@@ -84,6 +84,7 @@ class MultiStepWrapper(gym.Wrapper):
         self.obs = deque(maxlen=n_obs_steps+1)
         self.reward = list()
         self.done = list()
+        self.timeout = list()
         self.info = defaultdict(lambda : deque(maxlen=n_obs_steps+1))
 
     def reset(self, seed=None, options=None):
@@ -93,6 +94,7 @@ class MultiStepWrapper(gym.Wrapper):
         self.obs = deque([obs], maxlen=self.n_obs_steps+1)
         self.reward = list()
         self.done = list()
+        self.timeout = list()
         self.info = defaultdict(lambda : deque(maxlen=self.n_obs_steps+1))
 
         obs = self._get_obs(self.n_obs_steps)
@@ -106,7 +108,7 @@ class MultiStepWrapper(gym.Wrapper):
             if len(self.done) > 0 and self.done[-1]:
                 # termination
                 break
-            observation, reward, done, info = super().step(act)
+            observation, reward, done, timeout, info = super().step(act)
 
             self.obs.append(observation)
             self.reward.append(reward)
@@ -115,13 +117,15 @@ class MultiStepWrapper(gym.Wrapper):
                 # truncation
                 done = True
             self.done.append(done)
+            self.timeout.append(timeout)
             self._add_info(info)
 
         observation = self._get_obs(self.n_obs_steps)
         reward = aggregate(self.reward, self.reward_agg_method)
         done = aggregate(self.done, 'max')
+        timeout = aggregate(self.timeout, 'max')
         info = dict_take_last_n(self.info, self.n_obs_steps)
-        return observation, reward, done, info
+        return observation, reward, done, timeout, info
 
     def _get_obs(self, n_steps=1):
         """

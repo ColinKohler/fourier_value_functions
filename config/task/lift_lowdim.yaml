@@ -6,10 +6,10 @@ keypoint_dim: 3
 
 env_runner:
   _target_: imitation_learning.env_runner.lift_lowdim_runner.LiftLowdimRunner
-  num_train: 10
+  num_train: 2
   num_train_vis: 2
   train_start_seed: 0
-  num_test: 50
+  num_test: 8
   num_test_vis: 4
   test_start_seed: 100000
   max_steps: 500
