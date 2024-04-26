@@ -59,8 +59,8 @@ class PushTImageEnv(PushTEnv):
 
         return obs
 
-    def render(self, mode):
-        assert mode == 'rgb_array'
+    def render(self):
+        assert self.render_mode == 'rgb_array'
 
         if self.render_cache is None:
             self._get_obs()
