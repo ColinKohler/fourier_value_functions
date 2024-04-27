@@ -21,7 +21,7 @@ def polargrid(Rmax: float, Nr: int, Nphi: int) -> Tuple[torch.Tensor, torch.Tens
         Nr - Number of elements along the radial axis.
         Nphi- Number of elements along the angular axis.
     """
-    redges, r = grid1D(Rmax, Nr)
+    redges, r = grid1D(Rmax, Nr, origin=0.1)
     pedges, p = grid1D(2.0 * torch.pi, Nphi)
     r2d, p2d = torch.meshgrid(r, p, indexing='ij')
     return r2d, p2d

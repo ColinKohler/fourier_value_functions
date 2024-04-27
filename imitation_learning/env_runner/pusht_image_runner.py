@@ -214,7 +214,7 @@ class PushTImageRunner(BaseRunner):
                 action = action_dict['action'][:, self.num_latency_steps:]
 
                 # Step env
-                obs, reward, done, info = env.step(action)
+                obs, reward, done, timeout, info = env.step(action)
                 done = np.all(done)
                 past_action = action
 

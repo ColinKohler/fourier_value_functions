@@ -59,6 +59,7 @@ class DiskImplicitPolicy(BasePolicy):
         )
 
         # Optimize actions
+        #r = torch.linspace(action_stats['min'][0].item(), action_stats['max'][0].item(), self.energy_head.num_radii).view(1,-1).repeat(B,1).to(device)
         r = torch.linspace(action_stats['min'][0].item(), action_stats['max'][0].item(), self.energy_head.num_radii).view(1,-1).repeat(B,1).to(device)
         phi = torch.linspace(0, 2*np.pi, self.energy_head.num_phi).view(1, -1).repeat(B, 1).to(device)
         obs_feat = self.obs_encoder(nobs)

@@ -107,6 +107,7 @@ class DiskHarmonics(HarmonicFunction):
 
         self.radial_frequency = radial_frequency
         self.angular_frequency = angular_frequency
+        max_radius=1.0
         self.max_radius = max_radius
         self.num_radii = num_radii
         self.num_phi = num_phi

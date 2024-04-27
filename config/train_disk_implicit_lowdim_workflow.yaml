@@ -18,9 +18,9 @@ num_latency_steps: 0
 past_action_visible: False
 keypoint_visible_rate: 1.0
 z_dim: 512
-lmax: 5
-radial_freq: 1
-angular_freq: 5
+lmax: 3
+radial_freq: 10
+angular_freq: 1
 N: 16
 action_coords: "polar"
 

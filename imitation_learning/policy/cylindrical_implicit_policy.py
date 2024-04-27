@@ -83,6 +83,7 @@ class CylindricalImplicitPolicy(BasePolicy):
         z = self.normalizer["energy_coords"].unnormalize(nactions)[:,:,2]
         gripper_act = self.normalizer["implicit_act"].unnormalize(ngripper_act)
         actions = torch.concat([x.view(B,1), y.view(B,1), z.view(B,1), gripper_act.view(B,1)], dim=1).unsqueeze(1)
+        breakpoint()
 
         return {'action' : actions, 'energy' : action_probs}
 
