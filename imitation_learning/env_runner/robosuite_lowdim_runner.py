@@ -20,10 +20,11 @@ from franka_gym.robosuite_env import FrankaRobosuiteEnv
 from franka_gym.configs.default import FrankaGymConfig
 from franka_gym.configs.franka_gym_configs import FrankaLiftConfig, FrankaPushConfig
 
-class LiftLowdimRunner(BaseRunner):
+class RobosuiteLowdimRunner(BaseRunner):
     def __init__(
         self,
         output_dir,
+        env,
         num_train=10,
         num_train_vis=3,
         train_start_seed=0,
@@ -41,16 +42,26 @@ class LiftLowdimRunner(BaseRunner):
         tqdm_interval_sec=5.0,
         num_envs=None,
     ):
+        num_train = 0
+        num_test = 1
+        num_envs = 1
+        #num_envs = num_train + num_test if num_envs is None else num_envs
         super().__init__(output_dir)
-        num_envs = num_train + num_test if num_envs is None else num_envs
 
         task_fps = 10
         steps_per_render = max(10 // fps, 1)
 
+        if env == 'LiftEnv':
+            env_config = FrankaLiftConfig()
+        elif env == 'ReachEnv':
+            env_config = FrankaReachConfig()
+        else:
+            raise ValueError('Invalid env specified.')
+
         def env_fn():
             return MultiStepWrapper(
                 VideoRecordingWrapper(
-                    FrankaRobosuiteEnv("LiftEnv", FrankaLiftConfig(), render_mode='rgb_array', enable_render=True),
+                    FrankaRobosuiteEnv(env, env_config, render_mode='rgb_array', enable_render=True),
                     video_recoder=VideoRecorder.create_h264(
                         fps=fps,
                         codec='h264',
@@ -70,7 +81,7 @@ class LiftLowdimRunner(BaseRunner):
         def dummy_env_fn():
             return MultiStepWrapper(
                 VideoRecordingWrapper(
-                    FrankaRobosuiteEnv("LiftEnv", FrankaLiftConfig(), render_mode='rgb_array', enable_render=False),
+                    FrankaRobosuiteEnv(env, env_config, render_mode='rgb_array', enable_render=False),
                     video_recoder=VideoRecorder.create_h264(
                         fps=fps,
                         codec='h264',
@@ -199,8 +210,12 @@ class LiftLowdimRunner(BaseRunner):
             past_action = None
             policy.reset()
 
-            pbar = tqdm.tqdm(total=self.max_steps, desc=f"Eval LiftLowdimRunner {chunk_idx+1}/{num_chunks}",
-                leave=False, mininterval=self.tqdm_interval_sec)
+            pbar = tqdm.tqdm(
+                total=self.max_steps,
+                desc=f"Eval RobosuiteLowdimRunner {chunk_idx+1}/{num_chunks}",
+                leave=False,
+                mininterval=self.tqdm_interval_sec
+            )
             done = False
             while not done:
                 # create obs dict
@@ -247,8 +262,6 @@ class LiftLowdimRunner(BaseRunner):
 
         # log
         total_rewards = collections.defaultdict(list)
-        total_p1 = collections.defaultdict(list)
-        total_p2 = collections.defaultdict(list)
         prefix_event_counts = collections.defaultdict(lambda :collections.defaultdict(lambda : 0))
         prefix_counts = collections.defaultdict(lambda : 0)
 
@@ -258,12 +271,8 @@ class LiftLowdimRunner(BaseRunner):
             prefix = self.env_prefixs[i]
             this_rewards = all_rewards[i]
             total_reward = np.unique(this_rewards).sum() # (0, 0.49, 0.51)
-            p1 = total_reward > 0.4
-            p2 = total_reward > 0.9
 
             total_rewards[prefix].append(total_reward)
-            total_p1[prefix].append(p1)
-            total_p2[prefix].append(p2)
             log_data[prefix+f'sim_max_reward_{seed}'] = total_reward
 
             # aggregate event counts
@@ -281,14 +290,6 @@ class LiftLowdimRunner(BaseRunner):
         # log aggregate metrics
         for prefix, value in total_rewards.items():
             name = prefix+'mean_score'
-            value = np.mean(value)
-            log_data[name] = value
-        for prefix, value in total_p1.items():
-            name = prefix+'p1'
-            value = np.mean(value)
-            log_data[name] = value
-        for prefix, value in total_p2.items():
-            name = prefix+'p2'
             value = np.mean(value)
             log_data[name] = value
 

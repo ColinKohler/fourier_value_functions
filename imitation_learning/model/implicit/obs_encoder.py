@@ -47,6 +47,7 @@ class SO2KeypointEncoder2(nn.Module):
         num_obs: int,
         in_feat: int,
         z_dim: int,
+        num_layers: int,
         lmax: int=3,
         N: int=16,
         dropout: float=0.0,
@@ -56,6 +57,7 @@ class SO2KeypointEncoder2(nn.Module):
 
         self.G = group.so2_group()
         self.gspace = gspaces.no_base_space(self.G)
+        self.num_layers = num_layers
         self.z_dim = z_dim
 
         self.in_type = enn.FieldType(
@@ -64,8 +66,8 @@ class SO2KeypointEncoder2(nn.Module):
         )
         self.keypoint_enc = SO2MLP(
             self.in_type,
-            channels=[z_dim] * 4,
-            lmaxs=[lmax] * 4,
+            channels=[z_dim] * num_layers,
+            lmaxs=[lmax] * num_layers,
             N=N,
             dropout=dropout,
             act_out=True,

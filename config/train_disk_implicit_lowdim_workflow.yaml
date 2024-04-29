@@ -19,7 +19,8 @@ past_action_visible: False
 keypoint_visible_rate: 1.0
 z_dim: 512
 lmax: 3
-radial_freq: 10
+min_radius: 0.1
+radial_freq: 3
 angular_freq: 1
 N: 16
 action_coords: "polar"
@@ -51,11 +52,12 @@ energy_head:
   _target_: imitation_learning.model.implicit.energy_mlp.DiskEnergyMLP
   obs_feat_dim: ${z_dim}
   mlp_dim: ${z_dim}
-  num_layers: 8
+  num_layers: 4
   lmax: ${lmax}
   radial_freq: ${radial_freq}
   angular_freq: ${angular_freq}
   dropout: 0.1
+  min_radius: 0.1
   max_radius: 1.0
   num_radii: 1000
   num_phi: 360

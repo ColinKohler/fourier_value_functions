@@ -36,7 +36,7 @@ class DiskImplicitPolicy(BasePolicy):
         self.sample_actions = sample_actions
         #self.sample_actions = False
         self.temperature = temperature
-        #self.temperature = 0.5
+        #self.temperature = 3.0
         self.grad_pen = grad_pen
 
         self.obs_encoder = obs_encoder
@@ -59,7 +59,6 @@ class DiskImplicitPolicy(BasePolicy):
         )
 
         # Optimize actions
-        #r = torch.linspace(action_stats['min'][0].item(), action_stats['max'][0].item(), self.energy_head.num_radii).view(1,-1).repeat(B,1).to(device)
         r = torch.linspace(action_stats['min'][0].item(), action_stats['max'][0].item(), self.energy_head.num_radii).view(1,-1).repeat(B,1).to(device)
         phi = torch.linspace(0, 2*np.pi, self.energy_head.num_phi).view(1, -1).repeat(B, 1).to(device)
         obs_feat = self.obs_encoder(nobs)
@@ -174,11 +173,14 @@ class DiskImplicitPolicy(BasePolicy):
     def plot_energy_fn(self, img, energy):
         action_stats = self.get_action_stats()
         r = torch.linspace(action_stats['min'][0].item(), action_stats['max'][0].item(), self.energy_head.num_radii)
+        r0_rmin = torch.linspace(0, action_stats['min'][0], 10)
+        r = torch.concat([r0_rmin, r])
+        energy = torch.concat([torch.zeros(10,self.energy_head.num_phi), energy.cpu()])
         phi = torch.linspace(0, 2*np.pi, self.energy_head.num_phi)
 
-        flat_indexes = torch.argmax(energy.flatten())
-        r_idx = flat_indexes.div(energy.shape[-1], rounding_mode='floor')
-        phi_idx = torch.remainder(flat_indexes, energy.shape[-1])
+        #flat_indexes = torch.argmax(energy.flatten())
+        #r_idx = flat_indexes.div(energy.shape[-1], rounding_mode='floor')
+        #phi_idx = torch.remainder(flat_indexes, energy.shape[-1])
 
         f = plt.figure(figsize=(10,3))
         ax1 = f.add_subplot(111)
@@ -186,8 +188,8 @@ class DiskImplicitPolicy(BasePolicy):
 
         if img is not None:
             ax1.imshow(img[-1].transpose(1,2,0))
-        ax2.pcolormesh(phi,r,energy.cpu())
-        ax2.scatter(phi[phi_idx], r[r_idx], c='red', s=5)
+        ax2.pcolormesh(phi,r,energy)
+        #ax2.scatter(phi[phi_idx], r[r_idx], c='red', s=2)
         ax2.grid(False)
         ax2.set_yticklabels([])
         ax2.set_xticklabels([])

@@ -7,7 +7,7 @@ obs_eef_target: True
 
 env_runner: 
   _target_:  imitation_learning.env_runner.block_pushing_lowdim_runner.BlockPushingLowdimRunner
-  num_train: 6
+  num_train: 10
   num_train_vis: 2
   train_start_seed: 0
   num_test: 50
@@ -19,7 +19,7 @@ env_runner:
   fps: 5
   past_action: ${past_action_visible}
   abs_action: False
-  num_envs: null
+  num_envs: 30 
 
 dataset:
   _target_: imitation_learning.dataset.block_pushing_lowdim_dataset.BlockPushingLowdimDataset
@@ -29,5 +29,5 @@ dataset:
   pad_after: ${eval:'${num_action_steps}-1'}
   obs_eef_target: True
   seed: 0
-  harmonic_action: ${is_harmonic}
+  action_coords: ${action_coords}
   val_ratio: 0.02

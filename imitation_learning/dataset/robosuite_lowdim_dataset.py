@@ -143,6 +143,7 @@ def _data_to_obs(demo_dir: str) -> dict:
 
     obj_pos = obj_pose.reshape(-1,4,4)[:,:3,-1].reshape(-1,3)
     eef_pos = eef_pose.reshape(-1,4,4)[:,:3,-1].reshape(-1,3)
+    #gripper_q = gripper_q.reshape(-1,2,2)[:,0,0].reshape(-1,1)
     gripper_q = gripper_q[:,0].reshape(-1,1)
     obs = np.concatenate([obj_pos, eef_pos, gripper_q], axis=-1)
 

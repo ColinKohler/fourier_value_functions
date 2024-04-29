@@ -13,20 +13,57 @@ def grid1D(boxsize: float, ngrid: int, origin: float=0.) -> Tuple[torch.Tensor, 
     x = 0.5 * (xedges[1:] + xedges[:-1])
     return xedges, x
 
-def polargrid(Rmax: float, Nr: int, Nphi: int) -> Tuple[torch.Tensor, torch.Tensor]:
+def polargrid2(
+    Rmax: float,
+    Nr: int,
+    Nphi: int,
+    r_origin: float=0.0
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """ Returns a 2D polar grid.
 
     Args:
         Rmax - Maximum radius.
         Nr - Number of elements along the radial axis.
         Nphi- Number of elements along the angular axis.
+        r_origin - Radius origin point
     """
-    redges, r = grid1D(Rmax, Nr, origin=0.1)
+    T = [Nphi * i for i in range(1,num_radii+1)]
+    r_edges, r = grid.grid1D(max_radius, Nr, origin=r_origin)
+
+    rt_pairs = []
+    for i in range(len(r)):
+        ps = (np.arange(n[i]) * (2*np.pi / n[i])).reshape(n[i], 1)
+        rs = np.array([r[i]] * n[i]).reshape(n[i],1)
+        rt_pairs.extend(np.concatenate((ps,rs), axis=1).tolist())
+    return np.array(rt_pairs)
+
+def polargrid(
+    Rmax: float,
+    Nr: int,
+    Nphi: int,
+    r_origin: float=0.0
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """ Returns a 2D polar grid.
+
+    Args:
+        Rmax - Maximum radius.
+        Nr - Number of elements along the radial axis.
+        Nphi- Number of elements along the angular axis.
+        r_origin - Radius origin point
+    """
+    redges, r = grid1D(Rmax, Nr, origin=r_origin)
     pedges, p = grid1D(2.0 * torch.pi, Nphi)
     r2d, p2d = torch.meshgrid(r, p, indexing='ij')
     return r2d, p2d
 
-def cylinder_grid(Rmax: float, Zmax: float, Nr: int, Nphi: int, Nz: int) -> Tuple[torch.Tensor, torch.Tensor]:
+def cylinder_grid(
+    Rmax: float,
+    Zmax: float,
+    Nr: int,
+    Nphi: int,
+    Nz: int,
+    r_origin: float=0.0
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """ Returns a 3D cylinder grid.
 
     Args:
@@ -36,9 +73,9 @@ def cylinder_grid(Rmax: float, Zmax: float, Nr: int, Nphi: int, Nz: int) -> Tupl
         Nphi - Number of elements along the angular axis.
         Nz - Number of elements alongthe axial axis
     """
-    redges, r = grid1D(Rmax, Nr)
+    redges, r = grid1D(Rmax, Nr, origin=r_origin)
     pedges, p = grid1D(2.0 * torch.pi, Nphi)
-    zedges, z = grid1D(Zmax, Nz)
+    zedges, z = grid1D(Zmax, Nz, origin=r_origin)
     r2d, p2d, z2d = torch.meshgrid(r, p, z, indexing='ij')
     return r2d, p2d, z2d
 

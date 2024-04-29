@@ -98,7 +98,8 @@ class DiskHarmonics(HarmonicFunction):
         self,
         radial_frequency: int,
         angular_frequency: int,
-        max_radius: float,
+        min_radius: float=0.0,
+        max_radius: float=1.0,
         num_radii: int=None,
         num_phi: int=None,
         boundary: str="zero"
@@ -107,7 +108,7 @@ class DiskHarmonics(HarmonicFunction):
 
         self.radial_frequency = radial_frequency
         self.angular_frequency = angular_frequency
-        max_radius=1.0
+        self.min_radius = min_radius
         self.max_radius = max_radius
         self.num_radii = num_radii
         self.num_phi = num_phi
@@ -117,7 +118,12 @@ class DiskHarmonics(HarmonicFunction):
 
     def init(self) -> None:
         """ Initialize the intermediate variables and basis functions. """
-        self.r2d, self.p2d = grid.polargrid(self.max_radius, self.num_radii, self.num_phi)
+        self.r2d, self.p2d = grid.polargrid(
+            self.max_radius,
+            self.num_radii,
+            self.num_phi,
+            r_origin=self.min_radius
+        )
         self.dr = self.r2d[0][1] - self.r2d[0][0]
         self.dphi = self.p2d[1][0] - self.p2d[0][0]
         self.m = get_m(self.angular_frequency)

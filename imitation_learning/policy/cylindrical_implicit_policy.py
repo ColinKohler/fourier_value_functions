@@ -52,15 +52,15 @@ class CylindricalImplicitPolicy(BasePolicy):
 
         # Optimize actions
         implicit_stats, energy_stats = self.get_action_stats()
+        num_gripper_act = 1
         r = torch.linspace(energy_stats['min'][0].item(), energy_stats['max'][0].item(), self.energy_head.num_radii).view(1,-1).repeat(B,1).to(device)
         phi = torch.linspace(0, 2*np.pi, self.energy_head.num_phi).view(1, -1).repeat(B, 1).to(device)
         z = torch.linspace(energy_stats['min'][2].item(), energy_stats['max'][2].item(), self.energy_head.num_height).view(1,-1).repeat(B,1).to(device)
-        gripper = torch.linspace(implicit_stats['min'][0].item(), implicit_stats['max'][0].item(), 10).view(1,-1,1,1).repeat(B,1,1,1).to(device)
+        gripper = torch.linspace(implicit_stats['min'][0].item(), implicit_stats['max'][0].item(), num_gripper_act).view(1,-1,1,1).repeat(B,1,1,1).to(device)
 
-        cylindrical_act = torch.concatenate([r, phi, z], axis=1)
         obs_feat = self.obs_encoder(nobs)
         logits = self.energy_head(obs_feat, gripper).view(B, -1)
-        action_probs = torch.softmax(logits/self.temperature, dim=-1).view(B, 10, self.energy_head.num_radii, self.energy_head.num_phi, self.energy_head.num_height)
+        action_probs = torch.softmax(logits/self.temperature, dim=-1).view(B, num_gripper_act, self.energy_head.num_radii, self.energy_head.num_phi, self.energy_head.num_height)
 
         if self.sample_actions:
             flat_indexes = torch.multinomial(action_probs.flatten(start_dim=1), num_samples=1, replacement=True).squeeze()
@@ -83,7 +83,6 @@ class CylindricalImplicitPolicy(BasePolicy):
         z = self.normalizer["energy_coords"].unnormalize(nactions)[:,:,2]
         gripper_act = self.normalizer["implicit_act"].unnormalize(ngripper_act)
         actions = torch.concat([x.view(B,1), y.view(B,1), z.view(B,1), gripper_act.view(B,1)], dim=1).unsqueeze(1)
-        breakpoint()
 
         return {'action' : actions, 'energy' : action_probs}
 
@@ -103,9 +102,9 @@ class CylindricalImplicitPolicy(BasePolicy):
 
         # Sample negatives: (B, train_n_neg, Da)
         implicit_stats, energy_stats = self.get_action_stats()
-        implicit_dist = torch.distributions.Uniform(
-            low=implicit_stats["min"], high=implicit_stats["max"]
-        )
+        #implicit_dist = torch.distributions.Uniform(
+        #    low=implicit_stats["min"], high=implicit_stats["max"]
+        #)
         energy_dist = torch.distributions.Uniform(
             low=energy_stats["min"], high=energy_stats["max"]
         )
@@ -113,9 +112,10 @@ class CylindricalImplicitPolicy(BasePolicy):
         if self.optimize_negatives:
             pass
         else:
-            implicit_negatives = implicit_dist.sample((B, self.num_neg_act_samples, Ta)).to(
-                dtype=nimplicit_act.dtype
-            )
+            implicit_negatives = torch.tensor([-1.]).view(1,1,1).repeat(B,self.num_neg_act_samples, Ta, 1).to(nimplicit_act.device)
+            #implicit_negatives = implicit_dist.sample((B, self.num_neg_act_samples, Ta)).to(
+            #    dtype=nimplicit_act.dtype
+            #)
             energy_negatives = energy_dist.sample((B, self.num_neg_act_samples, Ta)).to(
                 dtype=nenergy_coords.dtype
             )
@@ -131,6 +131,11 @@ class CylindricalImplicitPolicy(BasePolicy):
         energy_targets = energy_targets[torch.arange(B).unsqueeze(-1), permutation]
         ground_truth = (permutation == 0).nonzero()[:, 1].to(nimplicit_act.device)
         one_hot = F.one_hot(ground_truth, num_classes=self.num_neg_act_samples+1).float()
+
+        r = energy_targets[:,:,0,0]
+        phi = self.normalizer["energy_coords"].unnormalize(energy_targets)[:,:,0,1]
+        z = energy_targets[:,:,0,2]
+        energy_targets = torch.concatenate([r.view(B,N,1), phi.view(B,N,1), z.view(B,N,1)], axis=2).view(B,N,1,-1)
 
         # Compute ciruclar energy function for the given obs and action magnitudes
         obs_feat = self.obs_encoder(nobs)
@@ -151,13 +156,13 @@ class CylindricalImplicitPolicy(BasePolicy):
         energy_coords = energy_coords[:, start:end]
 
         # Add noise
-        implicit_act += torch.normal(
-            mean=0,
-            std=noise,
-            size=implicit_act.shape,
-            dtype=implicit_act.dtype,
-            device=implicit_act.device,
-        )
+        #implicit_act += torch.normal(
+        #    mean=0,
+        #    std=noise,
+        #    size=implicit_act.shape,
+        #    dtype=implicit_act.dtype,
+        #    device=implicit_act.device,
+        #)
         energy_coords += torch.normal(
             mean=0,
             std=noise,

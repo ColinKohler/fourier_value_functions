@@ -211,6 +211,7 @@ class DiskEnergyMLP(nn.Module):
         radial_freq,
         angular_freq,
         dropout,
+        min_radius,
         max_radius,
         N=16,
         num_radii=100,
@@ -223,6 +224,7 @@ class DiskEnergyMLP(nn.Module):
         self.lmax = lmax
         self.radial_freq = radial_freq
         self.angular_freq = angular_freq
+        self.min_radius = min_radius
         self.max_radius = max_radius
         self.num_phi = num_phi
         self.num_radii = num_radii
@@ -248,7 +250,7 @@ class DiskEnergyMLP(nn.Module):
             act_out = False,
             initialize=initialize
         )
-        self.disk_harmonics = DiskHarmonics(radial_freq, angular_freq, max_radius, num_radii, num_phi, boundary=boundary)
+        self.disk_harmonics = DiskHarmonics(radial_freq, angular_freq, min_radius, max_radius, num_radii, num_phi, boundary=boundary)
 
     def forward(self, obs_feat, polar_actions=None):
         ''' Compute the energy function for the desired action.
@@ -278,6 +280,7 @@ class CylindricalEnergyMLP(nn.Module):
         axial_freq,
         dropout,
         N=16,
+        min_radius=0.0,
         max_radius=1.0,
         max_height=1.0,
         num_radii=100,
@@ -291,7 +294,11 @@ class CylindricalEnergyMLP(nn.Module):
         self.radial_freq = radial_freq
         self.angular_freq = angular_freq
         self.axial_freq = axial_freq
+        self.min_radius = min_radius
         self.max_radius = max_radius
+        num_radii = 100
+        num_phi = 36
+        num_height = 1000
         self.num_radii = num_radii
         self.num_phi = num_phi
         self.num_height = num_height
@@ -320,12 +327,13 @@ class CylindricalEnergyMLP(nn.Module):
             radial_freq,
             angular_freq,
             axial_freq,
+            min_radius,
             max_radius,
             max_height,
             num_radii,
             num_phi,
             num_height,
-            boundary='zero'
+            boundary='deri'
         )
 
     def forward(self, obs_feat, implicit_act, energy_coords=None):
@@ -340,7 +348,7 @@ class CylindricalEnergyMLP(nn.Module):
             torch.cat([s, implicit_act.reshape(B, N, -1)], dim=-1).reshape(B*N, -1)
         )
 
-        Pnm = self.energy_mlp(s_a).tensor.view(B*N, self.radial_freq, self.axial_freq, self.angular_freq*2+1).permute(0,2,1,3)
+        Pnm = self.energy_mlp(s_a).tensor.view(B*N, self.radial_freq, self.axial_freq, self.angular_freq*2+1).permute(0,3,1,2)
         if energy_coords is not None:
             return self.cylindrical_harmonics.evaluate(
                 Pnm.reshape(B*N,-1),
