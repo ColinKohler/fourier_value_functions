@@ -11,6 +11,7 @@ from imitation_learning.model.common.normalizer import LinearNormalizer
 from imitation_learning.utils import torch_utils
 from imitation_learning.policy.base_policy import BasePolicy
 from imitation_learning.utils import mcmc
+from imitation_learning.model.modules.harmonics import grid
 
 
 class CylindricalImplicitPolicy(BasePolicy):
@@ -53,9 +54,15 @@ class CylindricalImplicitPolicy(BasePolicy):
         # Optimize actions
         implicit_stats, energy_stats = self.get_action_stats()
         num_gripper_act = 1
-        r = torch.linspace(energy_stats['min'][0].item(), energy_stats['max'][0].item(), self.energy_head.num_radii).view(1,-1).repeat(B,1).to(device)
-        phi = torch.linspace(0, 2*np.pi, self.energy_head.num_phi).view(1, -1).repeat(B, 1).to(device)
-        z = torch.linspace(energy_stats['min'][2].item(), energy_stats['max'][2].item(), self.energy_head.num_height).view(1,-1).repeat(B,1).to(device)
+        #r = torch.linspace(energy_stats['min'][0].item(), energy_stats['max'][0].item(), self.energy_head.num_radii).view(1,-1).repeat(B,1).to(device)
+        #phi = torch.linspace(0, 2*np.pi, self.energy_head.num_phi).view(1, -1).repeat(B, 1).to(device)
+        #z = torch.linspace(energy_stats['min'][2].item(), energy_stats['max'][2].item(), self.energy_head.num_height).view(1,-1).repeat(B,1).to(device)
+        redges, r = grid.grid1D(energy_stats['max'][0].item(), self.energy_head.num_radii, origin=energy_stats['min'][0].item())
+        r = r.view(1,-1).repeat(B,1).to(device)
+        pedges, phi = grid.grid1D(2.0 * torch.pi, self.energy_head.num_phi)
+        phi = phi.view(1,-1).repeat(B,1).to(device)
+        zedges, z = grid.grid1D(energy_stats['max'][2].item(), self.energy_head.num_height, origin=energy_stats['min'][2].item())
+        z = z.view(1,-1).repeat(B,1).to(device)
         gripper = torch.linspace(implicit_stats['min'][0].item(), implicit_stats['max'][0].item(), num_gripper_act).view(1,-1,1,1).repeat(B,1,1,1).to(device)
 
         obs_feat = self.obs_encoder(nobs)
@@ -146,6 +153,8 @@ class CylindricalImplicitPolicy(BasePolicy):
         ebm_loss = F.kl_div(probs, one_hot, reduction='batchmean')
         grad_loss = torch.Tensor([0])
         loss = ebm_loss
+        if loss.item() < 1e-1:
+            breakpoint()
 
         return loss, ebm_loss, grad_loss
 

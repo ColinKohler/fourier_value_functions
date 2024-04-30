@@ -129,7 +129,7 @@ class CylindricalHarmonics(HarmonicFunction):
         axial_frequency: int,
         min_radius: float=0.0,
         max_radius: float=1.0,
-        max_height: float=1.9,
+        max_height: float=1.0,
         num_radii: int=None,
         num_phi: int=None,
         num_height: int=None,
@@ -152,7 +152,14 @@ class CylindricalHarmonics(HarmonicFunction):
 
     def init(self) -> None:
         """ Initialize the intermediate variables and basis functions. """
-        self.r2d, self.p2d, self.z2d = grid.cylinder_grid(self.max_radius, self.max_height, self.num_radii, self.num_phi, self.num_height, r_origin=self.min_radius)
+        self.r2d, self.p2d, self.z2d = grid.cylinder_grid(
+            self.max_radius,
+            self.max_height,
+            self.num_radii,
+            self.num_phi,
+            self.num_height,
+            r_origin=self.min_radius
+        )
         self.dr = self.r2d[0][1] - self.r2d[0][0]
         self.dphi = self.p2d[1][0] - self.p2d[0][0]
         self.dz = self.z2d[0][2] - self.z2d[0][0]

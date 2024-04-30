@@ -18,7 +18,7 @@ from imitation_learning.env_runner.base_runner import BaseRunner
 
 from franka_gym.robosuite_env import FrankaRobosuiteEnv
 from franka_gym.configs.default import FrankaGymConfig
-from franka_gym.configs.franka_gym_configs import FrankaLiftConfig, FrankaPushConfig
+from franka_gym.configs.franka_gym_configs import FrankaLiftConfig, FrankaReachConfig, FrankaPushConfig
 
 class RobosuiteLowdimRunner(BaseRunner):
     def __init__(
@@ -42,10 +42,10 @@ class RobosuiteLowdimRunner(BaseRunner):
         tqdm_interval_sec=5.0,
         num_envs=None,
     ):
-        num_train = 0
-        num_test = 1
-        num_envs = 1
-        #num_envs = num_train + num_test if num_envs is None else num_envs
+        #num_train = 0
+        #num_test = 1
+        #num_envs = 1
+        num_envs = num_train + num_test if num_envs is None else num_envs
         super().__init__(output_dir)
 
         task_fps = 10
@@ -198,7 +198,7 @@ class RobosuiteLowdimRunner(BaseRunner):
             this_init_fns = self.env_init_fn_dills[this_global_slice]
             num_diff = num_envs - len(this_init_fns)
             if num_diff > 0:
-                this_init_fns.extend([self.env_init_fn_dills[0]]*n_diff)
+                this_init_fns.extend([self.env_init_fn_dills[0]]*num_diff)
             assert len(this_init_fns) == num_envs
 
             # init envs

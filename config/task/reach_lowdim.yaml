@@ -6,11 +6,12 @@ keypoint_dim: 3
 
 env_runner:
   _target_: imitation_learning.env_runner.robosuite_lowdim_runner.RobosuiteLowdimRunner
-  num_train: 2
-  num_train_vis: 2
+  env: "ReachEnv"
+  num_train: 0
+  num_train_vis: 0
   train_start_seed: 0
-  num_test: 8
-  num_test_vis: 4
+  num_test: 2
+  num_test_vis: 2
   test_start_seed: 100000
   max_steps: 500
   num_obs_steps: ${num_obs_steps}

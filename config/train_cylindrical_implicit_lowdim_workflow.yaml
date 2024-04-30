@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - task: lift_lowdim 
+  - task: reach_lowdim 
 
 name: train_cylindrical_implicit_lowdim_policy
 _target_: imitation_learning.workflow.implicit_workflow.ImplicitWorkflow
@@ -17,13 +17,13 @@ num_action_steps: 1
 num_latency_steps: 0
 past_action_visible: False
 keypoint_visible_rate: 1.0
-z_dim: 512 
+z_dim: 64
 lmax: 3
 min_radius: 0.1
 radial_freq: 1
-angular_freq: 1
+angular_freq: 3
 axial_freq: 1
-N: 16
+N: 8
 action_coords: "cylindrical"
 
 policy:
@@ -32,7 +32,7 @@ policy:
   action_dim: ${action_dim}
   num_obs_steps: ${num_obs_steps}
   num_action_steps: ${num_action_steps}
-  num_neg_act_samples: 256
+  num_neg_act_samples: 512
   pred_n_samples: 1000
   optimize_negatives: False 
   sample_actions: True 
@@ -62,9 +62,9 @@ energy_head:
   min_radius: 0.1
   max_radius: 1.0
   max_height: 1.0
-  num_radii: 10
-  num_phi: 36
-  num_height: 10
+  num_radii: 20
+  num_phi: 90
+  num_height: 20
   N: ${N}
 
 dataloader:
@@ -83,7 +83,7 @@ val_dataloader:
 
 optimizer:
   _target_: torch.optim.AdamW
-  lr: 1e-4
+  lr: 1e-3
   betas: [0.95, 0.999]
   eps: 1e-8
   weight_decay: 1e-6
@@ -112,7 +112,7 @@ checkpoint:
   topk:
     monitor_key: test_mean_score
     mode: max
-    k: 5
+    k: 2
     format_str: 'epoch={epoch:04d}-test_mean_score={test_mean_score:.3f}.ckpt'
   save_last_checkpoint: True
   save_last_snapshot: False

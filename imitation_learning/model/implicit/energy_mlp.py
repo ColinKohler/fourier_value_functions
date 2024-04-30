@@ -296,9 +296,6 @@ class CylindricalEnergyMLP(nn.Module):
         self.axial_freq = axial_freq
         self.min_radius = min_radius
         self.max_radius = max_radius
-        num_radii = 100
-        num_phi = 36
-        num_height = 1000
         self.num_radii = num_radii
         self.num_phi = num_phi
         self.num_height = num_height
@@ -357,4 +354,4 @@ class CylindricalEnergyMLP(nn.Module):
                 energy_coords[:,:,0,2].view(B*N,1,1,1),
             ).view(B, N)
         else:
-            return self.cylindrical_harmonics.evaluate(Pnm.reshape(B*N,-1)).view(B, N, self.num_radii, self.num_phi, self.num_height)
+            return self.cylindrical_harmonics.evaluate(Pnm.reshape(B*N,-1))
