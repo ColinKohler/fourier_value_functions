@@ -19,11 +19,11 @@ past_action_visible: False
 keypoint_visible_rate: 1.0
 z_dim: 64
 lmax: 3
-min_radius: 0.1
+min_radius: 0.0
 radial_freq: 1
-angular_freq: 3
+angular_freq: 1
 axial_freq: 1
-N: 8
+N: 16
 action_coords: "cylindrical"
 
 policy:
@@ -32,7 +32,7 @@ policy:
   action_dim: ${action_dim}
   num_obs_steps: ${num_obs_steps}
   num_action_steps: ${num_action_steps}
-  num_neg_act_samples: 512
+  num_neg_act_samples: 256
   pred_n_samples: 1000
   optimize_negatives: False 
   sample_actions: True 
@@ -44,7 +44,7 @@ obs_encoder:
   num_obs: ${num_obs_steps}
   in_feat: ${eval:'${obs_dim} // 3'}
   z_dim: ${z_dim}
-  num_layers: 4
+  num_layers: 2
   lmax: ${lmax}
   N: ${N}
   dropout: 0.1
@@ -53,13 +53,13 @@ energy_head:
   _target_: imitation_learning.model.implicit.energy_mlp.CylindricalEnergyMLP
   obs_feat_dim: ${z_dim}
   mlp_dim: ${z_dim}
-  num_layers: 4
   lmax: ${lmax}
+  num_layers: 2
   radial_freq: ${radial_freq}
   angular_freq: ${angular_freq}
   axial_freq: ${axial_freq}
   dropout: 0.1
-  min_radius: 0.1
+  min_radius: ${min_radius}
   max_radius: 1.0
   max_height: 1.0
   num_radii: 20
@@ -83,7 +83,7 @@ val_dataloader:
 
 optimizer:
   _target_: torch.optim.AdamW
-  lr: 1e-3
+  lr: 1e-4
   betas: [0.95, 0.999]
   eps: 1e-8
   weight_decay: 1e-6

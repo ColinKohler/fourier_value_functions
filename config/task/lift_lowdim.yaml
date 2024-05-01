@@ -5,15 +5,15 @@ action_dim: 4 # (x,y,z,gripper)
 keypoint_dim: 3
 
 env_runner:
-  _target_: imitation_learning.env_runner.lift_lowdim_runner.LiftLowdimRunner
+  _target_: imitation_learning.env_runner.robosuite_lowdim_runner.RobosuiteLowdimRunner
   env: "LiftEnv"
   num_train: 2
   num_train_vis: 2
   train_start_seed: 0
   num_test: 8
-  num_test_vis: 4
+  num_test_vis: 8
   test_start_seed: 100000
-  max_steps: 500
+  max_steps: 200
   num_obs_steps: ${num_obs_steps}
   num_action_steps: ${num_action_steps}
   fps: 10

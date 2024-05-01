@@ -89,11 +89,20 @@ class RobosuiteLowdimDataset(torch.utils.data.Dataset):
         }
 
         normalizer = LinearNormalizer()
-        normalizer.fit(data=data, last_n_dims=1, mode=mode, **kwargs)
+        obs_stat = array_to_stat(data['keypoints'])
+        #normalizer['keypoints'] = normalizer_from_stat(obs_stat)
+        normalizer['keypoints'] = ws_normalizer(data['keypoints'])
+
+        imp_norm = SingleFieldLinearNormalizer()
+        #imp_stat = array_to_stat(data['implicit_act'])
+        #normalizer['implicit_act'] = normalizer_from_stat(imp_stat)
+        imp_norm.fit(data['implicit_act'])
+        normalizer['implicit_act'] = imp_norm
 
         act_norm = SingleFieldLinearNormalizer()
-        act_norm.fit(data=data['energy_coords'], output_min=0.1, output_max=1)
+        act_norm.fit(data=data['energy_coords'], output_min=0.0, output_max=1)
         normalizer['energy_coords'] = act_norm
+        #normalizer['energy_coords'] = act_normalizer(data['energy_coords'])
 
         return normalizer
 
@@ -108,7 +117,7 @@ class RobosuiteLowdimDataset(torch.utils.data.Dataset):
         gripper_action = data["action"][:,3]
         data = {
             'obs': {
-                'keypoints': data['obs']['keypoints'],
+                'keypoints': data['obs']['keypoints'] + npr.normal(0, 1e-3, data['obs']['keypoints'].shape),
             },
             "energy_coords": cylindrical_action,
             "implicit_act": gripper_action.reshape(-1, 1),
@@ -127,6 +136,57 @@ class RobosuiteLowdimDataset(torch.utils.data.Dataset):
         }
         return data
 
+def array_to_stat(arr):
+    stat = {
+        'min' : np.min(arr, axis=0),
+        'max' : np.max(arr, axis=0),
+        'mean' : np.mean(arr, axis=0),
+        'std' : np.std(arr, axis=0)
+    }
+    return stat
+
+def ws_normalizer(arr):
+    stat = {
+        'min': np.array([-0.04, -0.04, 0.8, -0.04, -0.04, 0.8, 0]),
+        'max': np.array([ 0.04,  0.04, 1.1,  0.04,  0.04, 1.1, 1]),
+        'mean' : np.mean(arr, axis=0),
+        'std' : np.std(arr, axis=0)
+    }
+    scale = (1 - (-1)) / (stat['max'] - stat['min'])
+    offset = -1 - scale * stat['min']
+    return SingleFieldLinearNormalizer.create_manual(
+        scale=scale,
+        offset=offset,
+        input_stats_dict=stat
+    )
+
+def act_normalizer(arr):
+    stat = {
+        'min': np.array([0.0, 0.0, -0.6]),
+        'max': np.array([0.6, 2*np.pi, 0.6]),
+        'mean' : np.mean(arr, axis=0),
+        'std' : np.std(arr, axis=0)
+    }
+    scale = (1 - 0) / (stat['max'] - stat['min'])
+    offset = 0 - scale * stat['min']
+    return SingleFieldLinearNormalizer.create_manual(
+        scale=scale,
+        offset=offset,
+        input_stats_dict=stat
+    )
+
+
+
+def normalizer_from_stat(stat):
+    max_abs = np.maximum(stat['max'].max(), np.abs(stat['min']).max())
+    scale = np.full_like(stat['max'], fill_value=1/max_abs)
+    offset = np.zeros_like(stat['max'])
+    return SingleFieldLinearNormalizer.create_manual(
+        scale=scale,
+        offset=offset,
+        input_stats_dict=stat
+    )
+
 def _data_to_obs(demo_dir: str) -> dict:
     # Read object pose
     with h5py.File(os.path.join(demo_dir, 'object.hdf5'), 'r') as f:
@@ -142,11 +202,14 @@ def _data_to_obs(demo_dir: str) -> dict:
         actions = np.array(f['actions'][:])
 
     obj_pos = obj_pose.reshape(-1,4,4)[:,:3,-1].reshape(-1,3)
+    obj_pos = obj_pos[:, [1,0,2]] * [1,-1,1]
     eef_pos = eef_pose.reshape(-1,4,4)[:,:3,-1].reshape(-1,3)
+    eef_pos = eef_pos[:, [1,0,2]] * [1,-1,1]
     #gripper_q = gripper_q.reshape(-1,2,2)[:,0,0].reshape(-1,1)
     gripper_q = gripper_q[:,0].reshape(-1,1)
     obs = np.concatenate([obj_pos, eef_pos, gripper_q], axis=-1)
 
+    actions = actions[:, [1,0,2,3]] * [1,-1,1,1]
     data = {
         'obs': obs,
         'actions': actions

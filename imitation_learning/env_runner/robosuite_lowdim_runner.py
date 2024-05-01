@@ -6,6 +6,7 @@ import pathlib
 import tqdm
 import dill
 import math
+import imageio
 import wandb.sdk.data_types.video as wv
 from imitation_learning.gym_util.multistep_wrapper import MultiStepWrapper
 from imitation_learning.gym_util.video_recording_wrapper import VideoRecordingWrapper, VideoRecorder
@@ -43,8 +44,8 @@ class RobosuiteLowdimRunner(BaseRunner):
         num_envs=None,
     ):
         #num_train = 0
-        #num_test = 1
-        #num_envs = 1
+        #num_test = 2
+        #num_envs = 2
         num_envs = num_train + num_test if num_envs is None else num_envs
         super().__init__(output_dir)
 
@@ -186,6 +187,7 @@ class RobosuiteLowdimRunner(BaseRunner):
         # allocate data
         all_video_paths = [None] * num_inits
         all_rewards = [None] * num_inits
+        energy_fn_plots = [list() for _ in range(num_inits)]
         last_info = [None] * num_inits
 
         for chunk_idx in range(num_chunks):
@@ -220,7 +222,9 @@ class RobosuiteLowdimRunner(BaseRunner):
             while not done:
                 # create obs dict
                 obj_pos = obs['cube_pose'].reshape(-1,2,4,4)[:,:,:3,-1].reshape(-1,2,3)
+                obj_pos = obj_pos[:, :, [1,0,2]] * [1,-1,1]
                 eef_pos = obs['eef_pose'].reshape(-1,2,4,4)[:,:,:3,-1].reshape(-1,2,3)
+                eef_pos = eef_pos[:, :, [1,0,2]] * [1,-1,1]
                 gripper_q = obs['gripper_q'][:,:,0].reshape(-1,2,1)
                 np_obs = np.concatenate([obj_pos, eef_pos, gripper_q], axis=-1)
 
@@ -242,9 +246,16 @@ class RobosuiteLowdimRunner(BaseRunner):
 
                 # device_transfer
                 np_action_dict = dict_apply(action_dict,
-                    lambda x: x.detach().to('cpu').numpy())
+                    lambda x: x.detach().to('cpu').numpy() if torch.is_tensor(x) else x)
+
+                if plot_energy_fn:
+                    for i, env_id in enumerate(range(start, end)):
+                        img = env.call_each('render2')[i]
+                        img = img.reshape(1,480,640,3).transpose(0,3,1,2)
+                        energy_fn_plots[env_id].append(policy.plot_energy_fn(img, action_dict['action_idxs'][i], action_dict['energy'][i]))
 
                 action = np_action_dict['action']
+                action = action[:,:,[1,0,2,3]] * [-1,1,1,1]
 
                 # step env
                 obs, reward, done, timeout, info = env.step(action)
@@ -284,6 +295,10 @@ class RobosuiteLowdimRunner(BaseRunner):
             # visualize sim
             video_path = all_video_paths[i]
             if video_path is not None:
+                if plot_energy_fn:
+                    media_path = video_path.rpartition('.')[0]
+                    energy_fn_plot_path = f'{media_path}_energy_fn.gif'
+                    imageio.mimwrite(energy_fn_plot_path, energy_fn_plots[i])
                 sim_video = wandb.Video(video_path)
                 log_data[prefix+f'sim_video_{seed}'] = sim_video
 

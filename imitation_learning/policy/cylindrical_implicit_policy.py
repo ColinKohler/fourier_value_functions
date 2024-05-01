@@ -44,6 +44,7 @@ class CylindricalImplicitPolicy(BasePolicy):
 
     def get_action(self, obs, device):
         nobs = self.normalizer.normalize(obs)
+        nobs['keypoints'] = nobs['keypoints'].float()
         B = list(obs.values())[0].shape[0]
 
         Do = self.obs_dim
@@ -53,10 +54,7 @@ class CylindricalImplicitPolicy(BasePolicy):
 
         # Optimize actions
         implicit_stats, energy_stats = self.get_action_stats()
-        num_gripper_act = 1
-        #r = torch.linspace(energy_stats['min'][0].item(), energy_stats['max'][0].item(), self.energy_head.num_radii).view(1,-1).repeat(B,1).to(device)
-        #phi = torch.linspace(0, 2*np.pi, self.energy_head.num_phi).view(1, -1).repeat(B, 1).to(device)
-        #z = torch.linspace(energy_stats['min'][2].item(), energy_stats['max'][2].item(), self.energy_head.num_height).view(1,-1).repeat(B,1).to(device)
+        num_gripper_act = 2
         redges, r = grid.grid1D(energy_stats['max'][0].item(), self.energy_head.num_radii, origin=energy_stats['min'][0].item())
         r = r.view(1,-1).repeat(B,1).to(device)
         pedges, phi = grid.grid1D(2.0 * torch.pi, self.energy_head.num_phi)
@@ -67,6 +65,7 @@ class CylindricalImplicitPolicy(BasePolicy):
 
         obs_feat = self.obs_encoder(nobs)
         logits = self.energy_head(obs_feat, gripper).view(B, -1)
+        #logits = self.energy_head(obs_feat).view(B, -1)
         action_probs = torch.softmax(logits/self.temperature, dim=-1).view(B, num_gripper_act, self.energy_head.num_radii, self.energy_head.num_phi, self.energy_head.num_height)
 
         if self.sample_actions:
@@ -91,11 +90,12 @@ class CylindricalImplicitPolicy(BasePolicy):
         gripper_act = self.normalizer["implicit_act"].unnormalize(ngripper_act)
         actions = torch.concat([x.view(B,1), y.view(B,1), z.view(B,1), gripper_act.view(B,1)], dim=1).unsqueeze(1)
 
-        return {'action' : actions, 'energy' : action_probs}
+        return {'action' : actions, 'action_idxs' : np.stack(idxs).transpose(1,0), 'energy' : action_probs}
 
     def compute_loss(self, batch):
         # Load batch
         nobs = self.normalizer.normalize(batch['obs'])
+        nobs['keypoints'] = nobs['keypoints'].float()
         nenergy_coords = self.normalizer['energy_coords'].normalize(batch["energy_coords"]).float()
         nimplicit_act = self.normalizer['implicit_act'].normalize(batch["implicit_act"]).float()
 
@@ -119,7 +119,11 @@ class CylindricalImplicitPolicy(BasePolicy):
         if self.optimize_negatives:
             pass
         else:
-            implicit_negatives = torch.tensor([-1.]).view(1,1,1).repeat(B,self.num_neg_act_samples, Ta, 1).to(nimplicit_act.device)
+            a = torch.tensor([-1, 1])
+            p = torch.ones(2) / 2
+            idxs = p.multinomial(num_samples=B*self.num_neg_act_samples, replacement=True)
+            implicit_negatives = a[idxs].view(B,self.num_neg_act_samples, Ta, 1).to(nimplicit_act.device)
+            #implicit_negatives = torch.tensor([-1.]).view(1,1,1).repeat(B,self.num_neg_act_samples, Ta, 1).to(nimplicit_act.device)
             #implicit_negatives = implicit_dist.sample((B, self.num_neg_act_samples, Ta)).to(
             #    dtype=nimplicit_act.dtype
             #)
@@ -146,6 +150,7 @@ class CylindricalImplicitPolicy(BasePolicy):
 
         # Compute ciruclar energy function for the given obs and action magnitudes
         obs_feat = self.obs_encoder(nobs)
+        #energy = self.energy_head(obs_feat, energy_targets)
         energy = self.energy_head(obs_feat, implicit_targets, energy_targets)
 
         # Compute InfoNCE loss, i.e. try to predict the expert action from the randomly sampled actions
@@ -153,8 +158,6 @@ class CylindricalImplicitPolicy(BasePolicy):
         ebm_loss = F.kl_div(probs, one_hot, reduction='batchmean')
         grad_loss = torch.Tensor([0])
         loss = ebm_loss
-        if loss.item() < 1e-1:
-            breakpoint()
 
         return loss, ebm_loss, grad_loss
 
@@ -184,14 +187,16 @@ class CylindricalImplicitPolicy(BasePolicy):
 
 
     def get_action_stats(self):
-        energy_stats = self.normalizer["energy_coords"].get_output_stats()
         implicit_stats = self.normalizer["implicit_act"].get_output_stats()
+        energy_stats = self.normalizer["energy_coords"].get_output_stats()
 
         return implicit_stats, energy_stats
 
-    def plot_energy_fn(self, img, energy):
-        max_disp = torch.max(energy, dim=-1)[0]
-        E = energy[torch.argmax(max_disp).item()].cpu().numpy()
+    def plot_energy_fn(self, img, idxs, energy):
+        _, action_stats = self.get_action_stats()
+        energy = energy[0,:,:,idxs[-1]].cpu().numpy()
+        r = torch.linspace(action_stats['min'][0].item(), action_stats['max'][0].item(), self.energy_head.num_radii)
+        phi = torch.linspace(0, 2*np.pi, self.energy_head.num_phi)
 
         f = plt.figure(figsize=(10,3))
         ax1 = f.add_subplot(111)
@@ -199,10 +204,13 @@ class CylindricalImplicitPolicy(BasePolicy):
 
         if img is not None:
             ax1.imshow(img[-1].transpose(1,2,0))
-        ax2.plot(np.linspace(0, 2*np.pi, E.shape[0]), E)
-        ax2.set_rticks(list())
-        ax2.grid(True)
-        ax2.set_title(f"R={torch.max(max_disp).item():.3f}", va="bottom")
+            ax1.axes.get_xaxis().set_ticks([])
+            ax1.axes.get_yaxis().set_ticks([])
+        ax2.pcolormesh(phi,r,energy)
+        ax2.grid(False)
+        ax2.set_yticklabels([])
+        ax2.set_xticklabels([])
+        ax2.set_title(f"z={idxs[-1]}", va="bottom")
 
         io_buf = io.BytesIO()
         f.savefig(io_buf, format='raw')

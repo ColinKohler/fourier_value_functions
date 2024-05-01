@@ -78,7 +78,7 @@ class SO2KeypointEncoder2(nn.Module):
     def forward(self, obs) -> torch.Tensor:
         B, T, Do = obs['keypoints'].shape
 
-        x = self.in_type(obs['keypoints'].view(B, -1))
+        x = self.in_type(obs['keypoints'].reshape(B, -1))
         obs_feat = self.keypoint_enc(x)
 
         return obs_feat.tensor
