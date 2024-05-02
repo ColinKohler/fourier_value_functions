@@ -68,6 +68,11 @@ class CylindricalImplicitPolicy(BasePolicy):
         #logits = self.energy_head(obs_feat).view(B, -1)
         action_probs = torch.softmax(logits/self.temperature, dim=-1).view(B, num_gripper_act, self.energy_head.num_radii, self.energy_head.num_phi, self.energy_head.num_height)
 
+        #if torch.any(obs['keypoints'][:,:,-1] < 0.03):
+        #    action_probs[:,:,:,:,:10]=0
+        #else:
+        #    action_probs[:,:,:,:,10:]=0
+
         if self.sample_actions:
             flat_indexes = torch.multinomial(action_probs.flatten(start_dim=1), num_samples=1, replacement=True).squeeze()
         else:

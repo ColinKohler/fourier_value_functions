@@ -298,6 +298,7 @@ class CylindricalEnergyMLP(nn.Module):
         self.max_radius = max_radius
         self.num_radii = num_radii
         self.num_phi = num_phi
+        num_height = 20
         self.num_height = num_height
 
         self.G = group.so2_group()

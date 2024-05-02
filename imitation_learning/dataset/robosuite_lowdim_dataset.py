@@ -99,10 +99,10 @@ class RobosuiteLowdimDataset(torch.utils.data.Dataset):
         imp_norm.fit(data['implicit_act'])
         normalizer['implicit_act'] = imp_norm
 
-        act_norm = SingleFieldLinearNormalizer()
-        act_norm.fit(data=data['energy_coords'], output_min=0.0, output_max=1)
-        normalizer['energy_coords'] = act_norm
-        #normalizer['energy_coords'] = act_normalizer(data['energy_coords'])
+        #act_norm = SingleFieldLinearNormalizer()
+        #act_norm.fit(data=data['energy_coords'], output_min=0.0, output_max=1)
+        #normalizer['energy_coords'] = act_norm
+        normalizer['energy_coords'] = act_normalizer(data['energy_coords'])
 
         return normalizer
 
@@ -175,8 +175,6 @@ def act_normalizer(arr):
         input_stats_dict=stat
     )
 
-
-
 def normalizer_from_stat(stat):
     max_abs = np.maximum(stat['max'].max(), np.abs(stat['min']).max())
     scale = np.full_like(stat['max'], fill_value=1/max_abs)
@@ -205,8 +203,8 @@ def _data_to_obs(demo_dir: str) -> dict:
     obj_pos = obj_pos[:, [1,0,2]] * [1,-1,1]
     eef_pos = eef_pose.reshape(-1,4,4)[:,:3,-1].reshape(-1,3)
     eef_pos = eef_pos[:, [1,0,2]] * [1,-1,1]
-    #gripper_q = gripper_q.reshape(-1,2,2)[:,0,0].reshape(-1,1)
-    gripper_q = gripper_q[:,0].reshape(-1,1)
+    gripper_q = gripper_q.reshape(-1,2,2)[:,0,0].reshape(-1,1)
+    #gripper_q = gripper_q[:,0].reshape(-1,1)
     obs = np.concatenate([obj_pos, eef_pos, gripper_q], axis=-1)
 
     actions = actions[:, [1,0,2,3]] * [1,-1,1,1]

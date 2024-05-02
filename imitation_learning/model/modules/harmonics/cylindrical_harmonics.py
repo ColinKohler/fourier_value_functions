@@ -95,7 +95,7 @@ def get_Z_k(k: int, z: torch.Tensor) -> torch.Tensor:
     """
     return torch.sin(k * torch.pi * z)
 
-def get_Psi_nm(
+def get_Psi_nmk(
     n: int,
     m: int,
     k: int,
@@ -167,7 +167,7 @@ class CylindricalHarmonics(HarmonicFunction):
         self.m = get_m(self.angular_frequency)
         self.n = get_n(self.radial_frequency)
         self.k = get_k(self.axial_frequency)
-        self.m2d, self.n2d, self.k2d = torch.meshgrid(self.m, self.n, self.k, indexing='ij')
+        self.m2d, self.n2d = torch.meshgrid(self.m, self.n, indexing='ij')
 
         self.xnm = torch.zeros(self.m2d.shape)
         self.knm = torch.zeros(self.m2d.shape)
@@ -193,33 +193,32 @@ class CylindricalHarmonics(HarmonicFunction):
 
         self.m2d_flat = self.m2d.flatten()
         self.n2d_flat = self.n2d.flatten()
-        self.k2d_flat = self.k2d.flatten()
         self.xnm_flat = self.xnm.flatten()
         self.knm_flat = self.knm.flatten()
         self.Nnm_flat = self.Nnm.flatten()
 
         # Pre-Compute Cylinder Basis Functions for specified grid
-        self.Psi = torch.zeros(((self.radial_frequency * (self.angular_frequency*2+1)),) * self.axial_frequency + self.r2d.shape)
-        li = 0
-        for i  in range(0,len(self.m2d_flat)):
-            Psi_nm = get_Psi_nm(
-                self.n2d_flat[i].item(),
-                self.m2d_flat[i].item(),
-                self.k2d_flat[i].item(),
-                self.r2d,
-                self.p2d,
-                self.z2d,
-                self.knm_flat[i].item(),
-                self.Nnm_flat[i]
-            )
-
-            if self.m2d_flat[i] == 0:
-                self.Psi[li] = Psi_nm
-                li+=1
-            else:
-                self.Psi[li] = Psi_nm[0]
-                self.Psi[li+1] = Psi_nm[1]
-                li+=2
+        self.Psi = torch.zeros(((self.radial_frequency *  self.axial_frequency * (self.angular_frequency*2+1)),) + self.r2d.shape)
+        for k in range(0, self.k[-1]):
+            li = 0
+            for i  in range(0,len(self.m2d_flat)):
+                Psi_nmk = get_Psi_nmk(
+                    self.n2d_flat[i].item(),
+                    self.m2d_flat[i].item(),
+                    self.k[k].item(),
+                    self.r2d,
+                    self.p2d,
+                    self.z2d,
+                    self.knm_flat[i].item(),
+                    self.Nnm_flat[i]
+                )
+                if self.m2d_flat[i] == 0:
+                    self.Psi[k*(self.m[-1]*2+1)+li] = Psi_nmk
+                    li+=1
+                else:
+                    self.Psi[k*(self.m[-1]*2+1)+li] = Psi_nmk[0]
+                    self.Psi[k*(self.m[-1]*2+1)+li+1] = Psi_nmk[1]
+                    li+=2
         self.Psi = self.Psi.unsqueeze(0)
 
     def evaluate(
@@ -239,25 +238,26 @@ class CylindricalHarmonics(HarmonicFunction):
         if radii is not None:
             f = torch.zeros((B,) + radii.shape[1:]).to(Pnm.device)
             li = 0
-            for i in range(len(self.m2d_flat)):
-                Psi = get_Psi_nm(
-                    self.n2d_flat[i].item(),
-                    self.m2d_flat[i].item(),
-                    self.k2d_flat[i].item(),
-                    radii,
-                    phis,
-                    zs,
-                    self.knm_flat[i].item(),
-                    self.Nnm_flat[i]
-                ).to(radii.device)
+            for k in range(0, self.k[-1]):
+                for i in range(len(self.m2d_flat)):
+                    Psi = get_Psi_nmk(
+                        self.n2d_flat[i].item(),
+                        self.m2d_flat[i].item(),
+                        self.k[k].item(),
+                        radii,
+                        phis,
+                        zs,
+                        self.knm_flat[i].item(),
+                        self.Nnm_flat[i]
+                    ).to(radii.device)
 
-                if self.m2d_flat[i] == 0:
-                    f += torch.einsum("n,nrpz->nrpz", Pnm[:,li], Psi)
-                    li += 1
-                else:
-                    f += torch.einsum("n,nrpz->nrpz", Pnm[:,li], Psi[0])
-                    f += torch.einsum("n,nrpz->nrpz", Pnm[:,li+1], Psi[1])
-                    li += 2
+                    if self.m2d_flat[i] == 0:
+                        f += torch.einsum("n,nrpz->nrpz", Pnm[:,li], Psi)
+                        li += 1
+                    else:
+                        f += torch.einsum("n,nrpz->nrpz", Pnm[:,li], Psi[0])
+                        f += torch.einsum("n,nrpz->nrpz", Pnm[:,li+1], Psi[1])
+                        li += 2
             return f
         else:
             Psi = self.Psi.repeat(B,1,1,1,1).to(Pnm.device)

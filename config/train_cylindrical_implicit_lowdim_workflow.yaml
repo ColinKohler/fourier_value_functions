@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - task: reach_lowdim 
+  - task: lift_lowdim 
 
 name: train_cylindrical_implicit_lowdim_policy
 _target_: imitation_learning.workflow.implicit_workflow.ImplicitWorkflow
@@ -17,13 +17,13 @@ num_action_steps: 1
 num_latency_steps: 0
 past_action_visible: False
 keypoint_visible_rate: 1.0
-z_dim: 64
+z_dim: 512
 lmax: 3
 min_radius: 0.0
 radial_freq: 1
 angular_freq: 1
-axial_freq: 1
-N: 16
+axial_freq: 3
+N: 8
 action_coords: "cylindrical"
 
 policy:
@@ -44,7 +44,7 @@ obs_encoder:
   num_obs: ${num_obs_steps}
   in_feat: ${eval:'${obs_dim} // 3'}
   z_dim: ${z_dim}
-  num_layers: 2
+  num_layers: 4
   lmax: ${lmax}
   N: ${N}
   dropout: 0.1
@@ -54,7 +54,7 @@ energy_head:
   obs_feat_dim: ${z_dim}
   mlp_dim: ${z_dim}
   lmax: ${lmax}
-  num_layers: 2
+  num_layers: 4
   radial_freq: ${radial_freq}
   angular_freq: ${angular_freq}
   axial_freq: ${axial_freq}
@@ -68,14 +68,14 @@ energy_head:
   N: ${N}
 
 dataloader:
-  batch_size: 64 
+  batch_size: 128 
   num_workers: 1
   shuffle: True
   pin_memory: True
   persistent_workers: False
 
 val_dataloader:
-  batch_size: 64 
+  batch_size: 128
   num_workers: 1
   shuffle: False
   pin_memory: True
