@@ -42,6 +42,7 @@ class RobosuiteLowdimRunner(BaseRunner):
         obs_eef_target=True,
         tqdm_interval_sec=5.0,
         num_envs=None,
+        observable_objects=None,
     ):
         #num_train = 0
         #num_test = 2
@@ -54,6 +55,8 @@ class RobosuiteLowdimRunner(BaseRunner):
 
         if env == 'LiftEnv':
             env_config = FrankaLiftConfig()
+        elif env == 'PushEnv':
+            env_config = FrankaPushConfig()
         elif env == 'ReachEnv':
             env_config = FrankaReachConfig()
         else:
@@ -172,7 +175,7 @@ class RobosuiteLowdimRunner(BaseRunner):
         self.max_steps = max_steps
         self.tqdm_interval_sec = tqdm_interval_sec
         self.obs_eef_target = obs_eef_target
-
+        self.observable_objects = observable_objects
 
     def run(self, policy: BasePolicy, plot_energy_fn=False):
         device = policy.device
@@ -221,12 +224,14 @@ class RobosuiteLowdimRunner(BaseRunner):
             done = False
             while not done:
                 # create obs dict
-                obj_pos = obs['cube_pose'].reshape(-1,2,4,4)[:,:,:3,-1].reshape(-1,2,3)
-                obj_pos = obj_pos[:, :, [1,0,2]] * [1,-1,1]
+                obj_pos = []
+                for obj_name in self.observable_objects:
+                    obj_pos_tmp = obs['cube_pose'].reshape(-1,2,4,4)[:,:,:3,-1].reshape(-1,2,3)
+                    obj_pos.append(obj_pos_tmp[:, :, [1,0,2]] * [1,-1,1])
                 eef_pos = obs['eef_pose'].reshape(-1,2,4,4)[:,:,:3,-1].reshape(-1,2,3)
                 eef_pos = eef_pos[:, :, [1,0,2]] * [1,-1,1]
                 gripper_q = obs['gripper_q'][:,:,0].reshape(-1,2,1)
-                np_obs = np.concatenate([obj_pos, eef_pos, gripper_q], axis=-1)
+                np_obs = np.concatenate(obj_pos + [eef_pos, gripper_q], axis=-1)
 
                 np_obs_dict = {
                     'keypoints': np_obs.astype(np.float32)

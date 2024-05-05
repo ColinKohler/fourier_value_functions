@@ -347,15 +347,16 @@ class CylindricalEnergyMLP(nn.Module):
         s_a = self.in_type(
             torch.cat([s, implicit_act.reshape(B, N, -1)], dim=-1).reshape(B*N, -1)
         )
-
-        Pnm = self.energy_mlp(s_a).tensor.view(B*N, self.radial_freq, self.axial_freq, self.angular_freq*2+1).permute(0,3,1,2)
+        Pnm_geo = self.energy_mlp(s_a)
+        #Pnm = Pnm_geo.tensor.view(B*N, self.radial_freq, self.axial_freq, self.angular_freq*2+1).permute(0,3,1,2)
+        Pnm = Pnm_geo.tensor
         #Pnm = self.energy_mlp(s).tensor.view(B, self.radial_freq, self.axial_freq, self.angular_freq*2+1).permute(0,3,1,2)
         if energy_coords is not None:
-            B, N, _, _ = energy_coords.shape
-            Pnm = Pnm.unsqueeze(1).repeat(1,N,1,1,1).reshape(B*N, -1)
+            #B, N, _, _ = energy_coords.shape
+            #Pnm = Pnm.unsqueeze(1).repeat(1,N,1,1,1).reshape(B*N, -1)
             return self.cylindrical_harmonics.evaluate(
-                #Pnm.reshape(B*N,-1),
-                Pnm,
+                Pnm.reshape(B*N,-1),
+                #Pnm,
                 energy_coords[:,:,0,0].view(B*N,1,1,1),
                 energy_coords[:,:,0,1].view(B*N,1,1,1),
                 energy_coords[:,:,0,2].view(B*N,1,1,1),

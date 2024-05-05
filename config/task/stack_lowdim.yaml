@@ -1,13 +1,13 @@
 name: lift_lowdim 
 
-obs_dim: 6 # block pos + gripper pos 
+obs_dim: 9 # blockA pos + blockB pos + gripper pos 
 action_dim: 4 # (x,y,z,gripper)
 keypoint_dim: 3
-num_keypoints: 2
+num_keypoints: 3
 
 env_runner:
   _target_: imitation_learning.env_runner.robosuite_lowdim_runner.RobosuiteLowdimRunner
-  env: "LiftEnv"
+  env: "StackEnv"
   num_train: 10
   num_train_vis: 2
   train_start_seed: 0
@@ -20,15 +20,15 @@ env_runner:
   fps: 10
   past_action: ${past_action_visible}
   num_envs: 10
-  observable_objects: ["cube"]
+  observable_objects: ["cubeA", "cubeB"]
 
 dataset:
   _target_: imitation_learning.dataset.robosuite_lowdim_dataset.RobosuiteLowdimDataset
-  path: data/lift_50
+  path: data/stack_30
   horizon: ${horizon}
   pad_before: ${eval:'${num_obs_steps}-1+${num_latency_steps}'}
   pad_after: ${eval:'${num_action_steps}-1'}
   seed: 0
   action_coords: ${action_coords}
   val_ratio: 0.02
-  max_train_episodes: 10
+  max_train_episodes: 29

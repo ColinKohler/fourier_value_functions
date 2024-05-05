@@ -44,6 +44,7 @@ class ObsEncoder(nn.Module):
 class SO2KeypointEncoder2(nn.Module):
     def __init__(
         self,
+        num_keypoints: int,
         num_obs: int,
         in_feat: int,
         z_dim: int,
@@ -60,10 +61,8 @@ class SO2KeypointEncoder2(nn.Module):
         self.num_layers = num_layers
         self.z_dim = z_dim
 
-        self.in_type = enn.FieldType(
-            self.gspace,
-            num_obs * [self.gspace.irrep(1), self.gspace.irrep(0), self.gspace.irrep(1), self.gspace.irrep(0), self.gspace.irrep(0)]
-        )
+        obs_type = num_keypoints * [self.gspace.irrep(1), self.gspace.irrep(0)] + [self.gspace.irrep(0)]
+        self.in_type = enn.FieldType(self.gspace, num_obs * obs_type)
         self.keypoint_enc = SO2MLP(
             self.in_type,
             channels=[z_dim] * num_layers,

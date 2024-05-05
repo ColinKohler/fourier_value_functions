@@ -145,30 +145,34 @@ def array_to_stat(arr):
     }
     return stat
 
-def ws_normalizer(arr):
+def ws_normalizer(arr, nmin=-1., nmax=1.):
     stat = {
-        'min': np.array([-0.04, -0.04, 0.8, -0.04, -0.04, 0.8, 0]),
-        'max': np.array([ 0.04,  0.04, 1.1,  0.04,  0.04, 1.1, 1]),
+        #'min': np.array([-0.04, -0.04, 0.8, -0.04, -0.04, 0.8, 0]),
+        #'max': np.array([ 0.04,  0.04, 1.1,  0.04,  0.04, 1.1, 1]),
+        'min': np.array([-0.1, -0.1, 0.8, -0.1, -0.1, 0.8, -0.1, -0.1, 0.8, 0]),
+        'max': np.array([ 0.1,  0.1, 1.1,  0.1,  0.1, 1.1,  0.1,  0.1, 1.1, 1]),
         'mean' : np.mean(arr, axis=0),
         'std' : np.std(arr, axis=0)
     }
-    scale = (1 - (-1)) / (stat['max'] - stat['min'])
-    offset = -1 - scale * stat['min']
+    scale = (nmax - nmin) / (stat['max'] - stat['min'])
+    offset = nmin - scale * stat['min']
     return SingleFieldLinearNormalizer.create_manual(
         scale=scale,
         offset=offset,
         input_stats_dict=stat
     )
 
-def act_normalizer(arr):
+def act_normalizer(arr, nmin=0., nmax=1.):
     stat = {
+        #'min': np.array([0.0, 0.0, -0.16]),
+        #'max': np.array([0.16, 2*np.pi, 0.16]),
         'min': np.array([0.0, 0.0, -0.6]),
         'max': np.array([0.6, 2*np.pi, 0.6]),
         'mean' : np.mean(arr, axis=0),
         'std' : np.std(arr, axis=0)
     }
-    scale = (1 - 0) / (stat['max'] - stat['min'])
-    offset = 0 - scale * stat['min']
+    scale = (nmax - nmin) / (stat['max'] - stat['min'])
+    offset = nmin - scale * stat['min']
     return SingleFieldLinearNormalizer.create_manual(
         scale=scale,
         offset=offset,
@@ -187,8 +191,10 @@ def normalizer_from_stat(stat):
 
 def _data_to_obs(demo_dir: str) -> dict:
     # Read object pose
+    obj_poses = []
     with h5py.File(os.path.join(demo_dir, 'object.hdf5'), 'r') as f:
-        obj_pose = np.array(f['cube_pose'][:])
+        for obj_name, obj_pose in f.items():
+            obj_poses.append(np.array(obj_pose[:]))
 
     # Read end effector pose
     with h5py.File(os.path.join(demo_dir, 'robot.hdf5'), 'r') as f:
@@ -199,14 +205,18 @@ def _data_to_obs(demo_dir: str) -> dict:
     with h5py.File(os.path.join(demo_dir, 'actions.hdf5'), 'r') as f:
         actions = np.array(f['actions'][:])
 
-    obj_pos = obj_pose.reshape(-1,4,4)[:,:3,-1].reshape(-1,3)
-    obj_pos = obj_pos[:, [1,0,2]] * [1,-1,1]
+    obj_pos = []
+    for obj_pose in obj_poses:
+        obj_pos_tmp = obj_pose.reshape(-1,4,4)[:,:3,-1].reshape(-1,3)
+        obj_pos.append(obj_pos_tmp[:, [1,0,2]] * [1,-1,1])
+    obj_pos = np.concatenate(obj_pos, axis=1)
     eef_pos = eef_pose.reshape(-1,4,4)[:,:3,-1].reshape(-1,3)
     eef_pos = eef_pos[:, [1,0,2]] * [1,-1,1]
-    gripper_q = gripper_q.reshape(-1,2,2)[:,0,0].reshape(-1,1)
-    #gripper_q = gripper_q[:,0].reshape(-1,1)
+    #gripper_q = gripper_q.reshape(-1,2,2)[:,0,0].reshape(-1,1)
+    gripper_q = gripper_q[:,0].reshape(-1,1)
     obs = np.concatenate([obj_pos, eef_pos, gripper_q], axis=-1)
 
+    # Swap x and y axis and flip y axis
     actions = actions[:, [1,0,2,3]] * [1,-1,1,1]
     data = {
         'obs': obs,

@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Normal
 import matplotlib.pyplot as plt
+from skimage.transform import resize
 
 from imitation_learning.model.common.normalizer import LinearNormalizer
 from imitation_learning.utils import torch_utils
@@ -199,23 +200,26 @@ class CylindricalImplicitPolicy(BasePolicy):
 
     def plot_energy_fn(self, img, idxs, energy):
         _, action_stats = self.get_action_stats()
-        energy = energy[0,:,:,idxs[-1]].cpu().numpy()
+        zenergy = energy[idxs[0],:,:,idxs[-1]].cpu().numpy()
+        renergy = energy[idxs[0],idxs[1],:,:].cpu().numpy()[:,::-1]
         r = torch.linspace(action_stats['min'][0].item(), action_stats['max'][0].item(), self.energy_head.num_radii)
         phi = torch.linspace(0, 2*np.pi, self.energy_head.num_phi)
 
         f = plt.figure(figsize=(10,3))
-        ax1 = f.add_subplot(111)
-        ax2 = f.add_subplot(141, projection='polar')
+        ax1 = f.add_subplot(133)
+        ax2 = f.add_subplot(131, projection='polar')
+        ax3 = f.add_subplot(132)
 
         if img is not None:
             ax1.imshow(img[-1].transpose(1,2,0))
             ax1.axes.get_xaxis().set_ticks([])
             ax1.axes.get_yaxis().set_ticks([])
-        ax2.pcolormesh(phi,r,energy)
+        ax2.pcolormesh(phi,r,zenergy)
         ax2.grid(False)
         ax2.set_yticklabels([])
         ax2.set_xticklabels([])
         ax2.set_title(f"z={idxs[-1]}", va="bottom")
+        ax3.imshow(resize(renergy.T, (renergy.T.shape[0]*4, renergy.T.shape[1]*4)))
 
         io_buf = io.BytesIO()
         f.savefig(io_buf, format='raw')

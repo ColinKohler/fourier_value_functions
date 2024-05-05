@@ -18,11 +18,11 @@ num_action_steps: 1
 num_latency_steps: 0
 past_action_visible: False
 keypoint_visible_rate: 1.0
-z_dim: 512
+z_dim: 256
 lmax: 3
 min_radius: 0.0
 radial_freq: 1
-angular_freq: 3
+angular_freq: 1
 axial_freq: 2
 N: 16
 action_coords: "cylindrical"
@@ -42,7 +42,7 @@ policy:
 
 obs_encoder:
   _target_: imitation_learning.model.implicit.obs_encoder.SO2KeypointEncoder2
-  num_keypoints: ${num_keypoints}
+  num_keypoints: ${num_keypoints} 
   num_obs: ${num_obs_steps}
   in_feat: ${eval:'${obs_dim} // 3'}
   z_dim: ${z_dim}
@@ -70,14 +70,14 @@ energy_head:
   N: ${N}
 
 dataloader:
-  batch_size: 64 
+  batch_size: 128 
   num_workers: 1
   shuffle: True
   pin_memory: True
   persistent_workers: False
 
 val_dataloader:
-  batch_size: 64
+  batch_size: 128
   num_workers: 1
   shuffle: False
   pin_memory: True
