@@ -21,6 +21,7 @@ class RobosuiteLowdimDataset(torch.utils.data.Dataset):
         pad_before=0,
         pad_after=0,
         obs_eef_target: bool = True,
+        num_keypoints: int=1,
         action_coords: str = "cylindrical",
         seed=0,
         val_ratio=0.0,
@@ -28,6 +29,7 @@ class RobosuiteLowdimDataset(torch.utils.data.Dataset):
     ):
         super().__init__()
 
+        self.num_keypoints = num_keypoints
         self.obs_eef_target = obs_eef_target
         self.action_coords = action_coords
 
@@ -90,7 +92,7 @@ class RobosuiteLowdimDataset(torch.utils.data.Dataset):
 
         normalizer = LinearNormalizer()
         obs_stat = array_to_stat(data['keypoints'])
-        normalizer['keypoints'] = ws_normalizer(data['keypoints'])
+        normalizer['keypoints'] = ws_normalizer(data['keypoints'], self.num_keypoints)
         normalizer['energy_coords'] = act_normalizer(data['energy_coords'])
 
         imp_norm = SingleFieldLinearNormalizer()
@@ -138,10 +140,10 @@ def array_to_stat(arr):
     }
     return stat
 
-def ws_normalizer(arr, nmin=-1., nmax=1.):
+def ws_normalizer(arr, num_keypoints, nmin=-1., nmax=1.):
     stat = {
-        'min': np.array([-0.1, -0.1, 0.8, -0.1, -0.1, 0.8, -0.1, -0.1, 0.8, 0]),
-        'max': np.array([ 0.1,  0.1, 1.1,  0.1,  0.1, 1.1,  0.1,  0.1, 1.1, 0.04]),
+        'min': np.array([-0.1, -0.1, 0.8] * num_keypoints + [0]),
+        'max': np.array([ 0.1,  0.1, 1.1] * num_keypoints + [0.04]),
         'mean' : np.mean(arr, axis=0),
         'std' : np.std(arr, axis=0)
     }

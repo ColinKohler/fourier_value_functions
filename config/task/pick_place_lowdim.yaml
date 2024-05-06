@@ -1,0 +1,35 @@
+name: pick_place_lowdim 
+
+obs_dim: 6 # can pos + gripper pos 
+action_dim: 4 # (x,y,z,gripper)
+keypoint_dim: 3
+num_keypoints: 2
+
+env_runner:
+  _target_: imitation_learning.env_runner.robosuite_lowdim_runner.RobosuiteLowdimRunner
+  env: "PickPlaceEnv"
+  num_train: 10
+  num_train_vis: 2
+  train_start_seed: 0
+  num_test: 50
+  num_test_vis: 8
+  test_start_seed: 100000
+  max_steps: 400
+  num_obs_steps: ${num_obs_steps}
+  num_action_steps: ${num_action_steps}
+  fps: 10
+  past_action: ${past_action_visible}
+  num_envs: 10
+  observable_objects: ["Can"]
+
+dataset:
+  _target_: imitation_learning.dataset.robosuite_lowdim_dataset.RobosuiteLowdimDataset
+  path: data/pick_place_30
+  horizon: ${horizon}
+  pad_before: ${eval:'${num_obs_steps}-1+${num_latency_steps}'}
+  pad_after: ${eval:'${num_action_steps}-1'}
+  seed: 0
+  num_keypoints: ${task.num_keypoints}
+  action_coords: ${action_coords}
+  val_ratio: 0.02
+  max_train_episodes: 29
