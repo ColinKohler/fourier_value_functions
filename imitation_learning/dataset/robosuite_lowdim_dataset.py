@@ -90,19 +90,12 @@ class RobosuiteLowdimDataset(torch.utils.data.Dataset):
 
         normalizer = LinearNormalizer()
         obs_stat = array_to_stat(data['keypoints'])
-        #normalizer['keypoints'] = normalizer_from_stat(obs_stat)
         normalizer['keypoints'] = ws_normalizer(data['keypoints'])
+        normalizer['energy_coords'] = act_normalizer(data['energy_coords'])
 
         imp_norm = SingleFieldLinearNormalizer()
-        #imp_stat = array_to_stat(data['implicit_act'])
-        #normalizer['implicit_act'] = normalizer_from_stat(imp_stat)
         imp_norm.fit(data['implicit_act'])
         normalizer['implicit_act'] = imp_norm
-
-        #act_norm = SingleFieldLinearNormalizer()
-        #act_norm.fit(data=data['energy_coords'], output_min=0.0, output_max=1)
-        #normalizer['energy_coords'] = act_norm
-        normalizer['energy_coords'] = act_normalizer(data['energy_coords'])
 
         return normalizer
 
@@ -147,10 +140,8 @@ def array_to_stat(arr):
 
 def ws_normalizer(arr, nmin=-1., nmax=1.):
     stat = {
-        #'min': np.array([-0.04, -0.04, 0.8, -0.04, -0.04, 0.8, 0]),
-        #'max': np.array([ 0.04,  0.04, 1.1,  0.04,  0.04, 1.1, 1]),
         'min': np.array([-0.1, -0.1, 0.8, -0.1, -0.1, 0.8, -0.1, -0.1, 0.8, 0]),
-        'max': np.array([ 0.1,  0.1, 1.1,  0.1,  0.1, 1.1,  0.1,  0.1, 1.1, 1]),
+        'max': np.array([ 0.1,  0.1, 1.1,  0.1,  0.1, 1.1,  0.1,  0.1, 1.1, 0.04]),
         'mean' : np.mean(arr, axis=0),
         'std' : np.std(arr, axis=0)
     }
@@ -164,8 +155,6 @@ def ws_normalizer(arr, nmin=-1., nmax=1.):
 
 def act_normalizer(arr, nmin=0., nmax=1.):
     stat = {
-        #'min': np.array([0.0, 0.0, -0.16]),
-        #'max': np.array([0.16, 2*np.pi, 0.16]),
         'min': np.array([0.0, 0.0, -0.6]),
         'max': np.array([0.6, 2*np.pi, 0.6]),
         'mean' : np.mean(arr, axis=0),

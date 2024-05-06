@@ -22,9 +22,9 @@ z_dim: 512
 lmax: 3
 min_radius: 0.0
 radial_freq: 1
-angular_freq: 3
+angular_freq: 1
 axial_freq: 2
-N: 16
+N: 8
 action_coords: "cylindrical"
 
 policy:
@@ -70,14 +70,14 @@ energy_head:
   N: ${N}
 
 dataloader:
-  batch_size: 64 
+  batch_size: 128
   num_workers: 1
   shuffle: True
   pin_memory: True
   persistent_workers: False
 
 val_dataloader:
-  batch_size: 64
+  batch_size: 128
   num_workers: 1
   shuffle: False
   pin_memory: True

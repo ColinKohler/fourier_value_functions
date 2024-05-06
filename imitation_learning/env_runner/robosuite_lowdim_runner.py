@@ -19,7 +19,7 @@ from imitation_learning.env_runner.base_runner import BaseRunner
 
 from franka_gym.robosuite_env import FrankaRobosuiteEnv
 from franka_gym.configs.default import FrankaGymConfig
-from franka_gym.configs.franka_gym_configs import FrankaLiftConfig, FrankaReachConfig, FrankaPushConfig
+from franka_gym.configs.franka_gym_configs import FrankaLiftConfig, FrankaReachConfig, FrankaPushConfig, FrankaStackConfig
 
 class RobosuiteLowdimRunner(BaseRunner):
     def __init__(
@@ -44,10 +44,10 @@ class RobosuiteLowdimRunner(BaseRunner):
         num_envs=None,
         observable_objects=None,
     ):
-        #num_train = 0
-        #num_test = 2
-        #num_envs = 2
-        num_envs = num_train + num_test if num_envs is None else num_envs
+        num_train = 0
+        num_test = 2
+        num_envs = 2
+        #num_envs = num_train + num_test if num_envs is None else num_envs
         super().__init__(output_dir)
 
         task_fps = 10
@@ -59,6 +59,8 @@ class RobosuiteLowdimRunner(BaseRunner):
             env_config = FrankaPushConfig()
         elif env == 'ReachEnv':
             env_config = FrankaReachConfig()
+        elif env == 'StackEnv':
+            env_config = FrankaStackConfig()
         else:
             raise ValueError('Invalid env specified.')
 
@@ -226,7 +228,7 @@ class RobosuiteLowdimRunner(BaseRunner):
                 # create obs dict
                 obj_pos = []
                 for obj_name in self.observable_objects:
-                    obj_pos_tmp = obs['cube_pose'].reshape(-1,2,4,4)[:,:,:3,-1].reshape(-1,2,3)
+                    obj_pos_tmp = obs[f"{obj_name}_pose"].reshape(-1,2,4,4)[:,:,:3,-1].reshape(-1,2,3)
                     obj_pos.append(obj_pos_tmp[:, :, [1,0,2]] * [1,-1,1])
                 eef_pos = obs['eef_pose'].reshape(-1,2,4,4)[:,:,:3,-1].reshape(-1,2,3)
                 eef_pos = eef_pos[:, :, [1,0,2]] * [1,-1,1]

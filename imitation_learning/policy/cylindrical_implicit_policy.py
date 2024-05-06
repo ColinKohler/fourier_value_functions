@@ -35,6 +35,7 @@ class CylindricalImplicitPolicy(BasePolicy):
         self.num_neg_act_samples = num_neg_act_samples
         self.pred_n_samples = pred_n_samples
         self.optimize_negatives = optimize_negatives
+        sample_actions=False
         self.sample_actions = sample_actions
         self.temperature = temperature
         self.grad_pen = grad_pen
@@ -66,13 +67,7 @@ class CylindricalImplicitPolicy(BasePolicy):
 
         obs_feat = self.obs_encoder(nobs)
         logits = self.energy_head(obs_feat, gripper).view(B, -1)
-        #logits = self.energy_head(obs_feat).view(B, -1)
         action_probs = torch.softmax(logits/self.temperature, dim=-1).view(B, num_gripper_act, self.energy_head.num_radii, self.energy_head.num_phi, self.energy_head.num_height)
-
-        #if torch.any(obs['keypoints'][:,:,-1] < 0.03):
-        #    action_probs[:,:,:,:,:10]=0
-        #else:
-        #    action_probs[:,:,:,:,10:]=0
 
         if self.sample_actions:
             flat_indexes = torch.multinomial(action_probs.flatten(start_dim=1), num_samples=1, replacement=True).squeeze()
@@ -115,9 +110,6 @@ class CylindricalImplicitPolicy(BasePolicy):
 
         # Sample negatives: (B, train_n_neg, Da)
         implicit_stats, energy_stats = self.get_action_stats()
-        #implicit_dist = torch.distributions.Uniform(
-        #    low=implicit_stats["min"], high=implicit_stats["max"]
-        #)
         energy_dist = torch.distributions.Uniform(
             low=energy_stats["min"], high=energy_stats["max"]
         )
@@ -129,10 +121,6 @@ class CylindricalImplicitPolicy(BasePolicy):
             p = torch.ones(2) / 2
             idxs = p.multinomial(num_samples=B*self.num_neg_act_samples, replacement=True)
             implicit_negatives = a[idxs].view(B,self.num_neg_act_samples, Ta, 1).to(nimplicit_act.device)
-            #implicit_negatives = torch.tensor([-1.]).view(1,1,1).repeat(B,self.num_neg_act_samples, Ta, 1).to(nimplicit_act.device)
-            #implicit_negatives = implicit_dist.sample((B, self.num_neg_act_samples, Ta)).to(
-            #    dtype=nimplicit_act.dtype
-            #)
             energy_negatives = energy_dist.sample((B, self.num_neg_act_samples, Ta)).to(
                 dtype=nenergy_coords.dtype
             )
@@ -156,7 +144,6 @@ class CylindricalImplicitPolicy(BasePolicy):
 
         # Compute ciruclar energy function for the given obs and action magnitudes
         obs_feat = self.obs_encoder(nobs)
-        #energy = self.energy_head(obs_feat, energy_targets)
         energy = self.energy_head(obs_feat, implicit_targets, energy_targets)
 
         # Compute InfoNCE loss, i.e. try to predict the expert action from the randomly sampled actions
