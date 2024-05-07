@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - task: lift_lowdim 
+  - task: lift_image
 
 name: train_cylindrical_implicit_lowdim_policy
 _target_: imitation_learning.workflow.implicit_workflow.ImplicitWorkflow
@@ -41,12 +41,11 @@ policy:
   grad_pen: False
 
 obs_encoder:
-  _target_: imitation_learning.model.implicit.obs_encoder.SO2KeypointEncoder2
+  _target_: imitation_learning.model.implicit.obs_encoder.SO2ObsEncoder
   num_keypoints: ${num_keypoints} 
   num_obs: ${num_obs_steps}
-  in_feat: ${eval:'${obs_dim} // 3'}
+  img_channels: 3
   z_dim: ${z_dim}
-  num_layers: 4
   lmax: ${lmax}
   N: ${N}
   dropout: 0.1
@@ -70,14 +69,14 @@ energy_head:
   N: ${N}
 
 dataloader:
-  batch_size: 128 
+  batch_size: 64
   num_workers: 1
   shuffle: True
   pin_memory: True
   persistent_workers: False
 
 val_dataloader:
-  batch_size: 128
+  batch_size: 64
   num_workers: 1
   shuffle: False
   pin_memory: True

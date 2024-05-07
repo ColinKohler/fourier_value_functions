@@ -85,19 +85,22 @@ class RobosuiteLowdimDataset(torch.utils.data.Dataset):
         cylindrical_action = action_utils.convert_action_coords(data["action"][:,:3], self.action_coords)
         gripper_action = data["action"][:,3]
         data = {
-            'keypoints': data['obs']['keypoints'],
+            'rgb_obs' : data['obs']['rgb']
+            'robot_obs': data['obs']['robot'],
              "energy_coords": cylindrical_action,
              "implicit_act": gripper_action.reshape(-1, 1),
         }
 
         normalizer = LinearNormalizer()
-        obs_stat = array_to_stat(data['keypoints'])
-        normalizer['keypoints'] = ws_normalizer(data['keypoints'], self.num_keypoints)
+        robot_stat = array_to_stat(data['robot_obs'])
+        normalizer['robot_obs'] = ws_normalizer(data['robot_obs'], self.num_keypoints)
         normalizer['energy_coords'] = act_normalizer(data['energy_coords'])
 
         imp_norm = SingleFieldLinearNormalizer()
         imp_norm.fit(data['implicit_act'])
         normalizer['implicit_act'] = imp_norm
+
+        normalizer['rgb'] = normalize_utils.get_image_range_normalizer()
 
         return normalizer
 
@@ -112,7 +115,8 @@ class RobosuiteLowdimDataset(torch.utils.data.Dataset):
         gripper_action = data["action"][:,3]
         data = {
             'obs': {
-                'keypoints': data['obs']['keypoints']# + npr.normal(0, 1e-3, data['obs']['keypoints'].shape),
+                'rgb': data['obs']['rgb'],
+                'robot': data['obs']['robot']
             },
             "energy_coords": cylindrical_action,
             "implicit_act": gripper_action.reshape(-1, 1),
@@ -125,7 +129,8 @@ class RobosuiteLowdimDataset(torch.utils.data.Dataset):
     def _sample_to_data(self, sample):
         data = {
             'obs': {
-                'keypoints' : sample['obs'], # T, D_o
+                'rgb' : sample'[rgb_obs'],
+                'robot' : sample['robot_obs'], # T, D_o
             },
             "action": sample["actions"],  # T, D_a
         }
@@ -185,9 +190,8 @@ def normalizer_from_stat(stat):
 def _data_to_obs(demo_dir: str) -> dict:
     # Read object pose
     obj_poses = []
-    with h5py.File(os.path.join(demo_dir, 'object.hdf5'), 'r') as f:
-        for obj_name, obj_pose in f.items():
-            obj_poses.append(np.array(obj_pose[:]))
+    with h5py.File(os.paht,join(demo_dir, 'color.hdf5'), 'r') as f:
+        rgb = np.arrray(f['agentview'])
 
     # Read end effector pose
     with h5py.File(os.path.join(demo_dir, 'robot.hdf5'), 'r') as f:
@@ -198,21 +202,16 @@ def _data_to_obs(demo_dir: str) -> dict:
     with h5py.File(os.path.join(demo_dir, 'actions.hdf5'), 'r') as f:
         actions = np.array(f['actions'][:])
 
-    obj_pos = []
-    for obj_pose in obj_poses:
-        obj_pos_tmp = obj_pose.reshape(-1,4,4)[:,:3,-1].reshape(-1,3)
-        obj_pos.append(obj_pos_tmp[:, [1,0,2]] * [1,-1,1])
-    obj_pos = np.concatenate(obj_pos, axis=1)
     eef_pos = eef_pose.reshape(-1,4,4)[:,:3,-1].reshape(-1,3)
     eef_pos = eef_pos[:, [1,0,2]] * [1,-1,1]
-    #gripper_q = gripper_q.reshape(-1,2,2)[:,0,0].reshape(-1,1)
     gripper_q = gripper_q[:,0].reshape(-1,1)
-    obs = np.concatenate([obj_pos, eef_pos, gripper_q], axis=-1)
+    robot_obs = np.concatenate([eef_pos, gripper_q], axis=-1)
 
     # Swap x and y axis and flip y axis
     actions = actions[:, [1,0,2,3]] * [1,-1,1,1]
     data = {
-        'obs': obs,
+        'rgb_obs': rgb,
+        'robot_obs': robot_obs,
         'actions': actions
     }
     return data

@@ -35,7 +35,6 @@ class CylindricalImplicitPolicy(BasePolicy):
         self.num_neg_act_samples = num_neg_act_samples
         self.pred_n_samples = pred_n_samples
         self.optimize_negatives = optimize_negatives
-        sample_actions=False
         self.sample_actions = sample_actions
         self.temperature = temperature
         self.grad_pen = grad_pen
@@ -154,7 +153,7 @@ class CylindricalImplicitPolicy(BasePolicy):
 
         return loss, ebm_loss, grad_loss
 
-    def augment_action(self, implicit_act, energy_coords, noise=1e-3):
+    def augment_action(self, implicit_act, energy_coords, noise=1e-4):
         start = self.num_obs_steps - 1
         end = start + self.num_action_steps
         implicit_act = implicit_act[:, start:end]
