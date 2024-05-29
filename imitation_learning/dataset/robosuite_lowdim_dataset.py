@@ -96,7 +96,7 @@ class RobosuiteLowdimDataset(torch.utils.data.Dataset):
         normalizer['energy_coords'] = act_normalizer(data['energy_coords'])
 
         imp_norm = SingleFieldLinearNormalizer()
-        imp_norm.fit(data['implicit_act'])
+        imp_norm.fit(data['implicit_act'], output_min=0, output_max=1)
         normalizer['implicit_act'] = imp_norm
 
         return normalizer
@@ -112,7 +112,7 @@ class RobosuiteLowdimDataset(torch.utils.data.Dataset):
         gripper_action = data["action"][:,3]
         data = {
             'obs': {
-                'keypoints': data['obs']['keypoints']# + npr.normal(0, 1e-3, data['obs']['keypoints'].shape),
+                'keypoints': data['obs']['keypoints']
             },
             "energy_coords": cylindrical_action,
             "implicit_act": gripper_action.reshape(-1, 1),
@@ -142,8 +142,8 @@ def array_to_stat(arr):
 
 def ws_normalizer(arr, num_keypoints, nmin=-1., nmax=1.):
     stat = {
-        'min': np.array([-0.1, -0.1, 0.8] * num_keypoints + [0]),
-        'max': np.array([ 0.1,  0.1, 1.1] * num_keypoints + [0.04]),
+        'min': np.array([-0.15, -0.15, 0.8] * num_keypoints + [0]),
+        'max': np.array([ 0.15,  0.15, 1.2] * num_keypoints + [0.05]),
         #'min': np.array([-0.45, -0.45, 0.8] * num_keypoints + [0]),
         #'max': np.array([ 0.35,  0.35, 1.2] * num_keypoints + [0.04]),
         'mean' : np.mean(arr, axis=0),
@@ -205,7 +205,6 @@ def _data_to_obs(demo_dir: str) -> dict:
     obj_pos = np.concatenate(obj_pos, axis=1)
     eef_pos = eef_pose.reshape(-1,4,4)[:,:3,-1].reshape(-1,3)
     eef_pos = eef_pos[:, [1,0,2]] * [1,-1,1]
-    #gripper_q = gripper_q.reshape(-1,2,2)[:,0,0].reshape(-1,1)
     gripper_q = gripper_q[:,0].reshape(-1,1)
     obs = np.concatenate([obj_pos, eef_pos, gripper_q], axis=-1)
 

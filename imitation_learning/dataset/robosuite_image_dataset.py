@@ -9,11 +9,11 @@ import h5py
 import tqdm
 
 from imitation_learning.dataset.replay_buffer import ReplayBuffer
-from imitation_learning.utils import torch_utils, action_utils
+from imitation_learning.utils import torch_utils, normalize_utils, data_augmentation, action_utils
 from imitation_learning.model.common.normalizer import LinearNormalizer, SingleFieldLinearNormalizer
 from imitation_learning.utils.sampler import SequenceSampler, get_val_mask, downsample_mask
 
-class RobosuiteLowdimDataset(torch.utils.data.Dataset):
+class RobosuiteImageDataset(torch.utils.data.Dataset):
     def __init__(
         self,
         path,
@@ -85,19 +85,19 @@ class RobosuiteLowdimDataset(torch.utils.data.Dataset):
         cylindrical_action = action_utils.convert_action_coords(data["action"][:,:3], self.action_coords)
         gripper_action = data["action"][:,3]
         data = {
-            'rgb_obs' : data['obs']['rgb']
-            'robot_obs': data['obs']['robot'],
+            'rgb' : data['obs']['rgb'],
+            'robot': data['obs']['robot'],
              "energy_coords": cylindrical_action,
              "implicit_act": gripper_action.reshape(-1, 1),
         }
 
         normalizer = LinearNormalizer()
-        robot_stat = array_to_stat(data['robot_obs'])
-        normalizer['robot_obs'] = ws_normalizer(data['robot_obs'], self.num_keypoints)
+        robot_stat = array_to_stat(data['robot'])
+        normalizer['robot'] = ws_normalizer(data['robot'], self.num_keypoints)
         normalizer['energy_coords'] = act_normalizer(data['energy_coords'])
 
         imp_norm = SingleFieldLinearNormalizer()
-        imp_norm.fit(data['implicit_act'])
+        imp_norm.fit(data['implicit_act'], output_min=0, output_max=1)
         normalizer['implicit_act'] = imp_norm
 
         normalizer['rgb'] = normalize_utils.get_image_range_normalizer()
@@ -129,7 +129,7 @@ class RobosuiteLowdimDataset(torch.utils.data.Dataset):
     def _sample_to_data(self, sample):
         data = {
             'obs': {
-                'rgb' : sample'[rgb_obs'],
+                'rgb' : sample['rgb_obs'],
                 'robot' : sample['robot_obs'], # T, D_o
             },
             "action": sample["actions"],  # T, D_a
@@ -190,8 +190,8 @@ def normalizer_from_stat(stat):
 def _data_to_obs(demo_dir: str) -> dict:
     # Read object pose
     obj_poses = []
-    with h5py.File(os.paht,join(demo_dir, 'color.hdf5'), 'r') as f:
-        rgb = np.arrray(f['agentview'])
+    with h5py.File(os.path.join(demo_dir, 'color.hdf5'), 'r') as f:
+        rgb = np.array(f['agentview'])
 
     # Read end effector pose
     with h5py.File(os.path.join(demo_dir, 'robot.hdf5'), 'r') as f:

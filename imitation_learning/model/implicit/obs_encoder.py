@@ -161,7 +161,7 @@ class SO2ObsEncoder(nn.Module):
         rho = self.G.spectral_regular_representation(*self.G.bl_irreps(L=lmax))
         self.lin_in_type = enn.FieldType(
             self.gspace,
-            num_obs * z_dim * [rho] + num_obs * [self.gspace.irrep(1)]
+            num_obs * z_dim * [rho] + num_obs * ([self.gspace.irrep(1), self.gspace.irrep(0)] + [self.gspace.irrep(0)])
         )
         self.lin = SO2MLP(
             self.lin_in_type,

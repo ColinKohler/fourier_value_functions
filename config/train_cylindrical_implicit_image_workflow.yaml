@@ -24,7 +24,7 @@ min_radius: 0.0
 radial_freq: 1
 angular_freq: 1
 axial_freq: 2
-N: 16
+N: 8
 action_coords: "cylindrical"
 
 policy:
@@ -42,7 +42,6 @@ policy:
 
 obs_encoder:
   _target_: imitation_learning.model.implicit.obs_encoder.SO2ObsEncoder
-  num_keypoints: ${num_keypoints} 
   num_obs: ${num_obs_steps}
   img_channels: 3
   z_dim: ${z_dim}

@@ -1,9 +1,9 @@
-name: lift_lowdim 
+name: lift_image
 
 obs_dim: 6 # block pos + gripper pos 
 action_dim: 4 # (x,y,z,gripper)
 keypoint_dim: 3
-num_keypoints: 2
+num_keypoints: 1
 
 env_runner:
   _target_: imitation_learning.env_runner.robosuite_lowdim_runner.RobosuiteLowdimRunner
@@ -23,7 +23,7 @@ env_runner:
   observable_objects: ["cube"]
 
 dataset:
-  _target_: imitation_learning.dataset.robosuite_lowdim_dataset.RobosuiteLowdimDataset
+  _target_: imitation_learning.dataset.robosuite_image_dataset.RobosuiteImageDataset
   path: data/lift_50
   horizon: ${horizon}
   pad_before: ${eval:'${num_obs_steps}-1+${num_latency_steps}'}

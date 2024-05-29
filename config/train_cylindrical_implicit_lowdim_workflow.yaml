@@ -18,12 +18,12 @@ num_action_steps: 1
 num_latency_steps: 0
 past_action_visible: False
 keypoint_visible_rate: 1.0
-z_dim: 1024
+z_dim: 256
 lmax: 3
 min_radius: 0.0
 radial_freq: 1
 angular_freq: 1
-axial_freq: 2
+axial_freq: 4
 N: 8
 action_coords: "cylindrical"
 

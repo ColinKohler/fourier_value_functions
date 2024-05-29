@@ -267,7 +267,7 @@ class RobosuiteLowdimRunner(BaseRunner):
                     for i, env_id in enumerate(range(start, end)):
                         img = env.call_each('render2')[i]
                         img = img.reshape(1,480,640,3).transpose(0,3,1,2)
-                        energy_fn_plots[env_id].append(policy.plot_energy_fn(img, action_dict['action_idxs'][i], action_dict['energy'][i]))
+                        energy_fn_plots[env_id].append(policy.plot_energy_fn(img, action_dict['action_idxs'][i], action_dict['energy'][i], action_dict['gripper'][i]))
 
                 action = np_action_dict['action']
                 action = action[:,:,[1,0,2,3]] * [-1,1,1,1]
