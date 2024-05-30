@@ -142,10 +142,12 @@ def array_to_stat(arr):
 
 def ws_normalizer(arr, num_keypoints, nmin=-1., nmax=1.):
     stat = {
-        'min': np.array([-0.15, -0.15, 0.8] * num_keypoints + [0]),
-        'max': np.array([ 0.15,  0.15, 1.2] * num_keypoints + [0.05]),
+        #'min': np.array([-0.15, -0.15, 0.8] * num_keypoints + [0]),
+        #'max': np.array([ 0.15,  0.15, 1.2] * num_keypoints + [0.05]),
         #'min': np.array([-0.45, -0.45, 0.8] * num_keypoints + [0]),
-        #'max': np.array([ 0.35,  0.35, 1.2] * num_keypoints + [0.04]),
+        #'max': np.array([ 0.45,  0.45, 1.2] * num_keypoints + [0.05]),
+        'min': np.array([-0.45, -0.15, 0.8] * num_keypoints + [0]),
+        'max': np.array([ 0.45,  0.15, 1.2] * num_keypoints + [0.05]),
         'mean' : np.mean(arr, axis=0),
         'std' : np.std(arr, axis=0)
     }

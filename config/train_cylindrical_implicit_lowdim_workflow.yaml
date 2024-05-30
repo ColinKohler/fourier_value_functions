@@ -18,7 +18,7 @@ num_action_steps: 1
 num_latency_steps: 0
 past_action_visible: False
 keypoint_visible_rate: 1.0
-z_dim: 256
+z_dim: 128
 lmax: 3
 min_radius: 0.0
 radial_freq: 1
@@ -46,7 +46,7 @@ obs_encoder:
   num_obs: ${num_obs_steps}
   in_feat: ${eval:'${obs_dim} // 3'}
   z_dim: ${z_dim}
-  num_layers: 2
+  num_layers: 4
   lmax: ${lmax}
   N: ${N}
   dropout: 0.1
@@ -56,7 +56,7 @@ energy_head:
   obs_feat_dim: ${z_dim}
   mlp_dim: ${z_dim}
   lmax: ${lmax}
-  num_layers: 2
+  num_layers: 4
   radial_freq: ${radial_freq}
   angular_freq: ${angular_freq}
   axial_freq: ${axial_freq}
@@ -96,8 +96,8 @@ training:
   resume: True
   lr_warmup_steps: 500
   num_epochs: 1000
-  checkpoint_every: 20
-  rollout_every: 20
+  checkpoint_every: 50
+  rollout_every: 50
   val_every: 1
   tqdm_interval_sec: 1.0
 

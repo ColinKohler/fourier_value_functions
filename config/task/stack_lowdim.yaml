@@ -24,7 +24,7 @@ env_runner:
 
 dataset:
   _target_: imitation_learning.dataset.robosuite_lowdim_dataset.RobosuiteLowdimDataset
-  path: data/stack_50
+  path: data/stack_no_multi_50
   horizon: ${horizon}
   pad_before: ${eval:'${num_obs_steps}-1+${num_latency_steps}'}
   pad_after: ${eval:'${num_action_steps}-1'}

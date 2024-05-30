@@ -126,7 +126,7 @@ class ImplicitWorkflow(BaseWorkflow):
                         )
 
                         # Compute loss
-                        loss, loss_ebm, loss_grad = self.model.compute_loss(batch)
+                        loss, loss_ebm, loss_gripper = self.model.compute_loss(batch)
                         loss.backward()
 
                         # Optimization
@@ -141,7 +141,7 @@ class ImplicitWorkflow(BaseWorkflow):
                         step_log = {
                             "train_loss": loss.item(),
                             "train_loss_ebm": loss_ebm.item(),
-                            "train_loss_grad": loss_grad.item(),
+                            "train_loss_gripper": loss_gripper.item(),
                             "global_step": self.global_step,
                             "epoch": self.epoch,
                             'lr': lr_scheduler.get_last_lr()[0],
@@ -180,13 +180,13 @@ class ImplicitWorkflow(BaseWorkflow):
                                 )
 
                                 # Compute loss
-                                loss, loss_ebm, loss_grad = self.model.compute_loss(batch)
+                                loss, loss_ebm, loss_gripper = self.model.compute_loss(batch)
                                 val_losses.append(loss)
 
                                 if len(val_losses) > 0:
                                     step_log["val_loss"] = loss
                                     step_log["val_loss_ebm"] = loss_ebm
-                                    step_log["val_loss_grad"] = loss_grad
+                                    step_log["val_loss_gripper"] = loss_gripper
 
                 # Checkpoint
                 if (self.epoch % self.config.training.checkpoint_every) == 0:

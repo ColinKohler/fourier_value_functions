@@ -6,7 +6,7 @@ from escnn import nn as enn
 from escnn import group
 
 from imitation_learning.model.modules.layers import MLP
-from imitation_learning.model.modules.equiv_layers import SO2MLP
+from imitation_learning.model.modules.equiv_layers import SO2MLP, SO3xSO2MLP
 from imitation_learning.model.modules.harmonics.circular_harmonics import CircularHarmonics
 from imitation_learning.model.modules.harmonics.disk_harmonics import DiskHarmonics
 from imitation_learning.model.modules.harmonics.cylindrical_harmonics import CylindricalHarmonics
@@ -343,6 +343,125 @@ class CylindricalEnergyMLP(nn.Module):
             num_height,
             boundary='deri'
         )
+
+    def forward(self, obs_feat, energy_coords=None):
+        ''' Compute the energy function for the desired action.
+
+        '''
+        B, Dz = obs_feat.shape
+
+        s = self.in_type(obs_feat)
+        Pnm_geo = self.energy_mlp(s)
+        Pnm = Pnm_geo.tensor
+        if energy_coords is not None:
+            B, N, _, _ = energy_coords.shape
+            Pnm = Pnm.unsqueeze(1).repeat(1,N,1).reshape(B*N, -1)
+            energy = self.cylindrical_harmonics.evaluate(
+                Pnm,
+                energy_coords[:,:,0,0].view(B*N,1,1,1),
+                energy_coords[:,:,0,1].view(B*N,1,1,1),
+                energy_coords[:,:,0,2].view(B*N,1,1,1),
+            ).view(B, N)
+        else:
+            energy = self.cylindrical_harmonics.evaluate(Pnm.reshape(B,-1))
+
+        gripper_pred = torch.sigmoid(self.gripper_mlp(s).tensor)
+        return energy, gripper_pred
+
+class SO3CylindricalEnergyMLP(nn.Module):
+    def __init__(
+        self,
+        obs_feat_dim,
+        mlp_dim,
+        lmax,
+        num_layers,
+        radial_freq,
+        angular_freq,
+        axial_freq,
+        so3_freq,
+        dropout,
+        N=16,
+        min_radius=0.0,
+        max_radius=1.0,
+        max_height=1.0,
+        num_radii=100,
+        num_phi=360,
+        num_height=100,
+        num_so3=100,
+        initialize=True
+    ):
+        super().__init__()
+        self.Lmax = lmax
+        self.num_layers = num_layers
+        self.radial_freq = radial_freq
+        self.angular_freq = angular_freq
+        self.axial_freq = axial_freq
+        self.so3_freq = so3_freq
+        self.min_radius = min_radius
+        self.max_radius = max_radius
+        self.num_radii = num_radii
+        self.num_phi = num_phi
+        self.num_height = num_height
+        self.num_so3 = num_so3
+
+        self.G = group.so2_group()
+        self.gspace = gspaces.no_base_space(self.G)
+        rho = self.G.spectral_regular_representation(*self.G.bl_irreps(L=lmax))
+
+        self.in_type = enn.FieldType(
+            self.gspace,
+            obs_feat_dim * [rho]
+        )
+
+        cylinder_out_type = enn.FieldType(self.gspace, radial_freq * axial_freq * [self.gspace.irrep(l) for l in range(angular_freq+1)])
+        self.cylinder_coeffs_mlp = SO2MLP(
+            self.in_type,
+            channels=[mlp_dim] * num_layers,
+            lmaxs=[lmax] * num_layers,
+            out_type=cylinder_out_type,
+            N=N,
+            dropout=dropout,
+            act_out=False,
+            initialize=initialize
+        )
+
+        so3_out_type = None
+        self.so3_coeffs_mlp = SO3xSO2MLP(
+            self.in_type,
+            channels=[mlp_dim] * num_layers,
+            lmaxs=[lmax] * num_layers,
+            out_type=so3_out_type,
+            N=N,
+            dropout=dropout,
+            act_out=False,
+            initialize=initialize
+        )
+
+        gripper_out = enn.FieldType(self.gspace, [self.gspace.trivial_repr])
+        self.gripper_mlp = SO2MLP(
+            self.in_type,
+            channels=[mlp_dim] * num_layers,
+            lmaxs=[lmax] * num_layers,
+            out_type=gripper_out,
+            N=N,
+            dropout=dropout,
+            act_out=False,
+            initialize=initialize
+        )
+
+        self.cylindrical_harmonics = CylindricalHarmonics(
+            radial_freq,
+            angular_freq,
+            axial_freq,
+            min_radius,
+            max_radius,
+            max_height,
+            num_radii,
+            num_phi,
+            num_height,
+            boundary='deri'
+        )
+        self.so3_harmonics = SO3Harmonics(so3_freq, num_so3)
 
     def forward(self, obs_feat, energy_coords=None):
         ''' Compute the energy function for the desired action.
