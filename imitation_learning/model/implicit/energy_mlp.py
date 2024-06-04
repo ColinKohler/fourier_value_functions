@@ -6,10 +6,11 @@ from escnn import nn as enn
 from escnn import group
 
 from imitation_learning.model.modules.layers import MLP
-from imitation_learning.model.modules.equiv_layers import SO2MLP, SO3xSO2MLP
+from imitation_learning.model.modules.equiv_layers import SO2MLP
 from imitation_learning.model.modules.harmonics.circular_harmonics import CircularHarmonics
 from imitation_learning.model.modules.harmonics.disk_harmonics import DiskHarmonics
 from imitation_learning.model.modules.harmonics.cylindrical_harmonics import CylindricalHarmonics
+from imitation_learning.model.modules.harmonics.so3_harmonics import SO3Harmonics
 
 class EnergyMLP(nn.Module):
     def __init__(self, obs_feat, mlp_dim, dropout, spec_norm, initialize):
@@ -404,9 +405,11 @@ class SO3CylindricalEnergyMLP(nn.Module):
         self.num_height = num_height
         self.num_so3 = num_so3
 
-        self.G = group.so2_group()
-        self.gspace = gspaces.no_base_space(self.G)
-        rho = self.G.spectral_regular_representation(*self.G.bl_irreps(L=lmax))
+        self.so2_group = group.so2_group()
+        self.so3_group = group.so3_group()
+        self.so2_id = (False, -1)
+        self.gspace = gspaces.no_base_space(self.so2_group)
+        rho = self.so2_group.spectral_regular_representation(*self.so2_group.bl_irreps(L=lmax))
 
         self.in_type = enn.FieldType(
             self.gspace,
@@ -425,8 +428,8 @@ class SO3CylindricalEnergyMLP(nn.Module):
             initialize=initialize
         )
 
-        so3_out_type = None
-        self.so3_coeffs_mlp = SO3xSO2MLP(
+        so3_out_type = enn.FieldType(self.gspace, [self.so3_group.bl_regular_representation(L=so3_freq).restrict(self.so2_id)])
+        self.so3_coeffs_mlp = SO2MLP(
             self.in_type,
             channels=[mlp_dim] * num_layers,
             lmaxs=[lmax] * num_layers,
@@ -470,19 +473,30 @@ class SO3CylindricalEnergyMLP(nn.Module):
         B, Dz = obs_feat.shape
 
         s = self.in_type(obs_feat)
-        Pnm_geo = self.energy_mlp(s)
+
+        Pnm_geo = self.cylinder_ceoffs_mlp_mlp(s)
+        f_geo = self.so2_coeffs_mlp(s)
         Pnm = Pnm_geo.tensor
+        f = f_geo.tensor
         if energy_coords is not None:
             B, N, _, _ = energy_coords.shape
             Pnm = Pnm.unsqueeze(1).repeat(1,N,1).reshape(B*N, -1)
-            energy = self.cylindrical_harmonics.evaluate(
+            f = f.unsqueeze(1).repeat(1,N,1).reshape(B*N, -1)
+            pos_energy = self.cylindrical_harmonics.evaluate(
                 Pnm,
                 energy_coords[:,:,0,0].view(B*N,1,1,1),
                 energy_coords[:,:,0,1].view(B*N,1,1,1),
                 energy_coords[:,:,0,2].view(B*N,1,1,1),
             ).view(B, N)
+            rot_energy = self.so3_harmonics.evaluate(
+                f,
+                energy_coords[:,:,0,3].view(B*N,1,1,1),
+                energy_coords[:,:,0,4].view(B*N,1,1,1),
+                energy_coords[:,:,0,5].view(B*N,1,1,1)
+            ).view(B,N)
         else:
-            energy = self.cylindrical_harmonics.evaluate(Pnm.reshape(B,-1))
+            pos_energy = self.cylindrical_harmonics.evaluate(Pnm.reshape(B,-1))
+            rot_energy = self.so3_harmonics.evaluate(f.reshape(B,-1))
 
         gripper_pred = torch.sigmoid(self.gripper_mlp(s).tensor)
-        return energy, gripper_pred
+        return pos_energy, rot_energy, gripper_pred

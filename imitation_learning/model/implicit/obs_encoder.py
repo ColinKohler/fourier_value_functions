@@ -6,6 +6,7 @@ from escnn import nn as enn
 from escnn import group
 from escnn.gspaces.r2 import GSpace2D
 
+from imitation_learning.model.common.rotation_transformer import RotationTransformer
 from imitation_learning.model.implicit.vision_encoder import ImageEncoder, CyclicImageEncoder
 from imitation_learning.model.modules.fourier import Fourier
 from imitation_learning.model.modules.equiv_layers import SO2MLP
@@ -40,6 +41,67 @@ class ObsEncoder(nn.Module):
         obs_feat = self.lin(img_feat_state)
 
         return obs_feat
+
+class SO3KeypointEncoder(nn.Module):
+    def __init__(
+        self,
+        num_keypoints: int,
+        num_obs: int,
+        in_feat: int,
+        z_dim: int,
+        num_layers: int,
+        lmax: int=3,
+        N: int=16,
+        dropout: float=0.0,
+        initialize: bool=True,
+    ):
+        super().__init__()
+
+        self.so2_group = group.so2_group(lmax)
+        self.so3_group = group.so3_group(lmax)
+        self.so2_id = (False, -1)
+        self.gspace = gspaces.no_base_space(self.so2_group)
+        self.num_layers = num_layers
+        self.z_dim = z_dim
+
+        keypoint_type = [self.so3_group.standard_representation().restrict(self.so2_id)] + 3 * [self.gspace.irrep(1)]
+        gripper_type = [self.gspace.irrep(0)]
+        obs_type = num_keypoints * keypoint_type + gripper_type
+        self.in_type = enn.FieldType(self.gspace, num_obs * obs_type)
+        self.keypoint_enc = SO2MLP(
+            self.in_type,
+            channels=[z_dim] * num_layers,
+            lmaxs=[lmax] * num_layers,
+            N=N,
+            dropout=dropout,
+            act_out=True,
+            initialize=initialize
+        )
+        self.out_type = self.keypoint_enc.out_type
+
+        self.quat_to_6d = RotationTransformer("quaternion", "rotation_6d")
+
+    def forward(self, obs) -> torch.Tensor:
+        B, T, Do = obs['keypoint_pos'].shape
+        keypoint_pos = obs['keypoint_pos']
+        keypoint_rot = self.quat_to_6d.forward(obs['keypoint_quat'][:, [3, 0, 1, 2]])
+        keypoints = [
+            keypoint_pos,
+            keypoint_rot[:,0],
+            keypoint_rot[:,3],
+            keypoint_rot[:,1],
+            keypoint_rot[:,4],
+            keypoint_rot[:,2],
+            keypoint_rot[:,5],
+            obs['gripper_state']
+        ]
+        keypoints = torch.cat(keypoints, dim=1)
+
+        x = self.in_type(keypoints.reshape(B, -1))
+        obs_feat = self.keypoint_enc(x)
+
+        return obs_feat.tensor
+
 
 class SO2KeypointEncoder2(nn.Module):
     def __init__(

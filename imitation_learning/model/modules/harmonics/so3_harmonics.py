@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 from escnn import group
 from escnn.group.groups.so3_utils import _wigner_d_matrix, _change_param
 
@@ -6,17 +7,20 @@ from imitation_learning.model.modules.harmonics.harmonics import HarmonicFunctio
 
 class SO3Harmonics(HarmonicFunction):
     def __init__(
+        self,
         frequency: int,
         num_grid_points: int=100
     ):
+        super().__init__()
+
         self.frequency = frequency
 
         self.so3_group = group.SO3(self.frequency)
         self.grid = self.so3_group.grid('thomson', N=num_grid_points)
 
         self.D = []
-        for l in range(self.frequency):
-            self.D.append(torch.stack([torch.from_numpy(_wigner_d_matrix(np.array(e.value), l, param=e.param)).float()]))
+        #for l in range(self.frequency):
+        #    self.D.append(torch.stack([torch.from_numpy(_wigner_d_matrix(np.array(e.value), l, param=e.param)).float()]))
 
     def evaluate(
         self,

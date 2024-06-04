@@ -51,52 +51,6 @@ class SO2MLP(nn.Module):
     def forward(self, x: enn.GeometricTensor) -> enn.GeometricTensor:
         return self.so2_mlp(x)
 
-class SO3xSO2MLP(nn.Module):
-    def __init__(
-        self,
-        in_type: enn.FieldType,
-        channels: list[int],
-        lmaxs: list[int],
-        out_type: enn.FieldType=None,
-        N: int=8,
-        dropout: float=0.0,
-        act_out: bool=True,
-        initialize: bool=True
-    ):
-        super().__init__()
-
-        self.so2_group = group.so2_group()
-        self.so3_group = group.so3_group()
-        self.gspace = gspaces.no_base_space(self.G)
-        self.in_type = in_type
-
-        blocks = list()
-        in_type = self.in_type
-        for i, (c, l) in enumerate(zip(channels, lmaxs)):
-            act = enn.FourierPointwise(
-                self.gspace,
-                channels=c,
-                irreps=self.G.bl_irreps(L=l),
-                inplace=True,
-                type="regular",
-                N=N,
-            )
-            is_last_layer = i == len(channels) - 1
-            if not is_last_layer or act_out:
-                blocks.append(enn.Linear(in_type, act.in_type, initialize=initialize))
-                blocks.append(enn.FieldDropout(act.in_type, dropout))
-                blocks.append(act)
-            else:
-                blocks.append(enn.Linear(in_type, out_type, initialize=initialize))
-            in_type = act.out_type
-
-        self.so2_mlp = enn.SequentialModule(*blocks)
-        self.out_type = self.so2_mlp.out_type
-
-    def forward(self, x: enn.GeometricTensor) -> enn.GeometricTensor:
-        return self.so2_mlp(x)
-
-
 class CyclicMLP(nn.Module):
     def __init__(
         self,

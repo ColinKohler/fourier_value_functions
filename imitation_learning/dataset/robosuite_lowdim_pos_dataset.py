@@ -201,39 +201,17 @@ def _data_to_obs(demo_dir: str) -> dict:
         actions = np.array(f['actions'][:])
 
     obj_pos = []
-    obj_rot = []
     for obj_pose in obj_poses:
-        obj_pose_matrix = obj_pose.reshape(-1, 4, 4)
-        obj_pos_tmp = obj_pose_matrix[:,:3,-1].reshape(-1,3)
+        obj_pos_tmp = obj_pose.reshape(-1,4,4)[:,:3,-1].reshape(-1,3)
         obj_pos.append(obj_pos_tmp[:, [1,0,2]] * [1,-1,1])
-        obj_rot.append(obj_pose_matrix[:,:2,:3].reshape(-1,6))
     obj_pos = np.concatenate(obj_pos, axis=1)
-    obj_rot = np.concatenate(obj_rot, axis=1)
-    eef_pose_matrix = eef_pose.reshape(-1,4,4)
-    eef_pos = eef_pose_matrix[:,:3,-1].reshape(-1,3)
+    eef_pos = eef_pose.reshape(-1,4,4)[:,:3,-1].reshape(-1,3)
     eef_pos = eef_pos[:, [1,0,2]] * [1,-1,1]
-    eef_rot = eef_pose_matrix[:,:2,:3].reshape(-1, 6)
     gripper_q = gripper_q[:,0].reshape(-1,1)
-    obs = np.concatenate([
-        obj_pos,
-        obj_rot[:,0].reshape(-1,1),
-        obj_rot[:,3].reshape(-1,1),
-        obj_rot[:,1].reshape(-1,1),
-        obj_rot[:,4].reshape(-1,1),
-        obj_rot[:,2].reshape(-1,1),
-        obj_rot[:,5].reshape(-1,1),
-        eef_pos,
-        eef_rot[:,0].reshape(-1,1),
-        eef_rot[:,3].reshape(-1,1),
-        eef_rot[:,1].reshape(-1,1),
-        eef_rot[:,4].reshape(-1,1),
-        eef_rot[:,2].reshape(-1,1),
-        eef_rot[:,5].reshape(-1,1),
-        gripper_q
-    ], axis=-1)
+    obs = np.concatenate([obj_pos, eef_pos, gripper_q], axis=-1)
 
     # Swap x and y axis and flip y axis
-    actions = actions[:, [1,0,2,3,4,5,6]] * [1,-1,1,1,1,1,1]
+    actions = actions[:, [1,0,2,3]] * [1,-1,1,1]
     data = {
         'obs': obs,
         'actions': actions
