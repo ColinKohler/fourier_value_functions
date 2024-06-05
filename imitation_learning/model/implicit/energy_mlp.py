@@ -474,8 +474,8 @@ class SO3CylindricalEnergyMLP(nn.Module):
 
         s = self.in_type(obs_feat)
 
-        Pnm_geo = self.cylinder_ceoffs_mlp_mlp(s)
-        f_geo = self.so2_coeffs_mlp(s)
+        Pnm_geo = self.cylinder_coeffs_mlp(s)
+        f_geo = self.so3_coeffs_mlp(s)
         Pnm = Pnm_geo.tensor
         f = f_geo.tensor
         if energy_coords is not None:
@@ -490,9 +490,7 @@ class SO3CylindricalEnergyMLP(nn.Module):
             ).view(B, N)
             rot_energy = self.so3_harmonics.evaluate(
                 f,
-                energy_coords[:,:,0,3].view(B*N,1,1,1),
-                energy_coords[:,:,0,4].view(B*N,1,1,1),
-                energy_coords[:,:,0,5].view(B*N,1,1,1)
+                energy_coords[:,:,0,3:].view(B*N,3),
             ).view(B,N)
         else:
             pos_energy = self.cylindrical_harmonics.evaluate(Pnm.reshape(B,-1))

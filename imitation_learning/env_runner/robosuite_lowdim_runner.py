@@ -235,13 +235,38 @@ class RobosuiteLowdimRunner(BaseRunner):
             while not done:
                 # create obs dict
                 obj_pos = []
+                obj_rot = []
                 for obj_name in self.observable_objects:
-                    obj_pos_tmp = obs[f"{obj_name}_pose"].reshape(-1,2,4,4)[:,:,:3,-1].reshape(-1,2,3)
+                    obj_pose = obs[f"{obj_name}_pose"].reshape(-1,2,4,4)
+                    obj_pos_tmp = obj_pose[:,:,:3,-1].reshape(-1,2,3)
                     obj_pos.append(obj_pos_tmp[:, :, [1,0,2]] * [1,-1,1])
-                eef_pos = obs['eef_pose'].reshape(-1,2,4,4)[:,:,:3,-1].reshape(-1,2,3)
+                    obj_rot.append(obj_pose[:,:,:2,:3].reshape(-1,2,6))
+                obj_pos = np.concatenate(obj_pos, axis=1)
+                obj_rot = np.concatenate(obj_rot, axis=1)
+
+                eef_pose = obs['eef_pose'].reshape(-1,2,4,4)
+                eef_pos = eef_pose[:,:,:3,-1].reshape(-1,2,3)
                 eef_pos = eef_pos[:, :, [1,0,2]] * [1,-1,1]
+                eef_rot = eef_pose[:,:,:2,:3].reshape(-1,2,6)
                 gripper_q = obs['gripper_q'][:,:,0].reshape(-1,2,1)
-                np_obs = np.concatenate(obj_pos + [eef_pos, gripper_q], axis=-1)
+
+                np_obs = np.concatenate([
+                    obj_pos,
+                    obj_rot[:,:,0].reshape(-1,2,1),
+                    obj_rot[:,:,3].reshape(-1,2,1),
+                    obj_rot[:,:,1].reshape(-1,2,1),
+                    obj_rot[:,:,4].reshape(-1,2,1),
+                    obj_rot[:,:,2].reshape(-1,2,1),
+                    obj_rot[:,:,5].reshape(-1,2,1),
+                    eef_pos,
+                    eef_rot[:,:,0].reshape(-1,2,1),
+                    eef_rot[:,:,3].reshape(-1,2,1),
+                    eef_rot[:,:,1].reshape(-1,2,1),
+                    eef_rot[:,:,4].reshape(-1,2,1),
+                    eef_rot[:,:,2].reshape(-1,2,1),
+                    eef_rot[:,:,5].reshape(-1,2,1),
+                    gripper_q
+                ], axis=-1)
 
                 np_obs_dict = {
                     'keypoints': np_obs.astype(np.float32)
@@ -270,7 +295,7 @@ class RobosuiteLowdimRunner(BaseRunner):
                         energy_fn_plots[env_id].append(policy.plot_energy_fn(img, action_dict['action_idxs'][i], action_dict['energy'][i], action_dict['gripper'][i]))
 
                 action = np_action_dict['action']
-                action = action[:,:,[1,0,2,3]] * [-1,1,1,1]
+                action = action[:,:,[1,0,2,3,4,5,6]] * [-1,1,1,1,1,1,1]
 
                 # step env
                 obs, reward, done, timeout, info = env.step(action)

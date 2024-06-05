@@ -6,7 +6,6 @@ from escnn import nn as enn
 from escnn import group
 from escnn.gspaces.r2 import GSpace2D
 
-from imitation_learning.model.common.rotation_transformer import RotationTransformer
 from imitation_learning.model.implicit.vision_encoder import ImageEncoder, CyclicImageEncoder
 from imitation_learning.model.modules.fourier import Fourier
 from imitation_learning.model.modules.equiv_layers import SO2MLP
@@ -79,23 +78,9 @@ class SO3KeypointEncoder(nn.Module):
         )
         self.out_type = self.keypoint_enc.out_type
 
-        self.quat_to_6d = RotationTransformer("quaternion", "rotation_6d")
-
     def forward(self, obs) -> torch.Tensor:
-        B, T, Do = obs['keypoint_pos'].shape
-        keypoint_pos = obs['keypoint_pos']
-        keypoint_rot = self.quat_to_6d.forward(obs['keypoint_quat'][:, [3, 0, 1, 2]])
-        keypoints = [
-            keypoint_pos,
-            keypoint_rot[:,0],
-            keypoint_rot[:,3],
-            keypoint_rot[:,1],
-            keypoint_rot[:,4],
-            keypoint_rot[:,2],
-            keypoint_rot[:,5],
-            obs['gripper_state']
-        ]
-        keypoints = torch.cat(keypoints, dim=1)
+        B, T, Do = obs['keypoints'].shape
+        keypoints = obs['keypoints']
 
         x = self.in_type(keypoints.reshape(B, -1))
         obs_feat = self.keypoint_enc(x)

@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 from escnn import group
-from escnn.group.groups.so3_utils import _wigner_d_matrix, _change_param
+from escnn.group.groups.so3_utils import _wigner_d_matrix, _change_param, _grid
 
 from imitation_learning.model.modules.harmonics.harmonics import HarmonicFunction
 
@@ -14,13 +14,17 @@ class SO3Harmonics(HarmonicFunction):
         super().__init__()
 
         self.frequency = frequency
+        self.num_grid_points = num_grid_points
 
         self.so3_group = group.SO3(self.frequency)
-        self.grid = self.so3_group.grid('thomson', N=num_grid_points)
+        self.grid = _grid('thomson', N=num_grid_points, parametrization='ZYZ')
 
         self.D = []
-        #for l in range(self.frequency):
-        #    self.D.append(torch.stack([torch.from_numpy(_wigner_d_matrix(np.array(e.value), l, param=e.param)).float()]))
+        for l in range(self.frequency+1):
+            d_l = []
+            for e in self.grid:
+                d_l.append(torch.from_numpy(_wigner_d_matrix(e, l, param='ZYZ')).float())
+            self.D.append(torch.stack(d_l))
 
     def evaluate(
         self,
@@ -29,16 +33,27 @@ class SO3Harmonics(HarmonicFunction):
     ) -> torch.Tensor:
         B = f.size(0)
         if R is not None:
-            F = torch.zeros((B,) + R.shape[1])
-            for l in range(self.frequnecy):
-                f_l = f[:,l].view(2*l+1, 2*l+1)
-                d_l = torch.from_numpy(_wigner_d_matrix(R, l, param='ZYZ')).float()
-                F += torch.sum((2*l + 1) / (8*torch.pi) * torch.matmul(f_l, d_l), axis=1)
+            F = torch.zeros((B)).to(f.device)
+            li = 0
+            for l in range(self.frequency+1):
+                ld = 2*l+1
+                f_l = f[:,li:li+ld**2].view(B, ld, ld)
+                d_l = []
+                for e in R.cpu().numpy():
+                    d_l.append(torch.from_numpy(_wigner_d_matrix(e, l, param='ZYZ')).float())
+                d_l = torch.stack(d_l).to(f_l.device)
+                F += (2*l + 1) / (8*torch.pi) * torch.vmap(torch.trace)(f_l * d_l)
+                li += ld**2
         else:
-            F = torch.zeros((B,) +  self.r2d.shape).to(Pnm.device)
-            for l in range(f.size(1)):
+            F = torch.zeros((B*self.num_grid_points)).to(f.device)
+            li = 0
+            for l in range(self.frequency+1):
+                ld = 2*l+1
                 d_l = self.D[l].unsqueeze(0).repeat(B,1,1,1).to(f.device)
-                f_l = f[:,l].view(2*l+1, 2*l+1)
-                F += torch.sum((2*l + 1) / (8*torch.pi) * torch.matmul(f_l, d_l), axis=1)
+                f_l = f[:,li:li+ld**2].view(B, 1, ld, ld)
+                f_l = f_l.repeat(1,self.num_grid_points, 1, 1)
+                F += (2*l + 1) / (8*torch.pi) * torch.vmap(torch.trace)(f_l.view(B*self.num_grid_points,ld,ld) * d_l.view(B*self.num_grid_points,ld,ld))
+                li += ld**2
+            F = F.view(B, self.num_grid_points)
 
         return F

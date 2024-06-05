@@ -83,21 +83,23 @@ class RobosuiteLowdimDataset(torch.utils.data.Dataset):
         if data is None:
             data = self._sample_to_data(self.replay_buffer)
         cylindrical_action = action_utils.convert_action_coords(data["action"][:,:3], self.action_coords)
-        gripper_action = data["action"][:,3]
+        so3_action = data["action"][:,3:-1]
+        pose_action = np.concatenate((cylindrical_action, so3_action), axis=-1)
+        gripper_action = data["action"][:,-1]
         data = {
             'keypoints': data['obs']['keypoints'],
-             "energy_coords": cylindrical_action,
-             "implicit_act": gripper_action.reshape(-1, 1),
+             "pose_act": pose_action,
+             "gripper_act": gripper_action.reshape(-1, 1),
         }
 
         normalizer = LinearNormalizer()
         obs_stat = array_to_stat(data['keypoints'])
         normalizer['keypoints'] = ws_normalizer(data['keypoints'], self.num_keypoints)
-        normalizer['energy_coords'] = act_normalizer(data['energy_coords'])
+        normalizer['pose_act'] = act_normalizer(data['pose_act'])
 
         imp_norm = SingleFieldLinearNormalizer()
-        imp_norm.fit(data['implicit_act'], output_min=0, output_max=1)
-        normalizer['implicit_act'] = imp_norm
+        imp_norm.fit(data['gripper_act'], output_min=0, output_max=1)
+        normalizer['gripper_act'] = imp_norm
 
         return normalizer
 
@@ -109,13 +111,15 @@ class RobosuiteLowdimDataset(torch.utils.data.Dataset):
         data = self._sample_to_data(sample)
 
         cylindrical_action = action_utils.convert_action_coords(data["action"][:,:3], self.action_coords)
+        so3_action = data["action"][:,3:-1]
+        pose_action = np.concatenate((cylindrical_action, so3_action), axis=-1)
         gripper_action = data["action"][:,3]
         data = {
             'obs': {
                 'keypoints': data['obs']['keypoints']
             },
-            "energy_coords": cylindrical_action,
-            "implicit_act": gripper_action.reshape(-1, 1),
+            "pose_act": pose_action,
+            "gripper_act": gripper_action.reshape(-1, 1),
         }
 
         torch_data = torch_utils.dict_apply(data, torch.from_numpy)
@@ -142,12 +146,8 @@ def array_to_stat(arr):
 
 def ws_normalizer(arr, num_keypoints, nmin=-1., nmax=1.):
     stat = {
-        #'min': np.array([-0.15, -0.15, 0.8] * num_keypoints + [0]),
-        #'max': np.array([ 0.15,  0.15, 1.2] * num_keypoints + [0.05]),
-        #'min': np.array([-0.45, -0.45, 0.8] * num_keypoints + [0]),
-        #'max': np.array([ 0.45,  0.45, 1.2] * num_keypoints + [0.05]),
-        'min': np.array([-0.45, -0.15, 0.8] * num_keypoints + [0]),
-        'max': np.array([ 0.45,  0.15, 1.2] * num_keypoints + [0.05]),
+        'min': np.array([-0.15, -0.15, 0.8, 0., 0., 0., 0., 0.0, 0.] * num_keypoints + [0]),
+        'max': np.array([ 0.15,  0.15, 1.2, 2*np.pi, 2*np.pi, 2*np.pi, 2*np.pi, 2*np.pi, 2*np.pi] * num_keypoints + [0.05]),
         'mean' : np.mean(arr, axis=0),
         'std' : np.std(arr, axis=0)
     }
@@ -161,8 +161,8 @@ def ws_normalizer(arr, num_keypoints, nmin=-1., nmax=1.):
 
 def act_normalizer(arr, nmin=0., nmax=1.):
     stat = {
-        'min': np.array([0.0, 0.0, -0.6]),
-        'max': np.array([0.6, 2*np.pi, 0.6]),
+        'min': np.array([0.0, 0.0, -0.6, 0., 0., 0. ]),
+        'max': np.array([0.6, 2*np.pi, 0.6, 2*np.pi, 2*np.pi, 2*np.pi]),
         'mean' : np.mean(arr, axis=0),
         'std' : np.std(arr, axis=0)
     }

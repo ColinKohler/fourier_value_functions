@@ -8,6 +8,7 @@ from torch.distributions import Normal
 import matplotlib.pyplot as plt
 from skimage.transform import resize
 from escnn.group.groups.so3_utils import _grid
+from pytorch3d.transforms import axis_angle_to_matrix, matrix_to_euler_angles, euler_angles_to_matrix, matrix_to_axis_angle
 
 from imitation_learning.model.common.normalizer import LinearNormalizer
 from imitation_learning.utils import torch_utils
@@ -54,14 +55,15 @@ class SO3CylindricalImplicitPolicy(BasePolicy):
         Ta = self.num_action_steps
 
         # Optimize actions
-        implicit_stats, energy_stats = self.get_action_stats()
-        redges, r = grid.grid1D(energy_stats['max'][0].item(), self.energy_head.num_radii, origin=energy_stats['min'][0].item())
+        gripper_stats, pose_stats = self.get_action_stats()
+        redges, r = grid.grid1D(pose_stats['max'][0].item(), self.energy_head.num_radii, origin=pose_stats['min'][0].item())
         r = r.view(1,-1).repeat(B,1).to(device)
         pedges, phi = grid.grid1D(2.0 * torch.pi, self.energy_head.num_phi)
         phi = phi.view(1,-1).repeat(B,1).to(device)
-        zedges, z = grid.grid1D(energy_stats['max'][2].item(), self.energy_head.num_height, origin=energy_stats['min'][2].item())
+        zedges, z = grid.grid1D(pose_stats['max'][2].item(), self.energy_head.num_height, origin=pose_stats['min'][2].item())
         z = z.view(1,-1).repeat(B,1).to(device)
-        so3_grid = _grid('thomson', N=self.energy_head.num_so3)
+        so3_grid = torch.from_numpy(_grid('thomson', N=self.energy_head.num_so3, parametrization='ZYZ'))
+        so3_grid = so3_grid.view(1,self.energy_head.num_so3,3).repeat(B,1,1).to(device)
 
         obs_feat = self.obs_encoder(nobs)
         pos_logits, rot_logits, gripper = self.energy_head(obs_feat)
@@ -72,7 +74,7 @@ class SO3CylindricalImplicitPolicy(BasePolicy):
 
         if self.sample_actions:
             pos_flat_indexes = torch.multinomial(pos_probs.flatten(start_dim=1), num_samples=1, replacement=True).squeeze()
-            rot_flat_indexes = torch.mulitnomial(rot_probs.flatten(start_dim=1), num_samples=1, replacement=True).squeeze()
+            rot_flat_indexes = torch.multinomial(rot_probs.flatten(start_dim=1), num_samples=1, replacement=True).squeeze()
         else:
             pos_flat_indexes = torch.argmax(pos_probs.flatten(start_dim=1), dim=-1)
             rot_flat_indexes = torch.argmax(rot_probs.flatten(start_dim=1), dim=-1)
@@ -86,37 +88,40 @@ class SO3CylindricalImplicitPolicy(BasePolicy):
         ]).permute(1,0).view(B,1,3)
 
         rot_idxs = np.unravel_index(rot_flat_indexes.cpu(), rot_probs.shape[1:])
-        nrot_actions = so3_grid[torch.arange(B), rot_idxs]
+        nrot_actions = so3_grid[torch.arange(B), rot_idxs[0]].view(B,1,3)
 
-        r = self.normalizer["energy_coords"].unnormalize(nactions)[:,:,0]
+        nactions = torch.concat([npos_actions, nrot_actions], dim=2)
+
+        r = self.normalizer["pose_act"].unnormalize(nactions)[:,:,0]
         phi = nactions[:,:,1]
         x = r * torch.cos(phi)
         y = r * torch.sin(phi)
-        z = self.normalizer["energy_coords"].unnormalize(nactions)[:,:,2]
-        gripper_act = self.normalizer["implicit_act"].unnormalize(torch.bernoulli(gripper))
-        actions = torch.concat([x.view(B,1), y.view(B,1), z.view(B,1), gripper_act.view(B,1)], dim=1).unsqueeze(1)
+        z = self.normalizer["pose_act"].unnormalize(nactions)[:,:,2]
+        r_axis_angle = matrix_to_axis_angle(euler_angles_to_matrix(nrot_actions, 'ZYZ'))
+        gripper_act = self.normalizer["gripper_act"].unnormalize(torch.bernoulli(gripper))
+        actions = torch.concat([x.view(B,1), y.view(B,1), z.view(B,1), r_axis_angle.view(B,3), gripper_act.view(B,1)], dim=1).unsqueeze(1)
 
-        return {'action' : actions, 'action_idxs' : np.stack(idxs).transpose(1,0), 'energy' : action_probs, 'gripper': gripper}
+        return {'action' : actions, 'action_idxs' : np.stack(pos_idxs).transpose(1,0), 'energy' : pos_probs, 'gripper': gripper}
 
     def compute_loss(self, batch):
         # Load batch
         nobs = self.normalizer.normalize(batch['obs'])
         nobs['keypoints'] = nobs['keypoints'].float()
-        nenergy_coords = self.normalizer['energy_coords'].normalize(batch["energy_coords"]).float()
-        nimplicit_act = self.normalizer['implicit_act'].normalize(batch["implicit_act"]).float()
+        npose_act = self.normalizer['pose_act'].normalize(batch["pose_act"]).float()
+        ngripper_act = self.normalizer['gripper_act'].normalize(batch["gripper_act"]).float()
 
         Do = self.obs_dim
         Da = self.action_dim
         To = self.num_obs_steps
         Ta = self.num_action_steps
-        B = nimplicit_act.shape[0]
+        B = ngripper_act.shape[0]
 
-        nimplicit_act, nenergy_coords = self.augment_action(nimplicit_act, nenergy_coords, noise=1e-3)
+        ngripper_act, npose_act = self.augment_action(ngripper_act, npose_act, noise=1e-3)
 
         # Sample negatives: (B, train_n_neg, Da)
-        implicit_stats, energy_stats = self.get_action_stats()
-        energy_dist = torch.distributions.Uniform(
-            low=energy_stats["min"], high=energy_stats["max"]
+        gripper_stats, pose_stats = self.get_action_stats()
+        pose_dist = torch.distributions.Uniform(
+            low=pose_stats["min"], high=pose_stats["max"]
         )
 
         if self.optimize_negatives:
@@ -125,70 +130,66 @@ class SO3CylindricalImplicitPolicy(BasePolicy):
             a = torch.tensor([-1, 1])
             p = torch.ones(2) / 2
             idxs = p.multinomial(num_samples=B*self.num_neg_act_samples, replacement=True)
-            #implicit_negatives = a[idxs].view(B,self.num_neg_act_samples, Ta, 1).to(nimplicit_act.device)
-            energy_negatives = energy_dist.sample((B, self.num_neg_act_samples, Ta)).to(
-                dtype=nenergy_coords.dtype
+            pose_negatives = pose_dist.sample((B, self.num_neg_act_samples, Ta)).to(
+                dtype=npose_act.dtype
             )
 
         # Combine pos and neg samples: (B, train_n_neg+1, Ta, Da)
-        #implicit_targets = torch.cat([nimplicit_act.unsqueeze(1), implicit_negatives], dim=1)
-        energy_targets = torch.cat([nenergy_coords.unsqueeze(1), energy_negatives], dim=1)
-        N = energy_targets.size(1)
+        pose_targets = torch.cat([npose_act.unsqueeze(1), pose_negatives], dim=1)
+        N = pose_targets.size(1)
 
         # Randomly permute the positive and negative samples
         permutation = torch.rand(B, N).argsort(dim=1)
-        #implicit_targets = implicit_targets[torch.arange(B).unsqueeze(-1), permutation]
-        energy_targets = energy_targets[torch.arange(B).unsqueeze(-1), permutation]
-        ground_truth = (permutation == 0).nonzero()[:, 1].to(nenergy_coords.device)
+        pose_targets = pose_targets[torch.arange(B).unsqueeze(-1), permutation]
+        ground_truth = (permutation == 0).nonzero()[:, 1].to(npose_act.device)
         one_hot = F.one_hot(ground_truth, num_classes=self.num_neg_act_samples+1).float()
 
-        r = energy_targets[:,:,0,0]
-        phi = self.normalizer["energy_coords"].unnormalize(energy_targets)[:,:,0,1]
-        z = energy_targets[:,:,0,2]
-        energy_targets = torch.concatenate([r.view(B,N,1), phi.view(B,N,1), z.view(B,N,1)], axis=2).view(B,N,1,-1)
+        r = pose_targets[:,:,0,0]
+        phi = self.normalizer["pose_act"].unnormalize(pose_targets)[:,:,0,1]
+        z = pose_targets[:,:,0,2]
 
-        # Compute ciruclar energy function for the given obs and action magnitudes
+        rot_axis_angle = self.normalizer["pose_act"].unnormalize(pose_targets[:,:,0,3:])
+        rot_zyz = matrix_to_euler_angles(axis_angle_to_matrix(rot_axis_angle.view(-1,3)), 'ZYZ').view(B,N,1,3)
+        pose_targets = torch.concatenate([r.view(B,N,1,1), phi.view(B,N,1,1), z.view(B,N,1,1), rot_zyz], axis=3).view(B,N,1,6)
+
+        # Compute energy function
         obs_feat = self.obs_encoder(nobs)
-        energy, gripper_pred = self.energy_head(obs_feat, energy_targets)
+        pos_energy, rot_energy, gripper_pred = self.energy_head(obs_feat, pose_targets)
 
         # Compute InfoNCE loss, i.e. try to predict the expert action from the randomly sampled actions
-        probs = F.log_softmax(energy, dim=1)
-        ebm_loss = F.kl_div(probs, one_hot, reduction='batchmean')
-        gripper_loss = F.binary_cross_entropy(gripper_pred, nimplicit_act.view(B,1))
-        loss = 0.01 * ebm_loss + gripper_loss
+        pos_probs = F.log_softmax(pos_energy, dim=1)
+        rot_probs = F.log_softmax(rot_energy, dim=1)
 
-        return loss, ebm_loss, gripper_loss
+        pos_ebm_loss = F.kl_div(pos_probs, one_hot, reduction='batchmean')
+        rot_ebm_loss = F.kl_div(rot_probs, one_hot, reduction='batchmean')
+        gripper_loss = F.binary_cross_entropy(gripper_pred, ngripper_act.view(B,1))
+        loss = 1e-1 * pos_ebm_loss + 1e-1 * rot_ebm_loss + gripper_loss
 
-    def augment_action(self, implicit_act, energy_coords, noise=1e-4):
+        return loss, pos_ebm_loss, rot_ebm_loss, gripper_loss
+
+    def augment_action(self, gripper_act, pose_act, noise=1e-4):
         start = self.num_obs_steps - 1
         end = start + self.num_action_steps
-        implicit_act = implicit_act[:, start:end]
-        energy_coords = energy_coords[:, start:end]
+        gripper_act = gripper_act[:, start:end]
+        pose_act = pose_act[:, start:end]
 
         # Add noise
-        #implicit_act += torch.normal(
-        #    mean=0,
-        #    std=noise,
-        #    size=implicit_act.shape,
-        #    dtype=implicit_act.dtype,
-        #    device=implicit_act.device,
-        #)
-        energy_coords += torch.normal(
+        pose_act += torch.normal(
             mean=0,
             std=noise,
-            size=energy_coords.shape,
-            dtype=energy_coords.dtype,
-            device=energy_coords.device,
+            size=pose_act.shape,
+            dtype=pose_act.dtype,
+            device=pose_act.device,
         )
 
-        return implicit_act, energy_coords
+        return gripper_act, pose_act
 
 
     def get_action_stats(self):
-        implicit_stats = self.normalizer["implicit_act"].get_output_stats()
-        energy_stats = self.normalizer["energy_coords"].get_output_stats()
+        gripper_stats = self.normalizer["gripper_act"].get_output_stats()
+        pose_stats = self.normalizer["pose_act"].get_output_stats()
 
-        return implicit_stats, energy_stats
+        return gripper_stats, pose_stats
 
     def plot_energy_fn(self, img, idxs, energy, gripper):
         _, action_stats = self.get_action_stats()
