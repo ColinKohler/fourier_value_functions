@@ -64,6 +64,7 @@ class SO3KeypointEncoder(nn.Module):
         self.z_dim = z_dim
 
         keypoint_type = [self.so3_group.standard_representation().restrict(self.so2_id)] + 3 * [self.gspace.irrep(1)]
+        #keypoint_type = [self.gspace.irrep(1), self.gspace.irrep(0)]# + 3 * [self.gspace.irrep(1)]
         gripper_type = [self.gspace.irrep(0)]
         obs_type = num_keypoints * keypoint_type + gripper_type
         self.in_type = enn.FieldType(self.gspace, num_obs * obs_type)
@@ -81,12 +82,13 @@ class SO3KeypointEncoder(nn.Module):
     def forward(self, obs) -> torch.Tensor:
         B, T, Do = obs['keypoints'].shape
         keypoints = obs['keypoints']
+        #keypoints = obs['keypoints'].reshape(B,-1)
+        #keypoints = torch.concat((keypoints[:,:3], keypoints[:,9:12], keypoints[:,18].reshape(B,1), keypoints[:,19:22], keypoints[:,28:31], keypoints[:,-1].reshape(B,1)), dim=-1)
 
         x = self.in_type(keypoints.reshape(B, -1))
         obs_feat = self.keypoint_enc(x)
 
         return obs_feat.tensor
-
 
 class SO2KeypointEncoder2(nn.Module):
     def __init__(
@@ -103,7 +105,7 @@ class SO2KeypointEncoder2(nn.Module):
     ):
         super().__init__()
 
-        self.G = group.so2_group()
+        self.G = group.so2_group(lmax)
         self.gspace = gspaces.no_base_space(self.G)
         self.num_layers = num_layers
         self.z_dim = z_dim

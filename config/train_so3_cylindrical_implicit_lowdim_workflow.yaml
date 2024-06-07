@@ -23,7 +23,7 @@ lmax: 3
 min_radius: 0.0
 radial_freq: 1
 angular_freq: 1
-axial_freq: 4
+axial_freq: 2
 so3_freq: 1
 N: 8
 action_coords: "cylindrical"
@@ -99,8 +99,8 @@ training:
   resume: True
   lr_warmup_steps: 500
   num_epochs: 1000
-  checkpoint_every: 50
-  rollout_every: 50
+  checkpoint_every: 10
+  rollout_every: 10
   val_every: 1
   tqdm_interval_sec: 1.0
 

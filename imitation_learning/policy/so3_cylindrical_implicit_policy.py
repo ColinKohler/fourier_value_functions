@@ -70,7 +70,7 @@ class SO3CylindricalImplicitPolicy(BasePolicy):
         pos_logits = pos_logits.view(B, -1)
         rot_logits = rot_logits.view(B, -1)
         pos_probs = torch.softmax(pos_logits/self.temperature, dim=-1).view(B, self.energy_head.num_radii, self.energy_head.num_phi, self.energy_head.num_height)
-        rot_probs= torch.softmax(rot_logits/self.temperature, dim=-1).view(B, self.energy_head.num_so3)
+        rot_probs = torch.softmax(rot_logits/self.temperature, dim=-1).view(B, self.energy_head.num_so3)
 
         if self.sample_actions:
             pos_flat_indexes = torch.multinomial(pos_probs.flatten(start_dim=1), num_samples=1, replacement=True).squeeze()
@@ -99,6 +99,7 @@ class SO3CylindricalImplicitPolicy(BasePolicy):
         z = self.normalizer["pose_act"].unnormalize(nactions)[:,:,2]
         r_axis_angle = matrix_to_axis_angle(euler_angles_to_matrix(nrot_actions, 'ZYZ'))
         gripper_act = self.normalizer["gripper_act"].unnormalize(torch.bernoulli(gripper))
+        r_axis_angle = torch.zeros((B,3)).to(device)
         actions = torch.concat([x.view(B,1), y.view(B,1), z.view(B,1), r_axis_angle.view(B,3), gripper_act.view(B,1)], dim=1).unsqueeze(1)
 
         return {'action' : actions, 'action_idxs' : np.stack(pos_idxs).transpose(1,0), 'energy' : pos_probs, 'gripper': gripper}
@@ -148,9 +149,9 @@ class SO3CylindricalImplicitPolicy(BasePolicy):
         phi = self.normalizer["pose_act"].unnormalize(pose_targets)[:,:,0,1]
         z = pose_targets[:,:,0,2]
 
-        rot_axis_angle = self.normalizer["pose_act"].unnormalize(pose_targets[:,:,0,3:])
+        rot_axis_angle = self.normalizer["pose_act"].unnormalize(pose_targets)[:,:,0,3:]
         rot_zyz = matrix_to_euler_angles(axis_angle_to_matrix(rot_axis_angle.view(-1,3)), 'ZYZ').view(B,N,1,3)
-        pose_targets = torch.concatenate([r.view(B,N,1,1), phi.view(B,N,1,1), z.view(B,N,1,1), rot_zyz], axis=3).view(B,N,1,6)
+        pose_targets = torch.concatenate([r.view(B,N,1,1), phi.view(B,N,1,1), z.view(B,N,1,1), rot_zyz], axis=-1).view(B,N,1,6)
 
         # Compute energy function
         obs_feat = self.obs_encoder(nobs)
@@ -163,7 +164,8 @@ class SO3CylindricalImplicitPolicy(BasePolicy):
         pos_ebm_loss = F.kl_div(pos_probs, one_hot, reduction='batchmean')
         rot_ebm_loss = F.kl_div(rot_probs, one_hot, reduction='batchmean')
         gripper_loss = F.binary_cross_entropy(gripper_pred, ngripper_act.view(B,1))
-        loss = 1e-1 * pos_ebm_loss + 1e-1 * rot_ebm_loss + gripper_loss
+        loss = 1e-1 * pos_ebm_loss + gripper_loss
+        #loss = 1e-1 * pos_ebm_loss + 1e-1 * rot_ebm_loss + gripper_loss
 
         return loss, pos_ebm_loss, rot_ebm_loss, gripper_loss
 

@@ -113,7 +113,7 @@ class RobosuiteLowdimDataset(torch.utils.data.Dataset):
         cylindrical_action = action_utils.convert_action_coords(data["action"][:,:3], self.action_coords)
         so3_action = data["action"][:,3:-1]
         pose_action = np.concatenate((cylindrical_action, so3_action), axis=-1)
-        gripper_action = data["action"][:,3]
+        gripper_action = data["action"][:,-1]
         data = {
             'obs': {
                 'keypoints': data['obs']['keypoints']
@@ -214,6 +214,8 @@ def _data_to_obs(demo_dir: str) -> dict:
     eef_pos = eef_pos[:, [1,0,2]] * [1,-1,1]
     eef_rot = eef_pose_matrix[:,:2,:3].reshape(-1, 6)
     gripper_q = gripper_q[:,0].reshape(-1,1)
+    #obj_rot = np.zeros_like(obj_rot)
+    #eef_rot = np.zeros_like(eef_rot)
     obs = np.concatenate([
         obj_pos,
         obj_rot[:,0].reshape(-1,1),

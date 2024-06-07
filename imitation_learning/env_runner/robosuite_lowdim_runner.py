@@ -241,14 +241,17 @@ class RobosuiteLowdimRunner(BaseRunner):
                     obj_pos_tmp = obj_pose[:,:,:3,-1].reshape(-1,2,3)
                     obj_pos.append(obj_pos_tmp[:, :, [1,0,2]] * [1,-1,1])
                     obj_rot.append(obj_pose[:,:,:2,:3].reshape(-1,2,6))
-                obj_pos = np.concatenate(obj_pos, axis=1)
-                obj_rot = np.concatenate(obj_rot, axis=1)
+                obj_pos = np.concatenate(obj_pos, axis=-1)
+                obj_rot = np.concatenate(obj_rot, axis=-1)
 
                 eef_pose = obs['eef_pose'].reshape(-1,2,4,4)
                 eef_pos = eef_pose[:,:,:3,-1].reshape(-1,2,3)
                 eef_pos = eef_pos[:, :, [1,0,2]] * [1,-1,1]
                 eef_rot = eef_pose[:,:,:2,:3].reshape(-1,2,6)
                 gripper_q = obs['gripper_q'][:,:,0].reshape(-1,2,1)
+
+                #obj_rot = np.zeros_like(obj_rot)
+                #eef_rot = np.zeros_like(eef_rot)
 
                 np_obs = np.concatenate([
                     obj_pos,
@@ -321,7 +324,7 @@ class RobosuiteLowdimRunner(BaseRunner):
             seed = self.env_seeds[i]
             prefix = self.env_prefixs[i]
             this_rewards = all_rewards[i]
-            total_reward = np.unique(this_rewards).sum() # (0, 0.49, 0.51)
+            total_reward = np.unique(this_rewards).sum()
 
             total_rewards[prefix].append(total_reward)
             log_data[prefix+f'sim_max_reward_{seed}'] = total_reward

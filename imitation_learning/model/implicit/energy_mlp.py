@@ -405,8 +405,8 @@ class SO3CylindricalEnergyMLP(nn.Module):
         self.num_height = num_height
         self.num_so3 = num_so3
 
-        self.so2_group = group.so2_group()
-        self.so3_group = group.so3_group()
+        self.so2_group = group.so2_group(lmax)
+        self.so3_group = group.so3_group(lmax)
         self.so2_id = (False, -1)
         self.gspace = gspaces.no_base_space(self.so2_group)
         rho = self.so2_group.spectral_regular_representation(*self.so2_group.bl_irreps(L=lmax))
