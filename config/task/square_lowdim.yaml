@@ -1,4 +1,4 @@
-name: lift_lowdim_6dof 
+name: square_lowdim_6dof 
 
 obs_dim: 21 # (block pos + rot) + (gripper pos + rot) + gripper_state 
 action_dim: 7 #(x,y,z,rx,ry,rz,g) 
@@ -7,7 +7,7 @@ num_keypoints: 2
 
 env_runner:
   _target_: imitation_learning.env_runner.robosuite_lowdim_runner.RobosuiteLowdimRunner
-  env: "LiftEnv"
+  env: "NutAssemblyEnv"
   num_train: 10
   num_train_vis: 2
   train_start_seed: 0
@@ -20,11 +20,11 @@ env_runner:
   fps: 10
   past_action: ${past_action_visible}
   num_envs: 10
-  observable_objects: ["cube"]
+  observable_objects: ["SquareNut"]
 
 dataset:
   _target_: imitation_learning.dataset.robosuite_lowdim_dataset.RobosuiteLowdimDataset
-  path: data/lift_6d_50
+  path: data/square_6d_20
   horizon: ${horizon}
   pad_before: ${eval:'${num_obs_steps}-1+${num_latency_steps}'}
   pad_after: ${eval:'${num_action_steps}-1'}
@@ -32,4 +32,4 @@ dataset:
   num_keypoints: ${task.num_keypoints}
   action_coords: ${action_coords}
   val_ratio: 0.02
-  max_train_episodes: 45
+  max_train_episodes: 19

@@ -12,6 +12,7 @@ from imitation_learning.gym_util.multistep_wrapper import MultiStepWrapper
 from imitation_learning.gym_util.video_recording_wrapper import VideoRecordingWrapper, VideoRecorder
 from imitation_learning.gym_util.async_vector_env import AsyncVectorEnv
 #from gymnasium.vector import AsyncVectorEnv
+from pytorch3d.transforms import euler_angles_to_matrix, axis_angle_to_matrix, matrix_to_axis_angle
 
 from imitation_learning.policy.base_policy import BasePolicy
 from imitation_learning.utils.torch_utils import dict_apply
@@ -25,6 +26,7 @@ from franka_gym.configs.franka_gym_configs import (
     FrankaPushConfig,
     FrankaStackConfig,
     FrankaPickPlaceConfig,
+    FrankaNutAssemblyConfig,
 )
 
 class RobosuiteLowdimRunner(BaseRunner):
@@ -50,10 +52,10 @@ class RobosuiteLowdimRunner(BaseRunner):
         num_envs=None,
         observable_objects=None,
     ):
-        #num_train = 0
-        #num_test = 2
-        #num_envs = 2
-        num_envs = num_train + num_test if num_envs is None else num_envs
+        num_train = 0
+        num_test = 2
+        num_envs = 2
+        #num_envs = num_train + num_test if num_envs is None else num_envs
         super().__init__(output_dir)
 
         task_fps = 10
@@ -69,6 +71,8 @@ class RobosuiteLowdimRunner(BaseRunner):
             env_config = FrankaStackConfig()
         elif env == 'PickPlaceEnv':
             env_config = FrankaPickPlaceConfig()
+        elif env == 'NutAssemblyEnv':
+            env_config = FrankaNutAssemblyConfig()
         else:
             raise ValueError('Invalid env specified.')
 
@@ -231,6 +235,8 @@ class RobosuiteLowdimRunner(BaseRunner):
                 leave=False,
                 mininterval=self.tqdm_interval_sec
             )
+            transform = np.eye(4)
+            transform[:3,:3] = euler_angles_to_matrix(torch.tensor([0., 0., 3*np.pi/2.]), 'XYZ').numpy()
             done = False
             while not done:
                 # create obs dict
@@ -238,20 +244,20 @@ class RobosuiteLowdimRunner(BaseRunner):
                 obj_rot = []
                 for obj_name in self.observable_objects:
                     obj_pose = obs[f"{obj_name}_pose"].reshape(-1,2,4,4)
-                    obj_pos_tmp = obj_pose[:,:,:3,-1].reshape(-1,2,3)
-                    obj_pos.append(obj_pos_tmp[:, :, [1,0,2]] * [1,-1,1])
+                    T_obj_pose = transform @ obj_pose
+                    #obj_pos_tmp = obj_pose[:,:,:3,-1].reshape(-1,2,3)
+                    #obj_pos.append(obj_pos_tmp[:, :, [1,0,2]] * [1,-1,1])
+                    obj_pos.append(T_obj_pose[:,:,:3,-1].reshape(-1,2,3))
                     obj_rot.append(obj_pose[:,:,:2,:3].reshape(-1,2,6))
                 obj_pos = np.concatenate(obj_pos, axis=-1)
                 obj_rot = np.concatenate(obj_rot, axis=-1)
 
                 eef_pose = obs['eef_pose'].reshape(-1,2,4,4)
-                eef_pos = eef_pose[:,:,:3,-1].reshape(-1,2,3)
-                eef_pos = eef_pos[:, :, [1,0,2]] * [1,-1,1]
+                T_eef_pose = transform @ eef_pose
+                eef_pos = T_eef_pose[:,:,:3,-1].reshape(-1,2,3)
+                #eef_pos = eef_pos[:, :, [1,0,2]] * [1,-1,1]
                 eef_rot = eef_pose[:,:,:2,:3].reshape(-1,2,6)
                 gripper_q = obs['gripper_q'][:,:,0].reshape(-1,2,1)
-
-                #obj_rot = np.zeros_like(obj_rot)
-                #eef_rot = np.zeros_like(eef_rot)
 
                 np_obs = np.concatenate([
                     obj_pos,
@@ -297,8 +303,16 @@ class RobosuiteLowdimRunner(BaseRunner):
                         img = img.reshape(1,480,640,3).transpose(0,3,1,2)
                         energy_fn_plots[env_id].append(policy.plot_energy_fn(img, action_dict['action_idxs'][i], action_dict['energy'][i], action_dict['gripper'][i]))
 
+
                 action = np_action_dict['action']
-                action = action[:,:,[1,0,2,3,4,5,6]] * [-1,1,1,1,1,1,1]
+                action_matrix = np.eye(4).reshape(1,4,4).repeat(action.shape[0], axis=0)
+                action_matrix[:,:3,:3] = axis_angle_to_matrix(torch.from_numpy(action[:,0,3:6])).numpy()
+                action_matrix[:,:3,-1] = action[:,0,:3]
+                T_actions = np.linalg.inv(transform) @ action_matrix
+                T_action_rot = matrix_to_axis_angle(torch.from_numpy(T_actions[:,:3,:3])).numpy()
+                T_action_pos = T_actions[:,:3,-1]
+                action = np.hstack([T_action_pos, action[:,0,3:6], action[:,0,-1].reshape(-1,1)]).reshape(action.shape[0],1,-1)
+                #action = action[:,:,[1,0,2,3,4,5,6]] * [-1,1,1,1,1,1,1]
 
                 # step env
                 obs, reward, done, timeout, info = env.step(action)

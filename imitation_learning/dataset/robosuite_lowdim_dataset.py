@@ -7,6 +7,7 @@ import numpy.random as npr
 import pickle
 import h5py
 import tqdm
+from pytorch3d.transforms import euler_angles_to_matrix, axis_angle_to_matrix, matrix_to_axis_angle, matrix_to_euler_angles
 
 from imitation_learning.dataset.replay_buffer import ReplayBuffer
 from imitation_learning.utils import torch_utils, action_utils
@@ -146,8 +147,10 @@ def array_to_stat(arr):
 
 def ws_normalizer(arr, num_keypoints, nmin=-1., nmax=1.):
     stat = {
-        'min': np.array([-0.15, -0.15, 0.8, 0., 0., 0., 0., 0.0, 0.] * num_keypoints + [0]),
-        'max': np.array([ 0.15,  0.15, 1.2, 2*np.pi, 2*np.pi, 2*np.pi, 2*np.pi, 2*np.pi, 2*np.pi] * num_keypoints + [0.05]),
+        'min': np.array([-0.3, -0.3, 0.8, -1., -1., -1., -1., -1., -1.] * num_keypoints + [0]),
+        'max': np.array([ 0.3,  0.3, 1.2, 1., 1., 1., 1., 1., 1.] * num_keypoints + [0.05]),
+        #'min': np.array([-0.15, -0.15, 0.8, 0., 0., 0., 0., 0.0, 0.] * num_keypoints + [0]),
+        #'max': np.array([ 0.15,  0.15, 1.2, 2*np.pi, 2*np.pi, 2*np.pi, 2*np.pi, 2*np.pi, 2*np.pi] * num_keypoints + [0.05]),
         'mean' : np.mean(arr, axis=0),
         'std' : np.std(arr, axis=0)
     }
@@ -161,8 +164,8 @@ def ws_normalizer(arr, num_keypoints, nmin=-1., nmax=1.):
 
 def act_normalizer(arr, nmin=0., nmax=1.):
     stat = {
-        'min': np.array([0.0, 0.0, -0.6, 0., 0., 0. ]),
-        'max': np.array([0.6, 2*np.pi, 0.6, 2*np.pi, 2*np.pi, 2*np.pi]),
+        'min': np.array([0.0, 0.0, -0.6, 0., 0., 0.]),
+        'max': np.array([0.6, 2*np.pi, 0.6, 2.*np.pi, 2.*np.pi, 2.*np.pi]),
         'mean' : np.mean(arr, axis=0),
         'std' : np.std(arr, axis=0)
     }
@@ -200,22 +203,27 @@ def _data_to_obs(demo_dir: str) -> dict:
     with h5py.File(os.path.join(demo_dir, 'actions.hdf5'), 'r') as f:
         actions = np.array(f['actions'][:])
 
+    # TODO: No reason to use torch3d here really
+    transform = np.eye(4)
+    transform[:3,:3] = euler_angles_to_matrix(torch.tensor([0., 0., 3*np.pi/2.]), 'XYZ').numpy()
+
     obj_pos = []
     obj_rot = []
     for obj_pose in obj_poses:
         obj_pose_matrix = obj_pose.reshape(-1, 4, 4)
-        obj_pos_tmp = obj_pose_matrix[:,:3,-1].reshape(-1,3)
-        obj_pos.append(obj_pos_tmp[:, [1,0,2]] * [1,-1,1])
+        T_obj_pose_matrix = transform @ obj_pose_matrix
+        #obj_pos_tmp = obj_pose_matrix[:,:3,-1].reshape(-1,3)
+        #obj_pos.append(obj_pos_tmp[:, [1,0,2]] * [1,-1,1])
+        obj_pos.append(T_obj_pose_matrix[:,:3,-1].reshape(-1,3))
         obj_rot.append(obj_pose_matrix[:,:2,:3].reshape(-1,6))
     obj_pos = np.concatenate(obj_pos, axis=1)
     obj_rot = np.concatenate(obj_rot, axis=1)
     eef_pose_matrix = eef_pose.reshape(-1,4,4)
-    eef_pos = eef_pose_matrix[:,:3,-1].reshape(-1,3)
-    eef_pos = eef_pos[:, [1,0,2]] * [1,-1,1]
+    T_eef_pose_matrix = transform @ eef_pose_matrix
+    eef_pos = T_eef_pose_matrix[:,:3,-1].reshape(-1,3)
+    #eef_pos = eef_pos[:, [1,0,2]] * [1,-1,1]
     eef_rot = eef_pose_matrix[:,:2,:3].reshape(-1, 6)
     gripper_q = gripper_q[:,0].reshape(-1,1)
-    #obj_rot = np.zeros_like(obj_rot)
-    #eef_rot = np.zeros_like(eef_rot)
     obs = np.concatenate([
         obj_pos,
         obj_rot[:,0].reshape(-1,1),
@@ -234,8 +242,17 @@ def _data_to_obs(demo_dir: str) -> dict:
         gripper_q
     ], axis=-1)
 
+
     # Swap x and y axis and flip y axis
-    actions = actions[:, [1,0,2,3,4,5,6]] * [1,-1,1,1,1,1,1]
+    action_matrix = np.eye(4).reshape(1,4,4).repeat(actions.shape[0], axis=0)
+    action_matrix[:,:3,:3] = axis_angle_to_matrix(torch.from_numpy(actions[:,3:6])).numpy()
+    action_matrix[:,:3,-1] = actions[:,:3]
+    T_actions = transform @ action_matrix
+    T_action_rot = matrix_to_axis_angle(torch.from_numpy(T_actions[:,:3,:3])).numpy()
+    T_action_pos = T_actions[:,:3,-1]
+    zyz_action_rot = matrix_to_euler_angles(axis_angle_to_matrix(torch.from_numpy(actions[:,3:6])), 'ZYZ').numpy()
+    actions = np.hstack([T_action_pos, zyz_action_rot, actions[:,-1].reshape(-1,1)])
+    #actions = actions[:, [1,0,2,3,4,5,6]] * [1,-1,1,1,1,1,1]
     data = {
         'obs': obs,
         'actions': actions

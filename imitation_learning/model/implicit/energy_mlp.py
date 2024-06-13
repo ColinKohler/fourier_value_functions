@@ -403,6 +403,7 @@ class SO3CylindricalEnergyMLP(nn.Module):
         self.num_radii = num_radii
         self.num_phi = num_phi
         self.num_height = num_height
+        num_so3 = 1000
         self.num_so3 = num_so3
 
         self.so2_group = group.so2_group(lmax)

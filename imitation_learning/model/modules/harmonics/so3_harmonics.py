@@ -2,6 +2,7 @@ import numpy as np
 import torch
 from escnn import group
 from escnn.group.groups.so3_utils import _wigner_d_matrix, _change_param, _grid
+from pytorch3d.transforms import axis_angle_to_matrix, matrix_to_euler_angles, euler_angles_to_matrix, matrix_to_axis_angle
 
 from imitation_learning.model.modules.harmonics.harmonics import HarmonicFunction
 
@@ -17,7 +18,12 @@ class SO3Harmonics(HarmonicFunction):
         self.num_grid_points = num_grid_points
 
         self.so3_group = group.SO3(self.frequency)
-        self.grid = _grid('thomson', N=num_grid_points, parametrization='ZYZ')
+        self.grid = _grid('hopf', N=num_grid_points, parametrization='ZYZ')
+        #self.grid = torch.from_numpy(_grid('hopf', N=num_grid_points, parametrization='ZYZ')).float()
+        #transform = euler_angles_to_matrix(torch.tensor([0., 0., 3*np.pi/2.]), 'XYZ')
+        #self.grid = matrix_to_euler_angles(transform @ euler_angles_to_matrix(self.grid, 'ZYZ'), 'ZYZ').numpy()
+
+        self.num_grid_points = self.grid.shape[0]
 
         self.D = []
         for l in range(self.frequency+1):
