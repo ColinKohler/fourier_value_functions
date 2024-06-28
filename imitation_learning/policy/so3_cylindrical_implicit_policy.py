@@ -65,16 +65,15 @@ class SO3CylindricalImplicitPolicy(BasePolicy):
         so3_grid = torch.from_numpy(_grid('hopf', N=self.energy_head.num_so3, parametrization='ZYZ'))
         num_so3 = so3_grid.size(0)
         so3_grid = so3_grid.view(1,num_so3,3).repeat(B,1,1).to(device).float()
-        #transform = euler_angles_to_matrix(torch.tensor([0., 0., 3*np.pi/2.]), 'XYZ')
-        #so3_grid = matrix_to_euler_angles(transform.to(device) @ euler_angles_to_matrix(so3_grid, 'ZYZ'), 'ZYZ')
+        transform = euler_angles_to_matrix(torch.tensor([0., 0., 1*np.pi/2.]), 'XYZ')
+        so3_grid = matrix_to_euler_angles(transform.to(device) @ euler_angles_to_matrix(so3_grid, 'ZYZ'), 'ZYZ')
 
         obs_feat = self.obs_encoder(nobs)
         pos_logits, rot_logits, gripper = self.energy_head(obs_feat)
         pos_logits = pos_logits.view(B, -1)
         rot_logits = rot_logits.view(B, -1)
         pos_probs = torch.softmax(pos_logits/self.temperature, dim=-1).view(B, self.energy_head.num_radii, self.energy_head.num_phi, self.energy_head.num_height)
-        #rot_probs = torch.softmax(rot_logits/self.temperature, dim=-1).view(B, num_so3)
-        rot_probs = torch.softmax(rot_logits/0.01, dim=-1).view(B, num_so3)
+        rot_probs = torch.softmax(rot_logits/self.temperature, dim=-1).view(B, num_so3)
 
         if self.sample_actions:
             pos_flat_indexes = torch.multinomial(pos_probs.flatten(start_dim=1), num_samples=1, replacement=True).squeeze()

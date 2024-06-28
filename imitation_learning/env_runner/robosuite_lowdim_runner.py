@@ -236,7 +236,7 @@ class RobosuiteLowdimRunner(BaseRunner):
                 mininterval=self.tqdm_interval_sec
             )
             transform = np.eye(4)
-            transform[:3,:3] = euler_angles_to_matrix(torch.tensor([0., 0., 3*np.pi/2.]), 'XYZ').numpy()
+            transform[:3,:3] = euler_angles_to_matrix(torch.tensor([0., 0., 1*np.pi/2.]), 'XYZ').numpy()
             done = False
             while not done:
                 # create obs dict
@@ -248,7 +248,7 @@ class RobosuiteLowdimRunner(BaseRunner):
                     #obj_pos_tmp = obj_pose[:,:,:3,-1].reshape(-1,2,3)
                     #obj_pos.append(obj_pos_tmp[:, :, [1,0,2]] * [1,-1,1])
                     obj_pos.append(T_obj_pose[:,:,:3,-1].reshape(-1,2,3))
-                    obj_rot.append(obj_pose[:,:,:2,:3].reshape(-1,2,6))
+                    obj_rot.append(T_obj_pose[:,:,:2,:3].reshape(-1,2,6))
                 obj_pos = np.concatenate(obj_pos, axis=-1)
                 obj_rot = np.concatenate(obj_rot, axis=-1)
 
@@ -256,7 +256,7 @@ class RobosuiteLowdimRunner(BaseRunner):
                 T_eef_pose = transform @ eef_pose
                 eef_pos = T_eef_pose[:,:,:3,-1].reshape(-1,2,3)
                 #eef_pos = eef_pos[:, :, [1,0,2]] * [1,-1,1]
-                eef_rot = eef_pose[:,:,:2,:3].reshape(-1,2,6)
+                eef_rot = T_eef_pose[:,:,:2,:3].reshape(-1,2,6)
                 gripper_q = obs['gripper_q'][:,:,0].reshape(-1,2,1)
 
                 np_obs = np.concatenate([
@@ -311,7 +311,8 @@ class RobosuiteLowdimRunner(BaseRunner):
                 T_actions = np.linalg.inv(transform) @ action_matrix
                 T_action_rot = matrix_to_axis_angle(torch.from_numpy(T_actions[:,:3,:3])).numpy()
                 T_action_pos = T_actions[:,:3,-1]
-                action = np.hstack([T_action_pos, action[:,0,3:6], action[:,0,-1].reshape(-1,1)]).reshape(action.shape[0],1,-1)
+                action = np.hstack([T_action_pos, T_action_rot, action[:,0,-1].reshape(-1,1)]).reshape(action.shape[0],1,-1)
+                #action = np.hstack([T_action_pos, action[:,0,3:6], action[:,0,-1].reshape(-1,1)]).reshape(action.shape[0],1,-1)
                 #action = action[:,:,[1,0,2,3,4,5,6]] * [-1,1,1,1,1,1,1]
 
                 # step env
