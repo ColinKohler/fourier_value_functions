@@ -6,7 +6,7 @@ keypoint_dim: 2
 obs_eef_target: True
 
 env_runner: 
-  _target_:  imitation_learning.env_runner.block_pushing_lowdim_runner.BlockPushingLowdimRunner
+  _target_:  fvf.env_runner.block_pushing_lowdim_runner.BlockPushingLowdimRunner
   num_train: 10
   num_train_vis: 2
   train_start_seed: 0
@@ -22,7 +22,7 @@ env_runner:
   num_envs: 30 
 
 dataset:
-  _target_: imitation_learning.dataset.block_pushing_lowdim_dataset.BlockPushingLowdimDataset
+  _target_: fvf.dataset.block_pushing_lowdim_dataset.BlockPushingLowdimDataset
   path: data/block_pushing/multimodal_push_seed.zarr
   horizon: ${horizon}
   pad_before: ${eval:'${num_obs_steps}-1'}

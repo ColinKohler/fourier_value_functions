@@ -1,14 +1,13 @@
 defaults:
   - _self_
-  - task: lift_lowdim 
+  - task: pusht_image
 
-name: train_cylindrical_implicit_lowdim_policy
+name: train_polar_implicit_image_policy
 _target_: fvf.workflow.implicit_workflow.ImplicitWorkflow
 
-obs_dim: ${task.obs_dim} 
+obs_dim: ${task.image_dim} 
 action_dim: ${task.action_dim}
 keypoint_dim: ${task.keypoint_dim}
-num_keypoints: ${task.num_keypoints}
 task_name: ${task.name}
 exp_name: 'default'
 
@@ -18,56 +17,47 @@ num_action_steps: 1
 num_latency_steps: 0
 past_action_visible: False
 keypoint_visible_rate: 1.0
-z_dim: 128
-lmax: 3
-min_radius: 0.0
+z_dim: 256
+min_radius: 0.1
 radial_freq: 1
 angular_freq: 1
-axial_freq: 4
-N: 8
-action_coords: "cylindrical"
+action_coords: "polar"
 
 policy:
-  _target_: fvf.policy.cylindrical_implicit_policy.CylindricalImplicitPolicy
+  _target_: fvf.policy.polar_implicit_policy.PolarImplicitPolicy
   obs_dim: ${obs_dim}
   action_dim: ${action_dim}
   num_obs_steps: ${num_obs_steps}
   num_action_steps: ${num_action_steps}
-  num_neg_act_samples: 256
+  num_neg_act_samples: 256 
   pred_n_samples: 1000
   optimize_negatives: False 
-  sample_actions: True 
+  sample_actions: True
   temperature: 1.0
   grad_pen: False
 
 obs_encoder:
-  _target_: fvf.model.implicit.obs_encoder.SO2KeypointEncoder2
-  num_keypoints: ${num_keypoints}
+  _target_: fvf.model.implicit.obs_encoder.ObsEncoder
   num_obs: ${num_obs_steps}
-  in_feat: ${eval:'${obs_dim} // 3'}
+  img_channels: 3 
   z_dim: ${z_dim}
-  num_layers: 4
-  lmax: ${lmax}
-  N: ${N}
   dropout: 0.1
+  spec_norm: False
 
 energy_head:
-  _target_: fvf.model.implicit.energy_mlp.CylindricalEnergyMLP
+  _target_: fvf.model.implicit.energy_mlp.PolarEnergyMLP
   obs_feat_dim: ${z_dim}
   mlp_dim: ${z_dim}
-  lmax: ${lmax}
   num_layers: 4
+  spec_norm: False
   radial_freq: ${radial_freq}
   angular_freq: ${angular_freq}
-  axial_freq: ${axial_freq}
   dropout: 0.1
-  min_radius: ${min_radius}
+  min_radius: 0.1
   max_radius: 1.0
-  max_height: 1.0
   num_radii: 20
   num_phi: 90
-  num_height: 20
-  N: ${N}
+  boundary: "deriv"
 
 dataloader:
   batch_size: 128
@@ -85,7 +75,7 @@ val_dataloader:
 
 optimizer:
   _target_: torch.optim.AdamW
-  lr: 1e-4
+  lr: 5e-4
   betas: [0.95, 0.999]
   eps: 1e-8
   weight_decay: 1e-6
@@ -95,9 +85,9 @@ training:
   seed: 0
   resume: True
   lr_warmup_steps: 500
-  num_epochs: 1000
-  checkpoint_every: 50
-  rollout_every: 50
+  num_epochs: 500
+  checkpoint_every: 10
+  rollout_every: 10
   val_every: 1
   tqdm_interval_sec: 1.0
 

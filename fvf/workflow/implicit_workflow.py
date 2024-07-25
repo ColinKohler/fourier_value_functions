@@ -12,7 +12,7 @@ from typing import Optional
 from omegaconf import OmegaConf
 import wandb
 
-from fvf.model.implicit.vision_encoder import ImageEncoder
+from fvf.model.implicit.obs_encoder import ObsEncoder
 from fvf.model.implicit.energy_mlp import EnergyMLP
 from fvf.dataset.base_dataset import BaseDataset
 from fvf.workflow.base_workflow import BaseWorkflow
@@ -28,7 +28,9 @@ OmegaConf.register_new_resolver("eval", eval, replace=True)
 class ImplicitWorkflow(BaseWorkflow):
     include_keys = ["global_step", "epoch"]
 
-    def __init__(self, config: OmegaConf, output_dir: Optional[str] = None, eval: bool=False):
+    def __init__(
+        self, config: OmegaConf, output_dir: Optional[str] = None, eval: bool = False
+    ):
         super().__init__(config, output_dir=output_dir)
 
         # Set random seed
@@ -37,7 +39,7 @@ class ImplicitWorkflow(BaseWorkflow):
         npr.seed(seed)
         random.seed(seed)
 
-        obs_encoder: ImageEncoder
+        obs_encoder: ObsEncoder
         obs_encoder = hydra.utils.instantiate(config.obs_encoder, initialize=(not eval))
 
         energy_head: EnergyMLP
@@ -87,7 +89,9 @@ class ImplicitWorkflow(BaseWorkflow):
 
         # Env runner
         env_runner: BaseRunner
-        env_runner = hydra.utils.instantiate(self.config.task.env_runner, output_dir=self.output_dir)
+        env_runner = hydra.utils.instantiate(
+            self.config.task.env_runner, output_dir=self.output_dir
+        )
 
         # Setup logging
         wandb_run = wandb.init(
@@ -104,8 +108,8 @@ class ImplicitWorkflow(BaseWorkflow):
 
         # Checkpointer
         topk_manager = TopKCheckpointManager(
-            save_dir=os.path.join(self.output_dir, 'checkpoints'),
-            **self.config.checkpoint.topk
+            save_dir=os.path.join(self.output_dir, "checkpoints"),
+            **self.config.checkpoint.topk,
         )
 
         # Training
@@ -126,7 +130,9 @@ class ImplicitWorkflow(BaseWorkflow):
                         )
 
                         # Compute loss
-                        loss, loss_pos_ebm, loss_rot_ebm, loss_gripper = self.model.compute_loss(batch)
+                        loss, loss_pos_ebm, loss_rot_ebm, loss_gripper = (
+                            self.model.compute_loss(batch)
+                        )
                         loss.backward()
 
                         # Optimization
@@ -145,7 +151,7 @@ class ImplicitWorkflow(BaseWorkflow):
                             "train_loss_gripper": loss_gripper.item(),
                             "global_step": self.global_step,
                             "epoch": self.epoch,
-                            'lr': lr_scheduler.get_last_lr()[0],
+                            "lr": lr_scheduler.get_last_lr()[0],
                         }
 
                         is_last_batch = batch_idx == len(train_dataloader) - 1
@@ -181,7 +187,9 @@ class ImplicitWorkflow(BaseWorkflow):
                                 )
 
                                 # Compute loss
-                                loss, loss_pos_ebm, loss_rot_ebm, loss_gripper = self.model.compute_loss(batch)
+                                loss, loss_pos_ebm, loss_rot_ebm, loss_gripper = (
+                                    self.model.compute_loss(batch)
+                                )
                                 val_losses.append(loss)
 
                                 if len(val_losses) > 0:
@@ -197,7 +205,7 @@ class ImplicitWorkflow(BaseWorkflow):
 
                     metric_dict = dict()
                     for k, v in step_log.items():
-                        metric_dict[k.replace('/', '_')] = v
+                        metric_dict[k.replace("/", "_")] = v
                     topk_checkpoint_path = topk_manager.get_ckpt_path(metric_dict)
                     if topk_checkpoint_path is not None:
                         self.save_checkpoint(path=topk_checkpoint_path)
@@ -211,7 +219,7 @@ class ImplicitWorkflow(BaseWorkflow):
 
 @hydra.main(
     version_base=None,
-    config_path=str(pathlib.Path(__file__).parent.parent.parent.joinpath("config")),
+    config_path="../../config",
     config_name=pathlib.Path(__file__).stem,
 )
 def main(config):

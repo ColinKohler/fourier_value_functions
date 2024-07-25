@@ -1,3 +1,5 @@
+from typing import List
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -11,8 +13,8 @@ class SO2MLP(nn.Module):
     def __init__(
         self,
         in_type: enn.FieldType,
-        channels: list[int],
-        lmaxs: list[int],
+        channels: List[int],
+        lmaxs: List[int],
         out_type: enn.FieldType=None,
         N: int=8,
         dropout: float=0.0,
@@ -55,8 +57,8 @@ class CyclicMLP(nn.Module):
     def __init__(
         self,
         in_type: enn.FieldType,
-        channels: list[int],
-        lmaxs: list[int],
+        channels: List[int],
+        lmaxs: List[int],
         out_type: enn.FieldType=None,
         N: int=8,
         dropout: float=0.0,

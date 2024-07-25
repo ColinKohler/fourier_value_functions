@@ -1,11 +1,11 @@
 defaults:
   - _self_
-  - task: pusht_lowdim 
+  - task: pusht_image
 
-name: train_disk_implicit_lowdim_policy
-_target_: imitation_learning.workflow.implicit_workflow.ImplicitWorkflow
+name: train_polar_implicit_image_policy
+_target_: fvf.workflow.implicit_workflow.ImplicitWorkflow
 
-obs_dim: ${task.obs_dim} 
+obs_dim: ${task.image_dim} 
 action_dim: ${task.action_dim}
 keypoint_dim: ${task.keypoint_dim}
 task_name: ${task.name}
@@ -16,42 +16,40 @@ num_obs_steps: 2
 num_action_steps: 1
 num_latency_steps: 0
 past_action_visible: False
-keypoint_visible_rate: 1.0
-z_dim: 512
+z_dim: 128
 lmax: 3
 min_radius: 0.1
-radial_freq: 1
-angular_freq: 1
+radial_freq: 2
+angular_freq: 3
 N: 16
 action_coords: "polar"
 
 policy:
-  _target_: imitation_learning.policy.disk_implicit_policy.DiskImplicitPolicy
+  _target_: fvf.policy.polar_implicit_policy.PolarImplicitPolicy
   obs_dim: ${obs_dim}
   action_dim: ${action_dim}
   num_obs_steps: ${num_obs_steps}
   num_action_steps: ${num_action_steps}
-  num_neg_act_samples: 256 
+  num_neg_act_samples: 256
   pred_n_samples: 1000
-  optimize_negatives: False 
+  optimize_negatives: False
   sample_actions: True
   temperature: 1.0
   grad_pen: False
 
 obs_encoder:
-  _target_: imitation_learning.model.implicit.obs_encoder.SO2KeypointEncoder
+  _target_: fvf.model.implicit.obs_encoder.SO2ObsEncoder
   num_obs: ${num_obs_steps}
-  in_feat: ${eval:'${obs_dim} // 2'}
+  img_channels: 3
   z_dim: ${z_dim}
-  num_layers: 4
   lmax: ${lmax}
   N: ${N}
   dropout: 0.1
 
 energy_head:
-  _target_: imitation_learning.model.implicit.energy_mlp.DiskEnergyMLP
+  _target_: fvf.model.implicit.energy_mlp.SO2PolarEnergyMLP
   obs_feat_dim: ${z_dim}
-  mlp_dim: ${z_dim}
+  mlp_dim: 512 
   num_layers: 4
   lmax: ${lmax}
   radial_freq: ${radial_freq}
@@ -60,19 +58,19 @@ energy_head:
   min_radius: 0.1
   max_radius: 1.0
   num_radii: 20
-  num_phi: 90
+  num_phi: 90 
   boundary: "deriv"
   N: ${N}
 
 dataloader:
-  batch_size: 256
+  batch_size: 128
   num_workers: 1
   shuffle: True
   pin_memory: True
   persistent_workers: False
 
 val_dataloader:
-  batch_size: 256
+  batch_size: 128
   num_workers: 1
   shuffle: False
   pin_memory: True

@@ -3,7 +3,7 @@ defaults:
   - task: lift_lowdim_6dof
 
 name: train_so3_cylindrical_implicit_lowdim_policy
-_target_: imitation_learning.workflow.implicit_workflow.ImplicitWorkflow
+_target_: fvf.workflow.implicit_workflow.ImplicitWorkflow
 
 obs_dim: ${task.obs_dim} 
 action_dim: ${task.action_dim}
@@ -29,7 +29,7 @@ N: 8
 action_coords: "cylindrical"
 
 policy:
-  _target_: imitation_learning.policy.so3_cylindrical_implicit_policy.SO3CylindricalImplicitPolicy
+  _target_: fvf.policy.so3_cylindrical_implicit_policy.SO3CylindricalImplicitPolicy
   obs_dim: ${obs_dim}
   action_dim: ${action_dim}
   num_obs_steps: ${num_obs_steps}
@@ -42,7 +42,7 @@ policy:
   grad_pen: False
 
 obs_encoder:
-  _target_: imitation_learning.model.implicit.obs_encoder.SO3KeypointEncoder
+  _target_: fvf.model.implicit.obs_encoder.SO3KeypointEncoder
   num_keypoints: ${num_keypoints}
   num_obs: ${num_obs_steps}
   in_feat: ${eval:'${obs_dim} // 3'}
@@ -53,7 +53,7 @@ obs_encoder:
   dropout: 0.1
 
 energy_head:
-  _target_: imitation_learning.model.implicit.energy_mlp.SO3CylindricalEnergyMLP
+  _target_: fvf.model.implicit.energy_mlp.SO3CylindricalEnergyMLP
   obs_feat_dim: ${z_dim}
   mlp_dim: ${z_dim}
   lmax: ${lmax}
@@ -73,7 +73,7 @@ energy_head:
   N: ${N}
 
 dataloader:
-  batch_size: 255
+  batch_size: 256
   num_workers: 1
   shuffle: True
   pin_memory: True

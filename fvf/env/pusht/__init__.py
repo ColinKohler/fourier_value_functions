@@ -1,9 +1,9 @@
-from gym.envs.registration import register
+from gymnasium.envs.registration import register
 import fvf.env.pusht
 
 register(
-    id='pusht-keypoints-v0',
-    entry_point='envs.pusht.pusht_keypoints_env:PushTKeypointsEnv',
+    id="pusht-keypoints-v0",
+    entry_point="envs.pusht.pusht_keypoints_env:PushTKeypointsEnv",
     max_episode_steps=200,
-    reward_threshold=1.0
+    reward_threshold=1.0,
 )

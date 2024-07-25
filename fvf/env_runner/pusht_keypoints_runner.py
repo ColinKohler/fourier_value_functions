@@ -1,3 +1,5 @@
+""" pusht_keypoints_Runnner.py  """
+
 import wandb
 import numpy as np
 import torch
@@ -18,7 +20,10 @@ from fvf.policy.base_policy import BasePolicy
 from fvf.env_runner.base_runner import BaseRunner
 from fvf.utils.torch_utils import dict_apply
 
+
 class PushTKeypointsRunner(BaseRunner):
+    """PushT Keypoint domain runner class."""
+
     def __init__(
         self,
         output_dir,
@@ -38,14 +43,11 @@ class PushTKeypointsRunner(BaseRunner):
         agent_keypoints=False,
         past_action=False,
         tqdm_interval_sec=5.0,
-        num_envs = None,
+        num_envs=None,
         random_goal_pose=False,
     ):
         super().__init__(output_dir)
-        num_train=0
-        num_test=1
-        num_envs=1
-        #num_envs = num_train + num_test if num_envs is None else num_envs
+        num_envs = num_train + num_test if num_envs is None else num_envs
 
         env_num_obs_steps = num_obs_steps + num_latency_steps
         env_num_action_steps = num_action_steps
@@ -60,21 +62,21 @@ class PushTKeypointsRunner(BaseRunner):
                         keypoint_visible_rate=keypoint_visible_rate,
                         agent_keypoints=agent_keypoints,
                         random_goal_pose=random_goal_pose,
-                        **kp_kwargs
+                        **kp_kwargs,
                     ),
                     video_recoder=VideoRecorder.create_h264(
                         fps=fps,
-                        codec='h264',
-                        input_pix_fmt='rgb24',
+                        codec="h264",
+                        input_pix_fmt="rgb24",
                         crf=crf,
-                        thread_type='FRAME',
-                        thread_count=1
+                        thread_type="FRAME",
+                        thread_count=1,
                     ),
                     file_path=None,
                 ),
                 n_obs_steps=env_num_obs_steps,
                 n_action_steps=env_num_action_steps,
-                max_episode_steps=max_steps
+                max_episode_steps=max_steps,
             )
 
         env_fns = [env_fn] * num_envs
@@ -93,7 +95,9 @@ class PushTKeypointsRunner(BaseRunner):
                 env.env.file_path = None
 
                 if enable_render:
-                    filename = pathlib.Path(output_dir).joinpath('media', wv.util.generate_id() + '.mp4')
+                    filename = pathlib.Path(output_dir).joinpath(
+                        "media", wv.util.generate_id() + ".mp4"
+                    )
                     filename.parent.mkdir(parents=False, exist_ok=True)
                     filename = str(filename)
                     env.env.file_path = filename
@@ -102,7 +106,7 @@ class PushTKeypointsRunner(BaseRunner):
                 env.seed(seed)
 
             env_seeds.append(seed)
-            env_prefixs.append('train/')
+            env_prefixs.append("train/")
             env_init_fn_dills.append(dill.dumps(init_fn))
 
         # Testing
@@ -116,7 +120,9 @@ class PushTKeypointsRunner(BaseRunner):
                 env.env.file_path = None
 
                 if enable_render:
-                    filename = pathlib.Path(output_dir).joinpath('media', wv.util.generate_id() + '.mp4')
+                    filename = pathlib.Path(output_dir).joinpath(
+                        "media", wv.util.generate_id() + ".mp4"
+                    )
                     filename.parent.mkdir(parents=False, exist_ok=True)
                     filename = str(filename)
                     env.env.file_path = filename
@@ -125,7 +131,7 @@ class PushTKeypointsRunner(BaseRunner):
                 env.seed(seed)
 
             env_seeds.append(seed)
-            env_prefixs.append('test/')
+            env_prefixs.append("test/")
             env_init_fn_dills.append(dill.dumps(init_fn))
 
         env = AsyncVectorEnv(env_fns)
@@ -145,7 +151,7 @@ class PushTKeypointsRunner(BaseRunner):
         self.max_steps = max_steps
         self.tqdm_interval_sec = tqdm_interval_sec
 
-    def run(self, policy: BasePolicy, plot_energy_fn: bool=False):
+    def run(self, policy: BasePolicy, plot_energy_fn: bool = False):
         device = policy.device
         dtype = policy.dtype
 
@@ -173,7 +179,7 @@ class PushTKeypointsRunner(BaseRunner):
             assert len(this_init_fns) == num_envs
 
             # Initialize envs
-            env.call_each('run_dill_function', args_list=[(x,) for x in this_init_fns])
+            env.call_each("run_dill_function", args_list=[(x,) for x in this_init_fns])
 
             obs = env.reset()
             past_action = None
@@ -181,9 +187,9 @@ class PushTKeypointsRunner(BaseRunner):
 
             pbar = tqdm.tqdm(
                 total=self.max_steps,
-                desc=f'Eval PushtKeypointsRunner {chunk_idx+1} / {num_chunks}',
+                desc=f"Eval PushtKeypointsRunner {chunk_idx+1} / {num_chunks}",
                 leave=False,
-                mininterval=self.tqdm_interval_sec
+                mininterval=self.tqdm_interval_sec,
             )
 
             done = False
@@ -191,31 +197,47 @@ class PushTKeypointsRunner(BaseRunner):
                 B = obs.shape[0]
                 Do = obs.shape[-1] // 2
                 obs_dict = {
-                    'keypoints' : obs[..., :self.num_obs_steps, :Do].astype(np.float32),
+                    "keypoints": obs[..., : self.num_obs_steps, :Do].astype(np.float32),
                 }
 
                 if self.past_action and (past_action is not None):
-                    obs['past_action'] = past_action[:, -(self.num_obs_steps-1):].astype(np.float32)
+                    obs["past_action"] = past_action[
+                        :, -(self.num_obs_steps - 1) :
+                    ].astype(np.float32)
 
-                obs_dict = dict_apply(obs_dict, lambda x: torch.from_numpy(x).to(device))
-                x_obs = (obs_dict['keypoints'].reshape(B,-1,2)[:,:,0] - 255.0)
-                y_obs = (obs_dict['keypoints'].reshape(B,-1,2)[:,:,1] - 255.0) * -1.
-                obs_dict['keypoints'] = torch.concatenate((x_obs.unsqueeze(-1), y_obs.unsqueeze(-1)), dim=-1).view(B, -1).view(B,2,Do)
+                obs_dict = dict_apply(
+                    obs_dict, lambda x: torch.from_numpy(x).to(device)
+                )
+                x_obs = obs_dict["keypoints"].reshape(B, -1, 2)[:, :, 0] - 255.0
+                y_obs = (
+                    obs_dict["keypoints"].reshape(B, -1, 2)[:, :, 1] - 255.0
+                ) * -1.0
+                obs_dict["keypoints"] = (
+                    torch.concatenate(
+                        (x_obs.unsqueeze(-1), y_obs.unsqueeze(-1)), dim=-1
+                    )
+                    .view(B, -1)
+                    .view(B, 2, Do)
+                )
 
                 with torch.no_grad():
                     action_dict = policy.get_action(obs_dict, device)
 
                 if plot_energy_fn:
                     for i, env_id in enumerate(range(start, end)):
-                        img = env.call_each('render2')[0]
-                        img = img.reshape(1,96,96,3).transpose(0,3,1,2)
-                        energy_fn_plots[env_id].append(policy.plot_energy_fn(img, action_dict['energy'][i]))
+                        img = env.call_each("render2")[0]
+                        img = img.reshape(1, 96, 96, 3).transpose(0, 3, 1, 2)
+                        energy_fn_plots[env_id].append(
+                            policy.plot_energy_fn(img, action_dict["energy"][i])
+                        )
 
-                x_act = action_dict['action'][:,:,0]
-                y_act = action_dict['action'][:,:,1] * -1
-                action_dict['action'] =  torch.concatenate((x_act, y_act), dim=-1).view(B,self.num_action_steps,2)
-                action_dict = dict_apply(action_dict, lambda x: x.to('cpu').numpy())
-                action = action_dict['action'][:, self.num_latency_steps:]
+                x_act = action_dict["action"][:, :, 0]
+                y_act = action_dict["action"][:, :, 1] * -1
+                action_dict["action"] = torch.concatenate((x_act, y_act), dim=-1).view(
+                    B, self.num_action_steps, 2
+                )
+                action_dict = dict_apply(action_dict, lambda x: x.to("cpu").numpy())
+                action = action_dict["action"][:, self.num_latency_steps :]
 
                 # Step env
                 obs, reward, done, timeout, info = env.step(action)
@@ -226,7 +248,9 @@ class PushTKeypointsRunner(BaseRunner):
             pbar.close()
 
             all_video_paths[this_global_slice] = env.render()[this_local_slice]
-            all_rewards[this_global_slice] = env.call('get_attr', 'reward')[this_local_slice]
+            all_rewards[this_global_slice] = env.call("get_attr", "reward")[
+                this_local_slice
+            ]
 
         # Logging
         max_rewards = collections.defaultdict(list)
@@ -237,21 +261,21 @@ class PushTKeypointsRunner(BaseRunner):
             prefix = self.env_prefixs[i]
             max_reward = np.max(all_rewards[i])
             max_rewards[prefix].append(max_reward)
-            log_data[prefix+f'sim_max_reward_{seed}'] = max_reward
+            log_data[prefix + f"sim_max_reward_{seed}"] = max_reward
 
             # Visualize sim
             video_path = all_video_paths[i]
             if video_path is not None:
                 sim_video = wandb.Video(video_path)
-                log_data[prefix+f'sim_video_{seed}'] = sim_video
+                log_data[prefix + f"sim_video_{seed}"] = sim_video
                 if plot_energy_fn:
-                    media_path = video_path.rpartition('.')[0]
-                    energy_fn_plot_path = f'{media_path}_energy_fn.gif'
-                    #log_data[prefix+f'energy_fn_{seed}'] = energy_fn_plot_path
+                    media_path = video_path.rpartition(".")[0]
+                    energy_fn_plot_path = f"{media_path}_energy_fn.gif"
+                    # log_data[prefix+f'energy_fn_{seed}'] = energy_fn_plot_path
                     imageio.mimwrite(energy_fn_plot_path, energy_fn_plots[i])
 
         # Log aggergate metrics
         for prefix, v in max_rewards.items():
-            log_data[prefix+'mean_score'] = np.mean(v)
+            log_data[prefix + "mean_score"] = np.mean(v)
 
         return log_data

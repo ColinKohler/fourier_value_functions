@@ -3,7 +3,7 @@ defaults:
   - task: pusht_lowdim
 
 name: train_diffusion_unet_lowdim
-_target_: imitation_learning.workflow.diffusion_workflow.DiffusionWorkflow
+_target_: fvf.workflow.diffusion_workflow.DiffusionWorkflow
 
 obs_dim: ${task.obs_dim}
 action_dim: ${task.action_dim}
@@ -23,10 +23,10 @@ obs_as_global_cond: True
 pred_action_steps_only: False
 
 policy:
-  _target_: imitation_learning.policy.diffusion_unet_policy.DiffusionUnetPolicy
+  _target_: fvf.policy.diffusion_unet_policy.DiffusionUnetPolicy
 
   model:
-    _target_: imitation_learning.model.diffusion.conditional_unet1d.ConditionalUnet1D
+    _target_: fvf.model.diffusion.conditional_unet1d.ConditionalUnet1D
     input_dim: "${eval: ${task.action_dim} if ${obs_as_local_cond} or ${obs_as_global_cond} else ${task.obs_dim} + ${task.action_dim}}"
     local_cond_dim: "${eval: ${task.obs_dim} if ${obs_as_local_cond} else None}"
     global_cond_dim: "${eval: ${task.obs_dim}*${num_obs_steps} if ${obs_as_global_cond} else None}"
@@ -61,7 +61,7 @@ policy:
   # predict_epsilon: True
 
 ema:
-  _target_: imitation_learning.model.diffusion.ema_model.EMAModel
+  _target_: fvf.model.diffusion.ema_model.EMAModel
   update_after_step: 0
   inv_gamma: 1.0
   power: 0.75

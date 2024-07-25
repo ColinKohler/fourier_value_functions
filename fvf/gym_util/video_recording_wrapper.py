@@ -1,8 +1,8 @@
-import gym
+import gymnasium
 import numpy as np
 from fvf.gym_util.video_recorder import VideoRecorder
 
-class VideoRecordingWrapper(gym.Wrapper):
+class VideoRecordingWrapper(gymnasium.Wrapper):
     def __init__(self,
             env,
             video_recoder: VideoRecorder,

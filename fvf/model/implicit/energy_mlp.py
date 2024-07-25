@@ -1,48 +1,127 @@
+""" energy_mlpy.py """
+
 import torch
-import torch.nn as nn
+from torch import nn
 
 from escnn import gspaces
 from escnn import nn as enn
 from escnn import group
 
 from fvf.model.modules.layers import MLP
-from fvf.model.modules.equiv_layers import SO2MLP
-from fvf.model.modules.harmonics.circular_harmonics import CircularHarmonics
-from fvf.model.modules.harmonics.disk_harmonics import DiskHarmonics
-from fvf.model.modules.harmonics.cylindrical_harmonics import CylindricalHarmonics
+from fvf.model.modules.equiv_layers import CyclicMLP, SO2MLP
 from fvf.model.modules.harmonics.so3_harmonics import SO3Harmonics
+from torch_harmonics.circular_harmonics import CircularHarmonics
+from torch_harmonics.polar_harmonics import PolarHarmonics
+from torch_harmonics.cylindrical_harmonics import CylindricalHarmonics
+
 
 class EnergyMLP(nn.Module):
-    def __init__(self, obs_feat, mlp_dim, dropout, spec_norm, initialize):
+    """Vanilla IBC energy head."""
+
+    def __init__(
+        self, obs_feat_dim: int, mlp_dim: int, dropout: float, spec_norm: bool
+    ):
         super().__init__()
         self.energy_mlp = MLP(
-            [obs_feat + 2] + [mlp_dim] * 4 +  [1],
+            [obs_feat_dim + 2] + [mlp_dim] * 4 + [1],
             dropout=dropout,
             act_out=False,
-            spec_norm=spec_norm
+            spec_norm=spec_norm,
         )
 
-    def forward(self, obs, action):
-        B, N, Ta, Da = action.shape
-        B, Dz = obs.shape
+    def forward(self, obs_feat: torch.Tensor, action: torch.Tensor):
+        """Compute energy for observation and action pairs."""
+        B, N, _, _ = action.shape
+        B, _ = obs_feat.shape
 
-        s = obs.reshape(B, 1, -1).expand(-1, N, -1)
-        s_a = torch.cat([s, action.reshape(B, N, -1)], dim=-1).reshape(B*N, -1)
+        s = obs_feat.reshape(B, 1, -1).expand(-1, N, -1)
+        s_a = torch.cat([s, action.reshape(B, N, -1)], dim=-1).reshape(B * N, -1)
         out = self.energy_mlp(s_a)
 
         return out.reshape(B, N)
 
+
+class PolarEnergyMLP(nn.Module):
+    """Vanilla IBC with Polar harmonics head."""
+
+    def __init__(
+        self,
+        obs_feat_dim: int,
+        mlp_dim: int,
+        num_layers: int,
+        dropout: float,
+        spec_norm: bool,
+        radial_freq: int,
+        angular_freq: int,
+        min_radius: float,
+        max_radius: float,
+        num_radii: int = 100,
+        num_phi: int = 360,
+        boundary: str = "zero",
+        initialize: bool = True,
+    ):
+        super().__init__()
+        self.energy_mlp = MLP(
+            [obs_feat_dim]
+            + [mlp_dim] * num_layers
+            + [radial_freq * (angular_freq * 2 + 1)],
+            dropout=dropout,
+            act_out=False,
+            spec_norm=spec_norm,
+        )
+
+        self.ph = PolarHarmonics(
+            radial_freq,
+            angular_freq,
+            min_radius,
+            max_radius,
+            num_radii,
+            num_phi,
+            boundary=boundary,
+        )
+
+    def forward(self, obs_feat: torch.Tensor, actions: torch.Tensor = None):
+        """
+        Compute the energy function for all actions using Polar Fourier transform. If actions are
+        specified
+
+        Args:
+            obs_feat: Encoded observations.
+            actions: Action coordinates to evaluate the polar harmoincs at.
+        """
+        B, _ = obs_feat.shape
+
+        Psi = self.energy_mlp(obs_feat).view(B, 1, -1)
+        if actions is not None:
+            B, N, _ = actions.shape
+            Psi = Psi.repeat(1, N, 1).reshape(B * N, -1)
+            out = self.ph(Psi, actions.view(B * N, 2)).view(B, N)
+        else:
+            out = self.ph(Psi.reshape(B, -1))
+
+        return out
+
+
 class CyclicEnergyMLP(nn.Module):
-    def __init__(self, obs_feat_dim, mlp_dim, lmax, dropout, N=16, initialize=True):
+    """Equivariant IBC energy head which uses the discrete cyclic group Cn."""
+
+    def __init__(
+        self,
+        obs_feat_dim: int,
+        mlp_dim: int,
+        lmax: int,
+        dropout: float,
+        N: int = 16,
+        initialize: bool = True,
+    ):
         super().__init__()
         self.Lmax = lmax
 
-        self.G =  group.CyclicGroup(N)
+        self.G = group.CyclicGroup(N)
         self.gspace = gspaces.no_base_space(self.G)
         rho = self.gspace.regular_repr
         self.in_type = enn.FieldType(
-            self.gspace,
-            obs_feat_dim * [rho] + [self.gspace.irrep(1)]
+            self.gspace, obs_feat_dim * [rho] + [self.gspace.irrep(1)]
         )
 
         out_type = enn.FieldType(self.gspace, [self.G.irrep(0)])
@@ -54,23 +133,35 @@ class CyclicEnergyMLP(nn.Module):
             N=N,
             dropout=dropout,
             act_out=False,
-            initialize=initialize
+            initialize=initialize,
         )
 
+    def forward(self, obs_feat: torch.Tensor, action: torch.Tensor):
+        """Compute energy for observation and action pairs."""
+        B, N, _, _ = action.shape
+        B, _ = obs_feat.shape
 
-    def forward(self, obs_feat, action):
-        B, N, Ta, Da = action.shape
-        B, Dz = obs_feat.shape
-
-        s = obsi_feat.reshape(B, 1, -1).expand(-1, N, -1)
-        s_a = self.in_type(torch.cat([s, action.reshape(B, N, -1)], dim=-1).reshape(B*N, -1))
+        s = obs_feat.reshape(B, 1, -1).expand(-1, N, -1)
+        s_a = self.in_type(
+            torch.cat([s, action.reshape(B, N, -1)], dim=-1).reshape(B * N, -1)
+        )
         out = self.energy_mlp(s_a)
 
         return out.tensor.reshape(B, N)
 
 
 class SO2EnergyMLP(nn.Module):
-    def __init__(self, obs_feat_dim, mlp_dim, lmax, dropout, N=16, initialize=True):
+    """Equivariant IBC energy head which uses the continuous SO2 group."""
+
+    def __init__(
+        self,
+        obs_feat_dim: int,
+        mlp_dim: int,
+        lmax: int,
+        dropout: float,
+        N: int = 16,
+        initialize: bool = True,
+    ):
         super().__init__()
         self.Lmax = lmax
 
@@ -79,8 +170,7 @@ class SO2EnergyMLP(nn.Module):
         rho = self.G.spectral_regular_representation(*self.G.bl_irreps(L=lmax))
 
         self.in_type = enn.FieldType(
-            self.gspace,
-            obs_feat_dim * [rho] + [self.gspace.irrep(1)]
+            self.gspace, obs_feat_dim * [rho] + [self.gspace.irrep(1)]
         )
         out_type = enn.FieldType(self.gspace, [self.G.irrep(0)])
 
@@ -92,23 +182,38 @@ class SO2EnergyMLP(nn.Module):
             N=N,
             dropout=dropout,
             act_out=False,
-            initialize=initialize
+            initialize=initialize,
         )
 
-    def forward(self, obs_feat, action):
-        B, N, Ta, Da = action.shape
-        B, Dz = obs_feat.shape
+    def forward(self, obs_feat: torch.Tensor, action: torch.Tensor):
+        """Compute energy for observation and action pairs."""
+        B, N, _, _ = action.shape
+        B, _ = obs_feat.shape
 
         s = obs_feat.reshape(B, 1, -1).expand(-1, N, -1)
         s_a = self.in_type(
-            torch.cat([s, action.reshape(B, N, -1)], dim=-1).reshape(B*N, -1)
+            torch.cat([s, action.reshape(B, N, -1)], dim=-1).reshape(B * N, -1)
         )
         out = self.energy_mlp(s_a)
 
         return out.tensor.reshape(B, N)
 
-class CircularEnergyMLP(nn.Module):
-    def __init__(self, obs_feat_dim, mlp_dim, lmax, dropout, N=16, num_phi=360, initialize=True):
+
+class SO2CircularEnergyMLP(nn.Module):
+    """
+    Equivariant IBC fourier energy head which uses the continuous SO2 group and circular harmonics.
+    """
+
+    def __init__(
+        self,
+        obs_feat_dim: int,
+        mlp_dim: int,
+        lmax: int,
+        dropout: float,
+        N: int = 16,
+        num_phi: int = 360,
+        initialize: bool = True,
+    ):
         super().__init__()
         self.Lmax = lmax
         self.num_phi = num_phi
@@ -118,10 +223,11 @@ class CircularEnergyMLP(nn.Module):
         rho = self.G.spectral_regular_representation(*self.G.bl_irreps(L=lmax))
 
         self.in_type = enn.FieldType(
-            self.gspace,
-            obs_feat_dim * [rho] + [self.gspace.irrep(0)]
+            self.gspace, obs_feat_dim * [rho] + [self.gspace.irrep(0)]
         )
-        out_type = enn.FieldType(self.gspace, [self.gspace.irrep(l) for l in range(self.Lmax+1)])
+        out_type = enn.FieldType(
+            self.gspace, [self.gspace.irrep(l) for l in range(self.Lmax + 1)]
+        )
 
         self.energy_mlp = SO2MLP(
             self.in_type,
@@ -130,116 +236,88 @@ class CircularEnergyMLP(nn.Module):
             out_type=out_type,
             N=N,
             dropout=dropout,
-            act_out = False,
-            initialize=initialize
+            act_out=False,
+            initialize=initialize,
         )
         self.circular_harmonics = CircularHarmonics(lmax, num_phi)
 
-    def forward(self, obs_feat, action_magnitude, action_theta=None):
-        ''' Compute the energy function for the desired action.
-
-        '''
-        B, N, Ta, Da = action_magnitude.shape
-        B, Dz = obs_feat.shape
+    def forward(
+        self,
+        obs_feat: torch.Tensor,
+        action_magnitude: torch.Tensor,
+        action_theta: torch.Tensor = None,
+    ):
+        """Compute the energy function for all actions using Fourier transform."""
+        B, N, _, _ = action_magnitude.shape
+        B, _ = obs_feat.shape
 
         s = obs_feat.reshape(B, 1, -1).expand(-1, N, -1)
         s_a = self.in_type(
-            torch.cat([s, action_magnitude.reshape(B, N, -1)], dim=-1).reshape(B*N, -1)
+            torch.cat([s, action_magnitude.reshape(B, N, -1)], dim=-1).reshape(
+                B * N, -1
+            )
         )
 
-        w = self.energy_mlp(s_a).tensor.view(B*N, -1)
+        w = self.energy_mlp(s_a).tensor.view(B * N, -1)
         if action_theta is not None:
-            return self.circular_harmonics.evaluate(w, action_theta.view(B*N, 1)).view(B, N)
+            out = self.circular_harmonics(w, action_theta.view(B * N, 1)).view(B, N)
         else:
-            return self.circular_harmonics.evaluate(w).view(B, N, -1)
+            out = self.circular_harmonics(w).view(B, N, -1)
+
+        return out
 
 
-class RingEnergyMLP(nn.Module):
-    def __init__(self, obs_feat_dim, mlp_dim, lmax, dropout, N=16, num_radii=100, num_phi=360, initialize=True):
-        super().__init__()
-        self.Lmax = lmax
-        self.num_phi = num_phi
-        self.num_radii = num_radii
+class SO2PolarEnergyMLP(nn.Module):
+    """
+    Equivariant IBC fourier energy head which uses the continuous SO2 group and polar harmonics.
 
-        self.G = group.so2_group()
-        self.gspace = gspaces.no_base_space(self.G)
-        rho = self.G.spectral_regular_representation(*self.G.bl_irreps(L=lmax))
+    Args:
+        obs_feat_dim - Dimensionality of encoded observations.
+        mlp_dim - Dimensionality of the MLP.
+        lmax - Maxiumum frequency within the MLP.
+        num_layers - Number of layers in the MLP.
+        N - Number of discrete activation features in the MLP.
+        dropout - Dropout of the MLP.
+        radial_freq - Maximum radial frequency of Polar harmonics (K).
+        angular_freq - Maximum angular frequneyc of the Polar harmoincs (L).
+        min_radius - Minimum value of the radius.
+        max_radius - Maximum value of the radius.
+        num_phi - Number of angular components in the basis grid.
+        num_rho - Number of radial components in the basis grid.
+        boundary - Boundary type of Polar Harmonics: zero or deri.
+        initialize - Initialize the model weights.
+    """
 
-        self.in_type = enn.FieldType(
-            self.gspace,
-            obs_feat_dim * [rho]
-        )
-        out_type = enn.FieldType(self.gspace, num_radii * [self.gspace.irrep(l) for l in range(self.Lmax+1)])
-
-        self.energy_mlp = SO2MLP(
-            self.in_type,
-            channels=[mlp_dim] * 4,
-            lmaxs=[lmax] * 4,
-            out_type=out_type,
-            N=N,
-            dropout=dropout,
-            act_out = False,
-            initialize=initialize
-        )
-        self.circular_harmonics = CircularHarmonics(lmax, num_phi)
-
-    def forward(self, obs_feat, polar_actions=None):
-        B, Dz = obs_feat.shape
-
-        s = self.in_type(obs_feat)
-        w = self.energy_mlp(s).tensor.view(B, self.num_radii, -1)
-        if polar_actions is not None:
-            B, N, _ = polar_actions.shape
-            r = polar_actions[:,:,0].int()
-            phi = polar_actions[:,:,1]
-            # TODO: Clean up this mess
-            w_r = w.view(B, 1, self.num_radii, -1).repeat(1,N,1,1).view(B*N,self.num_radii, -1)[torch.arange(B*N), r.view(B*N)]
-            return self.circular_harmonics.evaluate(w_r, phi.view(B*N, 1)).view(B, N)
-        else:
-            ring_fns = list()
-            for r in range(self.num_radii):
-                ring_fns.append(self.circular_harmonics.evaluate(w[:,r]).view(B, 1, -1))
-            return torch.concatenate(ring_fns, axis=1)
-
-
-class DiskEnergyMLP(nn.Module):
     def __init__(
         self,
-        obs_feat_dim,
-        mlp_dim,
-        lmax,
-        num_layers,
-        radial_freq,
-        angular_freq,
-        dropout,
-        min_radius,
-        max_radius,
-        N=16,
-        num_radii=100,
-        num_phi=360,
-        boundary='zero',
-        initialize=True
+        obs_feat_dim: int,
+        mlp_dim: int,
+        lmax: int,
+        num_layers: int,
+        radial_freq: int,
+        angular_freq: int,
+        dropout: float,
+        min_radius: float,
+        max_radius: float,
+        N: int = 16,
+        num_radii: int = 100,
+        num_phi: int = 360,
+        boundary: str = "zero",
+        initialize: bool = True,
     ):
         super().__init__()
         self.num_layers = num_layers
         self.lmax = lmax
-        self.radial_freq = radial_freq
-        self.angular_freq = angular_freq
-        self.min_radius = min_radius
-        self.max_radius = max_radius
-        self.num_phi = num_phi
-        self.num_radii = num_radii
-        self.boundary = boundary
 
         self.G = group.so2_group()
         self.gspace = gspaces.no_base_space(self.G)
         rho = self.G.spectral_regular_representation(*self.G.bl_irreps(L=self.lmax))
 
-        self.in_type = enn.FieldType(
+        self.in_type = enn.FieldType(self.gspace, obs_feat_dim * [rho])
+        out_type = enn.FieldType(
             self.gspace,
-            obs_feat_dim * [rho]
+            radial_freq * [self.gspace.irrep(l) for l in range(angular_freq + 1)],
         )
-        out_type = enn.FieldType(self.gspace, radial_freq * [self.gspace.irrep(l) for l in range(angular_freq+1)])
 
         self.energy_mlp = SO2MLP(
             self.in_type,
@@ -248,28 +326,47 @@ class DiskEnergyMLP(nn.Module):
             out_type=out_type,
             N=N,
             dropout=dropout,
-            act_out = False,
-            initialize=initialize
+            act_out=False,
+            initialize=initialize,
         )
-        self.disk_harmonics = DiskHarmonics(radial_freq, angular_freq, min_radius, max_radius, num_radii, num_phi, boundary=boundary)
+        self.ph = PolarHarmonics(
+            radial_freq,
+            angular_freq,
+            min_radius,
+            max_radius,
+            num_radii,
+            num_phi,
+            boundary=boundary,
+        )
 
-    def forward(self, obs_feat, polar_actions=None):
-        ''' Compute the energy function for the desired action.
+    def forward(self, obs_feat: torch.Tensor, actions: torch.Tensor = None):
+        """
+        Compute the energy function for all actions using Polar Fourier transform. If actions are
+        specified
 
-        '''
-        B, Dz = obs_feat.shape
+        Args:
+            obs_feat: Encoded observations.
+            actions: Action coordinates to evaluate the polar harmoincs at.
+        """
+        B, _ = obs_feat.shape
 
         s = self.in_type(obs_feat)
-        Pnm = self.energy_mlp(s).tensor.view(B, self.radial_freq, self.angular_freq*2+1).permute(0,2,1)
-        if polar_actions is not None:
-            B, N, _ = polar_actions.shape
-            Pnm = Pnm.unsqueeze(1).repeat(1,N,1,1).reshape(B*N, -1)
-            return self.disk_harmonics.evaluate(Pnm, polar_actions[:,:,0].view(B*N,1,1), polar_actions[:,:,1].view(B*N, 1, 1)).view(B, N)
+        Psi = self.energy_mlp(s).tensor.view(B, 1, -1)
+        if actions is not None:
+            B, N, _ = actions.shape
+            Psi = Psi.repeat(1, N, 1).reshape(B * N, -1)
+            out = self.ph(Psi, actions.view(B * N, 2)).view(B, N)
         else:
-            return self.disk_harmonics.evaluate(Pnm.reshape(B,-1))
+            out = self.ph(Psi.reshape(B, -1))
+
+        return out
 
 
 class CylindricalEnergyMLP(nn.Module):
+    """
+    Equivariant IBC fourier energy head which uses the continuous SO2 group and cylindrical harmonics.
+    """
+
     def __init__(
         self,
         obs_feat_dim,
@@ -287,7 +384,7 @@ class CylindricalEnergyMLP(nn.Module):
         num_radii=100,
         num_phi=360,
         num_height=100,
-        initialize=True
+        initialize=True,
     ):
         super().__init__()
         self.Lmax = lmax
@@ -305,11 +402,13 @@ class CylindricalEnergyMLP(nn.Module):
         self.gspace = gspaces.no_base_space(self.G)
         rho = self.G.spectral_regular_representation(*self.G.bl_irreps(L=lmax))
 
-        self.in_type = enn.FieldType(
+        self.in_type = enn.FieldType(self.gspace, obs_feat_dim * [rho])
+        out_type = enn.FieldType(
             self.gspace,
-            obs_feat_dim * [rho]
+            radial_freq
+            * axial_freq
+            * [self.gspace.irrep(l) for l in range(angular_freq + 1)],
         )
-        out_type = enn.FieldType(self.gspace, radial_freq * axial_freq * [self.gspace.irrep(l) for l in range(angular_freq+1)])
 
         self.energy_mlp = SO2MLP(
             self.in_type,
@@ -318,8 +417,8 @@ class CylindricalEnergyMLP(nn.Module):
             out_type=out_type,
             N=N,
             dropout=dropout,
-            act_out = False,
-            initialize=initialize
+            act_out=False,
+            initialize=initialize,
         )
         gripper_out = enn.FieldType(self.gspace, [self.gspace.trivial_repr])
         self.gripper_mlp = SO2MLP(
@@ -330,7 +429,7 @@ class CylindricalEnergyMLP(nn.Module):
             N=N,
             dropout=dropout,
             act_out=False,
-            initialize=initialize
+            initialize=initialize,
         )
         self.cylindrical_harmonics = CylindricalHarmonics(
             radial_freq,
@@ -342,34 +441,37 @@ class CylindricalEnergyMLP(nn.Module):
             num_radii,
             num_phi,
             num_height,
-            boundary='deri'
+            boundary="deri",
         )
 
     def forward(self, obs_feat, energy_coords=None):
-        ''' Compute the energy function for the desired action.
-
-        '''
-        B, Dz = obs_feat.shape
+        """Compute the energy function for all actions using Fourier transform."""
+        B, _ = obs_feat.shape
 
         s = self.in_type(obs_feat)
         Pnm_geo = self.energy_mlp(s)
         Pnm = Pnm_geo.tensor
         if energy_coords is not None:
             B, N, _, _ = energy_coords.shape
-            Pnm = Pnm.unsqueeze(1).repeat(1,N,1).reshape(B*N, -1)
-            energy = self.cylindrical_harmonics.evaluate(
+            Pnm = Pnm.unsqueeze(1).repeat(1, N, 1).reshape(B * N, -1)
+            energy = self.cylindrical_harmonics(
                 Pnm,
-                energy_coords[:,:,0,0].view(B*N,1,1,1),
-                energy_coords[:,:,0,1].view(B*N,1,1,1),
-                energy_coords[:,:,0,2].view(B*N,1,1,1),
+                energy_coords[:, :, 0, 0].view(B * N, 1, 1, 1),
+                energy_coords[:, :, 0, 1].view(B * N, 1, 1, 1),
+                energy_coords[:, :, 0, 2].view(B * N, 1, 1, 1),
             ).view(B, N)
         else:
-            energy = self.cylindrical_harmonics.evaluate(Pnm.reshape(B,-1))
+            energy = self.cylindrical_harmonics(Pnm.reshape(B, -1))
 
         gripper_pred = torch.sigmoid(self.gripper_mlp(s).tensor)
         return energy, gripper_pred
 
+
 class SO3CylindricalEnergyMLP(nn.Module):
+    """
+    Equivariant IBC fourier energy head which uses the continuous SO2 group and cylindrical harmonics.
+    """
+
     def __init__(
         self,
         obs_feat_dim,
@@ -389,7 +491,7 @@ class SO3CylindricalEnergyMLP(nn.Module):
         num_phi=360,
         num_height=100,
         num_so3=100,
-        initialize=True
+        initialize=True,
     ):
         super().__init__()
         self.Lmax = lmax
@@ -410,14 +512,18 @@ class SO3CylindricalEnergyMLP(nn.Module):
         self.so3_group = group.so3_group(lmax)
         self.so2_id = (False, -1)
         self.gspace = gspaces.no_base_space(self.so2_group)
-        rho = self.so2_group.spectral_regular_representation(*self.so2_group.bl_irreps(L=lmax))
-
-        self.in_type = enn.FieldType(
-            self.gspace,
-            obs_feat_dim * [rho]
+        rho = self.so2_group.spectral_regular_representation(
+            *self.so2_group.bl_irreps(L=lmax)
         )
 
-        cylinder_out_type = enn.FieldType(self.gspace, radial_freq * axial_freq * [self.gspace.irrep(l) for l in range(angular_freq+1)])
+        self.in_type = enn.FieldType(self.gspace, obs_feat_dim * [rho])
+
+        cylinder_out_type = enn.FieldType(
+            self.gspace,
+            radial_freq
+            * axial_freq
+            * [self.gspace.irrep(l) for l in range(angular_freq + 1)],
+        )
         self.cylinder_coeffs_mlp = SO2MLP(
             self.in_type,
             channels=[mlp_dim] * num_layers,
@@ -426,10 +532,17 @@ class SO3CylindricalEnergyMLP(nn.Module):
             N=N,
             dropout=dropout,
             act_out=False,
-            initialize=initialize
+            initialize=initialize,
         )
 
-        so3_out_type = enn.FieldType(self.gspace, [self.so3_group.bl_regular_representation(L=so3_freq).restrict(self.so2_id)])
+        so3_out_type = enn.FieldType(
+            self.gspace,
+            [
+                self.so3_group.bl_regular_representation(L=so3_freq).restrict(
+                    self.so2_id
+                )
+            ],
+        )
         self.so3_coeffs_mlp = SO2MLP(
             self.in_type,
             channels=[mlp_dim] * num_layers,
@@ -438,7 +551,7 @@ class SO3CylindricalEnergyMLP(nn.Module):
             N=N,
             dropout=dropout,
             act_out=False,
-            initialize=initialize
+            initialize=initialize,
         )
 
         gripper_out = enn.FieldType(self.gspace, [self.gspace.trivial_repr])
@@ -450,7 +563,7 @@ class SO3CylindricalEnergyMLP(nn.Module):
             N=N,
             dropout=dropout,
             act_out=False,
-            initialize=initialize
+            initialize=initialize,
         )
 
         self.cylindrical_harmonics = CylindricalHarmonics(
@@ -463,14 +576,12 @@ class SO3CylindricalEnergyMLP(nn.Module):
             num_radii,
             num_phi,
             num_height,
-            boundary='deri'
+            boundary="deri",
         )
         self.so3_harmonics = SO3Harmonics(so3_freq, num_so3)
 
     def forward(self, obs_feat, energy_coords=None):
-        ''' Compute the energy function for the desired action.
-
-        '''
+        """Compute the energy function for all actions using Fourier transform."""
         B, Dz = obs_feat.shape
 
         s = self.in_type(obs_feat)
@@ -481,21 +592,21 @@ class SO3CylindricalEnergyMLP(nn.Module):
         f = f_geo.tensor
         if energy_coords is not None:
             B, N, _, _ = energy_coords.shape
-            Pnm = Pnm.unsqueeze(1).repeat(1,N,1).reshape(B*N, -1)
-            f = f.unsqueeze(1).repeat(1,N,1).reshape(B*N, -1)
-            pos_energy = self.cylindrical_harmonics.evaluate(
+            Pnm = Pnm.unsqueeze(1).repeat(1, N, 1).reshape(B * N, -1)
+            f = f.unsqueeze(1).repeat(1, N, 1).reshape(B * N, -1)
+            pos_energy = self.cylindrical_harmonics(
                 Pnm,
-                energy_coords[:,:,0,0].view(B*N,1,1,1),
-                energy_coords[:,:,0,1].view(B*N,1,1,1),
-                energy_coords[:,:,0,2].view(B*N,1,1,1),
+                energy_coords[:, :, 0, 0].view(B * N, 1, 1, 1),
+                energy_coords[:, :, 0, 1].view(B * N, 1, 1, 1),
+                energy_coords[:, :, 0, 2].view(B * N, 1, 1, 1),
             ).view(B, N)
             rot_energy = self.so3_harmonics.evaluate(
                 f,
-                energy_coords[:,:,0,3:].view(B*N,3),
-            ).view(B,N)
+                energy_coords[:, :, 0, 3:].view(B * N, 3),
+            ).view(B, N)
         else:
-            pos_energy = self.cylindrical_harmonics.evaluate(Pnm.reshape(B,-1))
-            rot_energy = self.so3_harmonics.evaluate(f.reshape(B,-1))
+            pos_energy = self.cylindrical_harmonics(Pnm.reshape(B, -1))
+            rot_energy = self.so3_harmonics.evaluate(f.reshape(B, -1))
 
         gripper_pred = torch.sigmoid(self.gripper_mlp(s).tensor)
         return pos_energy, rot_energy, gripper_pred

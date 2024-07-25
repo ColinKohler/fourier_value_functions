@@ -1,3 +1,5 @@
+from typing import List
+
 import torch
 from torch.nn.utils import spectral_norm
 import torch.nn as nn
@@ -6,7 +8,7 @@ import torch.nn.functional as F
 class MLP(nn.Module):
     def __init__(
         self,
-        hiddens: list[int],
+        hiddens: List[int],
         dropout: float=0.0,
         act_out: bool=True,
         spec_norm: bool=False
