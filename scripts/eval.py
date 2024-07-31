@@ -47,6 +47,7 @@ def evaluate(
         cfg["task"]["env_runner"]["num_train"] = num_train
     if num_test is not None:
         cfg["task"]["env_runner"]["num_test"] = num_test
+        cfg["task"]["env_runner"]["num_envs"] = None
     cls = hydra.utils.get_class(cfg._target_)
     workflow = cls(cfg, output_dir=output_dir, eval=True)
     workflow: BaseWorkflow
@@ -60,7 +61,9 @@ def evaluate(
 
     # Run evaluation
     env_runner = hydra.utils.instantiate(cfg.task.env_runner, output_dir=output_dir)
-    runner_log = env_runner.run(policy, plot_energy_fn=plot_energy_fn)
+    runner_log = env_runner.run(
+        policy, plot_energy_fn=plot_energy_fn, plot_weights_basis_fns=True
+    )
 
     # Save logs
     json_log = {}

@@ -73,7 +73,8 @@ class PolarImplicitPolicy(BasePolicy):
         pedges, phi = grid.grid1D(2.0 * torch.pi, self.energy_head.ph.num_phi)
         phi = phi.view(1, -1).repeat(B, 1).to(device)
         obs_feat = self.obs_encoder(nobs)
-        logits = self.energy_head(obs_feat).view(B, -1)
+        logits, coeffs = self.energy_head(obs_feat, return_coeffs=True)
+        logits = logits.view(B, -1)
         action_probs = torch.softmax(logits / self.temperature, dim=-1).view(
             B, self.energy_head.ph.num_radii, self.energy_head.ph.num_phi
         )
@@ -99,7 +100,13 @@ class PolarImplicitPolicy(BasePolicy):
         y = r * torch.sin(phi)
         actions = torch.concat([x.view(B, 1), y.view(B, 1)], dim=1).unsqueeze(1)
 
-        return {"action": actions, "energy": action_probs}
+        return {
+            "action": actions,
+            "energy": logits.view(
+                B, self.energy_head.ph.num_radii, self.energy_head.ph.num_phi
+            ),
+            "fourier_coeffs": coeffs.cpu(),
+        }
 
     def compute_loss(self, batch):
         # Load batch
@@ -219,6 +226,10 @@ class PolarImplicitPolicy(BasePolicy):
         return repeated_stats
 
     def plot_energy_fn(self, img, energy):
+        probs = torch.softmax(energy.view(1, -1) / self.temperature, dim=-1).view(
+            self.energy_head.ph.num_radii, self.energy_head.ph.num_phi
+        )
+
         action_stats = self.get_action_stats()
         r = torch.linspace(
             action_stats["min"][0].item(),
@@ -232,14 +243,57 @@ class PolarImplicitPolicy(BasePolicy):
         )
         phi = torch.linspace(0, 2 * np.pi, self.energy_head.ph.num_phi)
 
+        probs = torch.concat(
+            [torch.zeros(10, self.energy_head.ph.num_phi), probs.cpu()]
+        )
+
         fig = plt.figure()
-        subfigs = fig.subfigures(1, 2)
-        ax1 = subfigs[1].add_subplot()
+        subfigs = fig.subfigures(1, 3)
+        ax1 = subfigs[2].add_subplot()
 
         if img is not None:
             ax1.imshow(img[-1].transpose(1, 2, 0))
+            ax1.set_title("Rollouts", va="bottom")
+            ax1.set_axis_off()
 
-        plotting.plot_polar_fn(energy, r=r, phi=phi, fig=subfigs[0])
+        plotting.plot_polar_fn(energy, r=r, phi=phi, fig=subfigs[0], title="Energy")
+        plotting.plot_polar_fn(probs, r=r, phi=phi, fig=subfigs[1], title="Softmax")
+
+        io_buf = io.BytesIO()
+        fig.savefig(io_buf, format="raw")
+        io_buf.seek(0)
+        img_arr = np.reshape(
+            np.frombuffer(io_buf.getvalue(), dtype=np.uint8),
+            newshape=(int(fig.bbox.bounds[3]), int(fig.bbox.bounds[2]), -1),
+        )
+        io_buf.close()
+        plt.close()
+
+        return img_arr
+
+    def plot_weighted_basis_fns(self, w):
+        w_ph = torch.einsum("bwrp,bw->bwrp", self.energy_head.ph.Psi, w).view(
+            self.energy_head.ph.K,
+            2 * self.energy_head.ph.L + 1,
+            self.energy_head.ph.num_radii,
+            self.energy_head.ph.num_phi,
+        )
+        w = w.view(
+            self.energy_head.ph.K,
+            2 * self.energy_head.ph.L + 1,
+        )
+
+        fig = plt.figure(figsize=(4 * self.energy_head.ph.L, 2 * self.energy_head.ph.K))
+        subfigs = fig.subfigures(self.energy_head.ph.K, self.energy_head.ph.L * 2 + 1)
+        for k in range(self.energy_head.ph.K):
+            for l in range(self.energy_head.ph.L * 2 + 1):
+                plotting.plot_polar_fn(
+                    w_ph[k, l].numpy(),
+                    title=f"w: {w[k,l]:.1f}",
+                    fig=subfigs[k, l],
+                    vmin=w_ph.min(),
+                    vmax=w_ph.max(),
+                )
 
         io_buf = io.BytesIO()
         fig.savefig(io_buf, format="raw")

@@ -18,6 +18,7 @@ from fvf.policy.base_policy import BasePolicy
 from fvf.env_runner.base_runner import BaseRunner
 from fvf.utils.torch_utils import dict_apply
 
+
 class PushTImageRunner(BaseRunner):
     def __init__(
         self,
@@ -38,13 +39,10 @@ class PushTImageRunner(BaseRunner):
         crf=22,
         past_action=False,
         tqdm_interval_sec=5.0,
-        num_envs = None,
+        num_envs=None,
         random_goal_pose=False,
     ):
         super().__init__(output_dir)
-        #num_train=0
-        #num_test=1
-        #num_envs=1
         num_envs = num_train + num_test if num_envs is None else num_envs
 
         env_num_obs_steps = num_obs_steps + num_latency_steps
@@ -60,17 +58,17 @@ class PushTImageRunner(BaseRunner):
                     ),
                     video_recoder=VideoRecorder.create_h264(
                         fps=fps,
-                        codec='h264',
-                        input_pix_fmt='rgb24',
+                        codec="h264",
+                        input_pix_fmt="rgb24",
                         crf=crf,
-                        thread_type='FRAME',
-                        thread_count=1
+                        thread_type="FRAME",
+                        thread_count=1,
                     ),
                     file_path=None,
                 ),
                 n_obs_steps=env_num_obs_steps,
                 n_action_steps=env_num_action_steps,
-                max_episode_steps=max_steps
+                max_episode_steps=max_steps,
             )
 
         env_fns = [env_fn] * num_envs
@@ -89,7 +87,9 @@ class PushTImageRunner(BaseRunner):
                 env.env.file_path = None
 
                 if enable_render:
-                    filename = pathlib.Path(output_dir).joinpath('media', wv.util.generate_id() + '.mp4')
+                    filename = pathlib.Path(output_dir).joinpath(
+                        "media", wv.util.generate_id() + ".mp4"
+                    )
                     filename.parent.mkdir(parents=False, exist_ok=True)
                     filename = str(filename)
                     env.env.file_path = filename
@@ -98,7 +98,7 @@ class PushTImageRunner(BaseRunner):
                 env.seed(seed)
 
             env_seeds.append(seed)
-            env_prefixs.append('train/')
+            env_prefixs.append("train/")
             env_init_fn_dills.append(dill.dumps(init_fn))
 
         # Testing
@@ -112,7 +112,9 @@ class PushTImageRunner(BaseRunner):
                 env.env.file_path = None
 
                 if enable_render:
-                    filename = pathlib.Path(output_dir).joinpath('media', wv.util.generate_id() + '.mp4')
+                    filename = pathlib.Path(output_dir).joinpath(
+                        "media", wv.util.generate_id() + ".mp4"
+                    )
                     filename.parent.mkdir(parents=False, exist_ok=True)
                     filename = str(filename)
                     env.env.file_path = filename
@@ -121,7 +123,7 @@ class PushTImageRunner(BaseRunner):
                 env.seed(seed)
 
             env_seeds.append(seed)
-            env_prefixs.append('test/')
+            env_prefixs.append("test/")
             env_init_fn_dills.append(dill.dumps(init_fn))
 
         env = AsyncVectorEnv(env_fns)
@@ -140,7 +142,12 @@ class PushTImageRunner(BaseRunner):
         self.max_steps = max_steps
         self.tqdm_interval_sec = tqdm_interval_sec
 
-    def run(self, policy: BasePolicy, plot_energy_fn: bool=False):
+    def run(
+        self,
+        policy: BasePolicy,
+        plot_energy_fn: bool = False,
+        plot_weights_basis_fns: bool = False,
+    ):
         device = policy.device
         dtype = policy.dtype
 
@@ -153,6 +160,7 @@ class PushTImageRunner(BaseRunner):
         all_video_paths = [None] * num_inits
         all_rewards = [None] * num_inits
         energy_fn_plots = [list() for _ in range(num_inits)]
+        basis_fn_plots = [list() for _ in range(num_inits)]
 
         for chunk_idx in range(num_chunks):
             start = chunk_idx * num_envs
@@ -168,7 +176,7 @@ class PushTImageRunner(BaseRunner):
             assert len(this_init_fns) == num_envs
 
             # Initialize envs
-            env.call_each('run_dill_function', args_list=[(x,) for x in this_init_fns])
+            env.call_each("run_dill_function", args_list=[(x,) for x in this_init_fns])
 
             obs = env.reset()
             past_action = None
@@ -176,42 +184,69 @@ class PushTImageRunner(BaseRunner):
 
             pbar = tqdm.tqdm(
                 total=self.max_steps,
-                desc=f'Eval PushtImageRunner {chunk_idx+1} / {num_chunks}',
+                desc=f"Eval PushtImageRunner {chunk_idx+1} / {num_chunks}",
                 leave=False,
-                mininterval=self.tqdm_interval_sec
+                mininterval=self.tqdm_interval_sec,
             )
 
             done = False
             while not done:
-                B, T, C, H, W = obs['image'].shape
-                #cropped_image = obs['image'][:,:,:,6:-6, 6:-6]
+                B, T, C, H, W = obs["image"].shape
+                # cropped_image = obs['image'][:,:,:,6:-6, 6:-6]
                 from torchvision.transforms.functional import resize
-                cropped_image = resize(torch.tensor(obs['image']).view(-1, 3, 96,96), (84, 84), antialias=True).view(-1, 2, 3, 84, 84).numpy()
 
-                x_pos = (obs['agent_pos'][:,:,0] - 255.0)
-                y_pos = (obs['agent_pos'][:,:,1] - 255.0) * -1
-                agent_pos = np.concatenate((x_pos[..., np.newaxis], y_pos[..., np.newaxis]), axis=-1).reshape(B, T, 2)
+                cropped_image = (
+                    resize(
+                        torch.tensor(obs["image"]).view(-1, 3, 96, 96),
+                        (84, 84),
+                        antialias=True,
+                    )
+                    .view(-1, 2, 3, 84, 84)
+                    .numpy()
+                )
 
-                obs_dict = {
-                    'image': cropped_image,
-                    'agent_pos': agent_pos
-                }
+                x_pos = obs["agent_pos"][:, :, 0] - 255.0
+                y_pos = (obs["agent_pos"][:, :, 1] - 255.0) * -1
+                agent_pos = np.concatenate(
+                    (x_pos[..., np.newaxis], y_pos[..., np.newaxis]), axis=-1
+                ).reshape(B, T, 2)
+
+                obs_dict = {"image": cropped_image, "agent_pos": agent_pos}
                 if self.past_action and (past_action is not None):
-                    obs['past_action'] = past_action[:, -(self.num_obs_steps-1):].astype(np.float32)
-                obs_dict = dict_apply(obs_dict, lambda x: torch.from_numpy(x).to(device))
+                    obs["past_action"] = past_action[
+                        :, -(self.num_obs_steps - 1) :
+                    ].astype(np.float32)
+                obs_dict = dict_apply(
+                    obs_dict, lambda x: torch.from_numpy(x).to(device)
+                )
 
                 with torch.no_grad():
                     action_dict = policy.get_action(obs_dict, device)
 
                 if plot_energy_fn:
                     for i, env_id in enumerate(range(start, end)):
-                        energy_fn_plots[env_id].append(policy.plot_energy_fn(cropped_image[i], action_dict['energy'][i]))
+                        energy_fn_plots[env_id].append(
+                            policy.plot_energy_fn(
+                                cropped_image[i],
+                                action_dict["energy"][i],
+                            )
+                        )
 
-                x_act = action_dict['action'][:,:,0]
-                y_act = action_dict['action'][:,:,1] * -1
-                action_dict['action'] =  torch.concatenate((x_act, y_act), dim=-1).view(B,1,2)
-                action_dict = dict_apply(action_dict, lambda x: x.to('cpu').numpy())
-                action = action_dict['action'][:, self.num_latency_steps:]
+                if plot_weights_basis_fns:
+                    for i, env_id in enumerate(range(start, end)):
+                        basis_fn_plots[env_id].append(
+                            policy.plot_weighted_basis_fns(
+                                action_dict["fourier_coeffs"][i]
+                            )
+                        )
+
+                x_act = action_dict["action"][:, :, 0]
+                y_act = action_dict["action"][:, :, 1] * -1
+                action_dict["action"] = torch.concatenate((x_act, y_act), dim=-1).view(
+                    B, 1, 2
+                )
+                action_dict = dict_apply(action_dict, lambda x: x.to("cpu").numpy())
+                action = action_dict["action"][:, self.num_latency_steps :]
 
                 # Step env
                 obs, reward, done, timeout, info = env.step(action)
@@ -222,7 +257,9 @@ class PushTImageRunner(BaseRunner):
             pbar.close()
 
             all_video_paths[this_global_slice] = env.render()[this_local_slice]
-            all_rewards[this_global_slice] = env.call('get_attr', 'reward')[this_local_slice]
+            all_rewards[this_global_slice] = env.call("get_attr", "reward")[
+                this_local_slice
+            ]
 
         # Logging
         max_rewards = collections.defaultdict(list)
@@ -233,21 +270,23 @@ class PushTImageRunner(BaseRunner):
             prefix = self.env_prefixs[i]
             max_reward = np.max(all_rewards[i])
             max_rewards[prefix].append(max_reward)
-            log_data[prefix+f'sim_max_reward_{seed}'] = max_reward
+            log_data[prefix + f"sim_max_reward_{seed}"] = max_reward
 
             # Visualize sim
             video_path = all_video_paths[i]
             if video_path is not None:
                 sim_video = wandb.Video(video_path)
-                log_data[prefix+f'sim_video_{seed}'] = sim_video
+                log_data[prefix + f"sim_video_{seed}"] = sim_video
                 if plot_energy_fn:
-                    media_path = video_path.rpartition('.')[0]
-                    energy_fn_plot_path = f'{media_path}_energy_fn.gif'
-                    #log_data[prefix+f'energy_fn_{seed}'] = energy_fn_plot_path
+                    media_path = video_path.rpartition(".")[0]
+                    energy_fn_plot_path = f"{media_path}_energy_fn.mp4"
+                    basis_fn_plot_path = f"{media_path}_basis_fn.mp4"
+                    # log_data[prefix+f'energy_fn_{seed}'] = energy_fn_plot_path
                     imageio.mimwrite(energy_fn_plot_path, energy_fn_plots[i])
+                    imageio.mimwrite(basis_fn_plot_path, basis_fn_plots[i])
 
         # Log aggergate metrics
         for prefix, v in max_rewards.items():
-            log_data[prefix+'mean_score'] = np.mean(v)
+            log_data[prefix + "mean_score"] = np.mean(v)
 
         return log_data

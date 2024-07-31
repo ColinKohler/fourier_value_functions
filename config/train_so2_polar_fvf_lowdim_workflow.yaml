@@ -2,7 +2,7 @@ defaults:
   - _self_
   - task: pusht_lowdim 
 
-name: train_polar_implicit_lowdim_policy
+name: train_so2_polar_implicit_lowdim_policy
 _target_: fvf.workflow.implicit_workflow.ImplicitWorkflow
 
 obs_dim: ${task.obs_dim} 

@@ -80,7 +80,12 @@ class PolarEnergyMLP(nn.Module):
             boundary=boundary,
         )
 
-    def forward(self, obs_feat: torch.Tensor, actions: torch.Tensor = None):
+    def forward(
+        self,
+        obs_feat: torch.Tensor,
+        actions: torch.Tensor = None,
+        return_coeffs: bool = False,
+    ):
         """
         Compute the energy function for all actions using Polar Fourier transform. If actions are
         specified
@@ -91,15 +96,18 @@ class PolarEnergyMLP(nn.Module):
         """
         B, _ = obs_feat.shape
 
-        Psi = self.energy_mlp(obs_feat).view(B, 1, -1)
+        w = self.energy_mlp(obs_feat).view(B, 1, -1)
         if actions is not None:
             B, N, _ = actions.shape
-            Psi = Psi.repeat(1, N, 1).reshape(B * N, -1)
-            out = self.ph(Psi, actions.view(B * N, 2)).view(B, N)
+            w = w.repeat(1, N, 1).reshape(B * N, -1)
+            out = self.ph(w, actions.view(B * N, 2)).view(B, N)
         else:
-            out = self.ph(Psi.reshape(B, -1))
+            out = self.ph(w.reshape(B, -1))
 
-        return out
+        if return_coeffs:
+            return out, w
+        else:
+            return out
 
 
 class CyclicEnergyMLP(nn.Module):
@@ -339,7 +347,12 @@ class SO2PolarEnergyMLP(nn.Module):
             boundary=boundary,
         )
 
-    def forward(self, obs_feat: torch.Tensor, actions: torch.Tensor = None):
+    def forward(
+        self,
+        obs_feat: torch.Tensor,
+        actions: torch.Tensor = None,
+        return_coeffs: bool = False,
+    ):
         """
         Compute the energy function for all actions using Polar Fourier transform. If actions are
         specified
@@ -347,19 +360,23 @@ class SO2PolarEnergyMLP(nn.Module):
         Args:
             obs_feat: Encoded observations.
             actions: Action coordinates to evaluate the polar harmoincs at.
+            return_coeffs: Return Fourier coefficients.
         """
         B, _ = obs_feat.shape
 
         s = self.in_type(obs_feat)
-        Psi = self.energy_mlp(s).tensor.view(B, 1, -1)
+        w = self.energy_mlp(s).tensor.view(B, 1, -1)
         if actions is not None:
             B, N, _ = actions.shape
-            Psi = Psi.repeat(1, N, 1).reshape(B * N, -1)
-            out = self.ph(Psi, actions.view(B * N, 2)).view(B, N)
+            w = w.repeat(1, N, 1).reshape(B * N, -1)
+            out = self.ph(w, actions.view(B * N, 2)).view(B, N)
         else:
-            out = self.ph(Psi.reshape(B, -1))
+            out = self.ph(w.reshape(B, -1))
 
-        return out
+        if return_coeffs:
+            return out, w
+        else:
+            return out
 
 
 class CylindricalEnergyMLP(nn.Module):
