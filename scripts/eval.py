@@ -27,6 +27,7 @@ def evaluate(
     num_train: int = None,
     num_test: int = None,
     plot_energy_fn: bool = False,
+    plot_basis_fn: bool = False,
 ):
     """Evluate a checkpoint."""
     if os.path.exists(output_dir):
@@ -62,7 +63,7 @@ def evaluate(
     # Run evaluation
     env_runner = hydra.utils.instantiate(cfg.task.env_runner, output_dir=output_dir)
     runner_log = env_runner.run(
-        policy, plot_energy_fn=plot_energy_fn, plot_weights_basis_fns=True
+        policy, plot_energy_fn=plot_energy_fn, plot_weights_basis_fns=plot_basis_fn
     )
 
     # Save logs
@@ -98,7 +99,13 @@ if __name__ == "__main__":
         "--plot_energy_fn",
         default=False,
         action="store_true",
-        help="Plot the energy function alongside the env images. Only works on circular models.",
+        help="Plot the energy function alongside the env images.",
+    )
+    parser.add_argument(
+        "--plot_basis_fn",
+        default=False,
+        action="store_true",
+        help="Plot the weighted basis functions that make up the energy function.",
     )
     args = parser.parse_args()
     evaluate(
@@ -108,4 +115,5 @@ if __name__ == "__main__":
         args.num_train,
         args.num_test,
         args.plot_energy_fn,
+        args.plot_basis_fn,
     )

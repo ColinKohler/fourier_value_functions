@@ -448,7 +448,7 @@ class CylindricalEnergyMLP(nn.Module):
             act_out=False,
             initialize=initialize,
         )
-        self.cylindrical_harmonics = CylindricalHarmonics(
+        self.ch = CylindricalHarmonics(
             radial_freq,
             angular_freq,
             axial_freq,
@@ -461,27 +461,27 @@ class CylindricalEnergyMLP(nn.Module):
             boundary="deri",
         )
 
-    def forward(self, obs_feat, energy_coords=None):
+    def forward(self, obs_feat, actions=None, return_coeffs: bool = False):
         """Compute the energy function for all actions using Fourier transform."""
         B, _ = obs_feat.shape
 
         s = self.in_type(obs_feat)
-        Pnm_geo = self.energy_mlp(s)
-        Pnm = Pnm_geo.tensor
-        if energy_coords is not None:
-            B, N, _, _ = energy_coords.shape
-            Pnm = Pnm.unsqueeze(1).repeat(1, N, 1).reshape(B * N, -1)
-            energy = self.cylindrical_harmonics(
-                Pnm,
-                energy_coords[:, :, 0, 0].view(B * N, 1, 1, 1),
-                energy_coords[:, :, 0, 1].view(B * N, 1, 1, 1),
-                energy_coords[:, :, 0, 2].view(B * N, 1, 1, 1),
+        w = self.energy_mlp(s).tensor.view(B, 1, -1)
+        if actions is not None:
+            B, N, _, _ = actions.shape
+            w = w.repeat(1, N, 1).reshape(B * N, -1)
+            energy = self.ch(
+                w,
+                actions.view(B * N, -1),
             ).view(B, N)
         else:
-            energy = self.cylindrical_harmonics(Pnm.reshape(B, -1))
+            energy = self.ch(Pnm.reshape(B, -1))
 
         gripper_pred = torch.sigmoid(self.gripper_mlp(s).tensor)
-        return energy, gripper_pred
+        if return_coeffs:
+            return energy, gripper_pred, Pnm
+        else:
+            return energy, gripper_pred
 
 
 class SO3CylindricalEnergyMLP(nn.Module):

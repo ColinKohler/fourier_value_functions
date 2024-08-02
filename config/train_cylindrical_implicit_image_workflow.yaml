@@ -21,8 +21,8 @@ keypoint_visible_rate: 1.0
 z_dim: 256
 lmax: 3
 min_radius: 0.0
-radial_freq: 1
-angular_freq: 1
+radial_freq: 2
+angular_freq: 3
 axial_freq: 2
 N: 8
 action_coords: "cylindrical"
