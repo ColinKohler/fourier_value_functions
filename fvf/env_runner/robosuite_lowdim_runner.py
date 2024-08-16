@@ -216,6 +216,7 @@ class RobosuiteLowdimRunner(BaseRunner):
         all_video_paths = [None] * num_inits
         all_rewards = [None] * num_inits
         energy_fn_plots = [list() for _ in range(num_inits)]
+        basis_fn_plots = [list() for _ in range(num_inits)]
         last_info = [None] * num_inits
 
         for chunk_idx in range(num_chunks):
@@ -338,6 +339,13 @@ class RobosuiteLowdimRunner(BaseRunner):
                                 action_dict["gripper"][i],
                             )
                         )
+                if plot_weights_basis_fns:
+                    for i, env_id in enumerate(range(start, end)):
+                        basis_fn_plots[env_id].append(
+                            policy.plot_weighted_basis_fns(
+                                action_dict["fourier_coeffs"][i]
+                            )
+                        )
 
                 action = np_action_dict["action"]
                 action_matrix = (
@@ -405,10 +413,13 @@ class RobosuiteLowdimRunner(BaseRunner):
             # visualize sim
             video_path = all_video_paths[i]
             if video_path is not None:
+                media_path = video_path.rpartition(".")[0]
                 if plot_energy_fn:
-                    media_path = video_path.rpartition(".")[0]
-                    energy_fn_plot_path = f"{media_path}_energy_fn.gif"
+                    energy_fn_plot_path = f"{media_path}_energy_fn.mp4"
                     imageio.mimwrite(energy_fn_plot_path, energy_fn_plots[i])
+                if plot_weights_basis_fns:
+                    basis_fn_plot_path = f"{media_path}_basis_fn.mp4"
+                    imageio.mimwrite(basis_fn_plot_path, basis_fn_plots[i])
                 sim_video = wandb.Video(video_path)
                 log_data[prefix + f"sim_video_{seed}"] = sim_video
 

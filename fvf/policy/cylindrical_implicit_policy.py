@@ -74,6 +74,15 @@ class CylindricalImplicitPolicy(BasePolicy):
         )
         z = z.view(1, -1).repeat(B, 1).to(device)
 
+        nobs["keypoints"] = torch.concat(
+            [
+                nobs["keypoints"][:, :, :3],
+                nobs["keypoints"][:, :, 9:12],
+                nobs["keypoints"][:, :, -1].unsqueeze(2),
+            ],
+            dim=-1,
+        )
+
         obs_feat = self.obs_encoder(nobs)
         logits, gripper, coeffs = self.energy_head(obs_feat, return_coeffs=True)
         logits = logits.view(B, -1)
@@ -191,6 +200,14 @@ class CylindricalImplicitPolicy(BasePolicy):
         ).view(B, N, 1, -1)
 
         # Compute ciruclar energy function for the given obs and action magnitudes
+        nobs["keypoints"] = torch.concat(
+            [
+                nobs["keypoints"][:, :, :3],
+                nobs["keypoints"][:, :, 9:12],
+                nobs["keypoints"][:, :, -1].unsqueeze(2),
+            ],
+            dim=-1,
+        )
         obs_feat = self.obs_encoder(nobs)
         energy, gripper_pred = self.energy_head(obs_feat, pos_targets)
 
@@ -198,7 +215,7 @@ class CylindricalImplicitPolicy(BasePolicy):
         probs = F.log_softmax(energy, dim=1)
         ebm_loss = F.kl_div(probs, one_hot, reduction="batchmean")
         gripper_loss = F.binary_cross_entropy(gripper_pred, ngripper_act.view(B, 1))
-        loss = ebm_loss + gripper_loss
+        loss = 1e-2 * ebm_loss + gripper_loss
 
         return loss, ebm_loss, torch.tensor(0.0), gripper_loss
 
@@ -256,6 +273,53 @@ class CylindricalImplicitPolicy(BasePolicy):
 
         plotting.plot_cylinder_prob(energy.cpu(), fig=subfigs[0], title="Energy")
         plotting.plot_cylinder_prob(probs.cpu(), fig=subfigs[1], title="Softmax")
+
+        io_buf = io.BytesIO()
+        fig.savefig(io_buf, format="raw")
+        io_buf.seek(0)
+        img_arr = np.reshape(
+            np.frombuffer(io_buf.getvalue(), dtype=np.uint8),
+            newshape=(int(fig.bbox.bounds[3]), int(fig.bbox.bounds[2]), -1),
+        )
+        io_buf.close()
+        plt.close()
+
+        return img_arr
+
+    def plot_weighted_basis_fns(self, w):
+        w_ch = torch.einsum("bwrpz,bw->bwrpz", self.energy_head.ch.Psi.cpu(), w).view(
+            self.energy_head.ch.M,
+            self.energy_head.ch.K,
+            2 * self.energy_head.ch.L + 1,
+            self.energy_head.ch.num_radii,
+            self.energy_head.ch.num_phi,
+            self.energy_head.ch.num_height,
+        )
+        w = w.view(
+            self.energy_head.ch.M,
+            self.energy_head.ch.K,
+            2 * self.energy_head.ch.L + 1,
+        )
+
+        fig = plt.figure(
+            figsize=(
+                self.energy_head.ch.M * self.energy_head.ch.K,
+                4 * self.energy_head.ch.L,
+            )
+        )
+        subfigs = fig.subfigures(
+            self.energy_head.ch.M * self.energy_head.ch.K, self.energy_head.ch.L * 2 + 1
+        )
+        for m in range(self.energy_head.ch.M):
+            for k in range(self.energy_head.ch.K):
+                for l in range(self.energy_head.ch.L * 2 + 1):
+                    plotting.plot_cylinder_prob(
+                        w_ch[m, k, l],
+                        title=f"w: {w[m,k,l]:.1f}",
+                        fig=subfigs[m * self.energy_head.ch.K + k, l],
+                        vmin=w_ch.min(),
+                        vmax=w_ch.max(),
+                    )
 
         io_buf = io.BytesIO()
         fig.savefig(io_buf, format="raw")

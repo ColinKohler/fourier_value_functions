@@ -475,11 +475,11 @@ class CylindricalEnergyMLP(nn.Module):
                 actions.view(B * N, -1),
             ).view(B, N)
         else:
-            energy = self.ch(Pnm.reshape(B, -1))
+            energy = self.ch(w.reshape(B, -1))
 
         gripper_pred = torch.sigmoid(self.gripper_mlp(s).tensor)
         if return_coeffs:
-            return energy, gripper_pred, Pnm
+            return energy, gripper_pred, w
         else:
             return energy, gripper_pred
 

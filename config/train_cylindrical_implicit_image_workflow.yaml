@@ -2,7 +2,7 @@ defaults:
   - _self_
   - task: lift_image
 
-name: train_cylindrical_implicit_lowdim_policy
+name: train_cylindrical_implicit_image_policy
 _target_: fvf.workflow.implicit_workflow.ImplicitWorkflow
 
 obs_dim: ${task.obs_dim} 
@@ -41,7 +41,7 @@ policy:
   grad_pen: False
 
 obs_encoder:
-  _target_: fvf.model.implicit.obs_encoder.SO2ObsEncoder
+  _target_: fvf.model.implicit.obs_encoder.SO2ObsEncoder2
   num_obs: ${num_obs_steps}
   img_channels: 3
   z_dim: ${z_dim}

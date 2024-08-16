@@ -223,7 +223,7 @@ class SO2ObsEncoder(nn.Module):
     ):
         super().__init__()
 
-        self.G = group.so2_group()
+        self.G = group.so2_group(lmax)
         self.gspace = gspaces.no_base_space(self.G)
         self.z_dim = z_dim
 
@@ -258,6 +258,64 @@ class SO2ObsEncoder(nn.Module):
         state = obs["agent_pos"].view(B, -1)
 
         img_feat_state = self.lin_in_type(torch.cat([so2_img_feat, state], dim=-1))
+        obs_feat = self.lin(img_feat_state)
+
+        return obs_feat.tensor
+
+
+class SO2ObsEncoder2(nn.Module):
+    """SO2 image & agent position encoder."""
+
+    def __init__(
+        self,
+        num_obs: int,
+        img_channels: int,
+        z_dim: int,
+        lmax: int = 3,
+        N: int = 16,
+        dropout: float = 0.0,
+        initialize: bool = True,
+    ):
+        super().__init__()
+
+        self.G = group.so2_group(lmax)
+        self.gspace = gspaces.no_base_space(self.G)
+        self.z_dim = z_dim
+
+        self.image_encoder = CyclicImageEncoder(
+            img_channels, z_dim, dropout, lmax=lmax, N=N, initialize=initialize
+        )
+        self.fourier = Fourier(self.gspace, z_dim, self.G.bl_irreps(L=lmax), N=N)
+
+        img_feat_type = self.G.spectral_regular_representation(
+            *self.G.bl_irreps(L=lmax)
+        )
+        ee_pos_type = [self.gspace.irrep(1), self.gspace.irrep(0)]
+        self.lin_in_type = enn.FieldType(
+            self.gspace,
+            num_obs * z_dim * [img_feat_type]
+            + num_obs * ee_pos_type
+            + num_obs * [self.gspace.irrep(0)],
+        )
+        self.lin = SO2MLP(
+            self.lin_in_type,
+            channels=[z_dim],
+            lmaxs=[lmax],
+            N=N,
+            dropout=dropout,
+            act_out=True,
+            initialize=initialize,
+        )
+        self.out_type = self.lin.out_type
+
+    def forward(self, obs) -> torch.Tensor:
+        B, T, C, H, W = obs["image"].shape
+
+        c8_img_feat = self.image_encoder(obs["image"].view(B * T, C, H, W))
+        so2_img_feat = self.fourier(c8_img_feat).tensor.view(B, -1)
+        ee_state = obs["keypoints"].view(B, -1)
+
+        img_feat_state = self.lin_in_type(torch.cat([so2_img_feat, ee_state], dim=-1))
         obs_feat = self.lin(img_feat_state)
 
         return obs_feat.tensor

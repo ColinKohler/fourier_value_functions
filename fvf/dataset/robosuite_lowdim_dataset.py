@@ -115,7 +115,7 @@ class RobosuiteLowdimDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         sample = self.sampler.sample_sequence(idx)
-        data = self._sample_to_data(sample)
+        data = self._sample_to_data(sample)  #
 
         cylindrical_action = action_utils.convert_action_coords(
             data["action"][:, :3], self.action_coords
