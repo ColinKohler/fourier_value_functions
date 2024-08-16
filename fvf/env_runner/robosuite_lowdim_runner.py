@@ -21,7 +21,7 @@ from pytorch3d.transforms import (
 )
 
 from fvf.policy.base_policy import BasePolicy
-from fvf.utils.torch_utils import dict_apply
+from fvf.utils import torch_utils, robosuite_utils
 from fvf.env_runner.base_runner import BaseRunner
 
 from franka_gym.robosuite_env import FrankaRobosuiteEnv
@@ -256,33 +256,18 @@ class RobosuiteLowdimRunner(BaseRunner):
                 obj_positions = []
                 obj_rotations = []
                 for obj_name in self.observable_objects:
-                    obj_pose = obs[f"{obj_name}_pose"].reshape(-1, 2, 4, 4)
-                    obj_pos = obj_pose[:, :, :3, -1].reshape(-1, 2, 3)
-                    obj_pos = obj_pos[:, :, [1, 0, 2]]
-                    obj_pos[:, :, 1] = -obj_pos[:, :, 1]
+                    obj_pose = obs[f"{obj_name}_pose"].reshape(-1, 4, 4)
+                    obj_pos, obj_rot = robosuite_utils.preprocess_pose(obj_pose)
 
-                    obj_rot = obj_pose[:, :, :3, :3].reshape(-1, 3, 3)
-                    obj_rot = matrix_to_euler_angles(torch.from_numpy(obj_rot), "XYZ")
-                    obj_rot = obj_rot[:, [1, 0, 2]]
-                    obj_rot[:, 1] = -obj_rot[:, 1]
-                    obj_rot = euler_angles_to_matrix(obj_rot, "XYZ")[:, :2, :3]
-
-                    obj_positions.append(obj_pos)
+                    obj_positions.append(obj_pos.reshape(-1, 2, 3))
                     obj_rotations.append(obj_rot.reshape(-1, 2, 6).numpy())
                 obj_positions = np.concatenate(obj_positions, axis=-1)
                 obj_rotations = np.concatenate(obj_rotations, axis=-1)
 
-                eef_pose = obs["eef_pose"].reshape(-1, 2, 4, 4)
-                eef_pos = eef_pose[:, :, :3, -1].reshape(-1, 2, 3)
-                eef_pos = eef_pos[:, :, [1, 0, 2]]
-                eef_pos[:, :, 1] = -eef_pos[:, :, 1]
-
-                eef_rot = eef_pose[:, :, :3, :3].reshape(-1, 3, 3)
-                eef_rot = matrix_to_euler_angles(torch.from_numpy(eef_rot), "XYZ")
-                eef_rot = eef_rot[:, [1, 0, 2]]
-                eef_rot[:, 1] = -eef_rot[:, 1]
-                eef_rot = euler_angles_to_matrix(eef_rot, "XYZ")[:, :2, :3]
-                eef_rot = eef_rot.reshape(-1, 2, 6).numpy()
+                eef_pose = obs["eef_pose"].reshape(-1, 4, 4)
+                eef_pos, eef_rot = robosuite_utils.preprocess_pose(eef_pose)
+                eef_pos = eef_pos.reshape(-1, 2, 3)
+                eef_rot = eef_rot.reshape(-1, 2, 6)
 
                 gripper_q = obs["gripper_q"][:, :, 0].reshape(-1, 2, 1)
 
@@ -314,7 +299,7 @@ class RobosuiteLowdimRunner(BaseRunner):
                         :, -(self.num_obs_steps - 1) :
                     ].astype(np.float32)
                 # device transfer
-                obs_dict = dict_apply(
+                obs_dict = torch_utils.dict_apply(
                     np_obs_dict, lambda x: torch.from_numpy(x).to(device=device)
                 )
 
@@ -323,7 +308,7 @@ class RobosuiteLowdimRunner(BaseRunner):
                     action_dict = policy.get_action(obs_dict, device)
 
                 # device_transfer
-                np_action_dict = dict_apply(
+                np_action_dict = torch_utils.dict_apply(
                     action_dict,
                     lambda x: x.detach().to("cpu").numpy() if torch.is_tensor(x) else x,
                 )
@@ -347,27 +332,7 @@ class RobosuiteLowdimRunner(BaseRunner):
                             )
                         )
 
-                action = np_action_dict["action"]
-                action_matrix = (
-                    np.eye(4).reshape(1, 4, 4).repeat(action.shape[0], axis=0)
-                )
-                action_matrix[:, :3, :3] = axis_angle_to_matrix(
-                    torch.from_numpy(action[:, 0, 3:6])
-                ).numpy()
-                action_matrix[:, :3, -1] = action[:, 0, :3]
-
-                action_pos = action_matrix[:, :3, -1]
-                action_pos[:, 1] = -action_pos[:, 1]
-                action_pos = action_pos[:, [1, 0, 2]]
-
-                T_action_rot = matrix_to_axis_angle(
-                    torch.from_numpy(action_matrix[:, :3, :3])
-                ).numpy()
-                action_rot = np.zeros_like(T_action_rot)
-
-                action = np.hstack(
-                    [action_pos, action_rot, action[:, 0, -1].reshape(-1, 1)]
-                ).reshape(action.shape[0], 1, -1)
+                action = robosuite_utils.process_action(np_action_dict["action"])
 
                 # step env
                 obs, reward, done, timeout, info = env.step(action)

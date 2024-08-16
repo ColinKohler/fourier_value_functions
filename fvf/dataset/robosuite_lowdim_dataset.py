@@ -15,7 +15,7 @@ from pytorch3d.transforms import (
 )
 
 from fvf.dataset.replay_buffer import ReplayBuffer
-from fvf.utils import torch_utils, action_utils
+from fvf.utils import torch_utils, action_utils, robosuite_utils
 from fvf.model.common.normalizer import LinearNormalizer, SingleFieldLinearNormalizer
 from fvf.utils.sampler import SequenceSampler, get_val_mask, downsample_mask
 
@@ -215,32 +215,14 @@ def _data_to_obs(demo_dir: str) -> dict:
     obj_positions = []
     obj_rotations = []
     for obj_pose in obj_poses:
-        obj_pose = obj_pose.reshape(-1, 4, 4)
-        obj_pos = obj_pose[:, :3, -1].reshape(-1, 3)
-        obj_pos = obj_pos[:, [1, 0, 2]]
-        obj_pos[:, 1] = -obj_pos[:, 1]
-
-        obj_rot = obj_pose[:, :3, :3].reshape(-1, 3, 3)
-        obj_rot = matrix_to_euler_angles(torch.from_numpy(obj_rot), "XYZ")
-        obj_rot = obj_rot[:, [1, 0, 2]]
-        obj_rot[:, 1] = -obj_rot[:, 1]
-        obj_rot = euler_angles_to_matrix(obj_rot, "XYZ")[:, :2, :3]
+        obj_pos, obj_rot = robosuite_utils.preprocess_pose(obj_pose)
 
         obj_positions.append(obj_pos)
         obj_rotations.append(obj_rot.reshape(-1, 6).numpy())
     obj_positions = np.concatenate(obj_positions, axis=-1)
     obj_rotations = np.concatenate(obj_rotations, axis=-1)
 
-    eef_pose = eef_pose.reshape(-1, 4, 4)
-    eef_pos = eef_pose[:, :3, -1].reshape(-1, 3)
-    eef_pos = eef_pos[:, [1, 0, 2]]
-    eef_pos[:, 1] = -eef_pos[:, 1]
-
-    eef_rot = eef_pose[:, :3, :3].reshape(-1, 3, 3)
-    eef_rot = matrix_to_euler_angles(torch.from_numpy(eef_rot), "XYZ")
-    eef_rot = eef_rot[:, [1, 0, 2]]
-    eef_rot[:, 1] = -eef_rot[:, 1]
-    eef_rot = euler_angles_to_matrix(eef_rot, "XYZ")[:, :2, :3]
+    eef_pos, eef_rot = robosuite_utils.preprocess_pose(eef_pose)
     eef_rot = eef_rot.reshape(-1, 6).numpy()
 
     gripper_q = gripper_q[:, 0].reshape(-1, 1)
@@ -273,17 +255,9 @@ def _data_to_obs(demo_dir: str) -> dict:
     ).numpy()
     action_matrix[:, :3, -1] = actions[:, :3]
 
-    action_pos = action_matrix[:, :3, -1]
-    action_pos = action_pos[:, [1, 0, 2]]
-    action_pos[:, 1] = -action_pos[:, 1]
-
-    action_rot = action_matrix[:, :3, :3].reshape(-1, 3, 3)
-    action_rot = matrix_to_euler_angles(torch.from_numpy(action_rot), "XYZ")
-    action_rot = action_rot[:, [1, 0, 2]]
-    action_rot[:, 1] = -action_rot[:, 1]
-    action_rot = matrix_to_euler_angles(
-        euler_angles_to_matrix(action_rot, "XYZ"), "ZYZ"
-    ).numpy()
+    action_pos, action_rot = robosuite_utils.preprocess_pose(
+        action_matrix, rot_type="zyz"
+    )
 
     actions = np.hstack([action_pos, action_rot, actions[:, -1].reshape(-1, 1)])
     data = {"obs": obs, "actions": actions}
