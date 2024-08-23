@@ -96,7 +96,9 @@ class SO3KeypointEncoder(nn.Module):
         self.z_dim = z_dim
 
         keypoint_type = [
-            self.so3_group.standard_representation().restrict(self.so2_id)
+            self.gspace.irrep(1),
+            self.gspace.irrep(0),
+            # self.so3_group.standard_representation().restrict(self.so2_id)
         ] + 3 * [self.gspace.irrep(1)]
         gripper_type = [self.gspace.irrep(0)]
         obs_type = num_keypoints * keypoint_type + gripper_type

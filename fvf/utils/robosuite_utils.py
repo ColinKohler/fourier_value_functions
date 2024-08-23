@@ -46,11 +46,14 @@ def process_action(action):
     action_pos[:, 1] = -action_pos[:, 1]
     action_pos = action_pos[:, [1, 0, 2]]
 
-    action_rot = matrix_to_axis_angle(torch.from_numpy(action_pose[:, :3, :3])).numpy()
+    action_rot = matrix_to_euler_angles(torch.from_numpy(action_pose[:, :3, :3]), "XYZ")
+    action_rot[:, 1] = -action_rot[:, 1]
+    action_rot = action_rot[:, [1, 0, 2]]
+    action_rot = matrix_to_axis_angle(euler_angles_to_matrix(action_rot, "XYZ")).numpy()
     zaction_rot = np.zeros_like(action_rot)
 
     gripper_act = action[:, 0, -1].reshape(-1, 1)
 
-    action = np.hstack([action_pos, zaction_rot, gripper_act]).reshape(B, 1, -1)
+    action = np.hstack([action_pos, action_rot, gripper_act]).reshape(B, 1, -1)
 
     return action

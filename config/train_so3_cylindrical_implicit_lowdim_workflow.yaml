@@ -18,13 +18,13 @@ num_action_steps: 1
 num_latency_steps: 0
 past_action_visible: False
 keypoint_visible_rate: 1.0
-z_dim: 128
+z_dim: 32
 lmax: 3
 min_radius: 0.0
-radial_freq: 1
-angular_freq: 1
+radial_freq: 2
+angular_freq: 3
 axial_freq: 2
-so3_freq: 1
+so3_freq: 2
 N: 8
 action_coords: "cylindrical"
 
@@ -69,7 +69,7 @@ energy_head:
   num_radii: 20
   num_phi: 90
   num_height: 20
-  num_so3: 100
+  num_so3: 1000
   N: ${N}
 
 dataloader:
@@ -98,7 +98,7 @@ training:
   seed: 0
   resume: True
   lr_warmup_steps: 500
-  num_epochs: 1000
+  num_epochs: 100
   checkpoint_every: 10
   rollout_every: 10
   val_every: 1

@@ -246,10 +246,7 @@ class RobosuiteLowdimRunner(BaseRunner):
                 leave=False,
                 mininterval=self.tqdm_interval_sec,
             )
-            transform = np.eye(4)
-            transform[:3, :3] = euler_angles_to_matrix(
-                torch.tensor([0.0, 0.0, 3 * np.pi / 2.0]), "XYZ"
-            ).numpy()
+
             done = False
             while not done:
                 # create obs dict

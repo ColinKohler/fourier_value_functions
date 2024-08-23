@@ -9,10 +9,11 @@ from escnn import group
 
 from fvf.model.modules.layers import MLP
 from fvf.model.modules.equiv_layers import CyclicMLP, SO2MLP
-from fvf.model.modules.harmonics.so3_harmonics import SO3Harmonics
+
 from torch_harmonics.circular_harmonics import CircularHarmonics
 from torch_harmonics.polar_harmonics import PolarHarmonics
 from torch_harmonics.cylindrical_harmonics import CylindricalHarmonics
+from torch_harmonics.so3_harmonics import SO3Harmonics
 
 
 class EnergyMLP(nn.Module):
@@ -486,7 +487,8 @@ class CylindricalEnergyMLP(nn.Module):
 
 class SO3CylindricalEnergyMLP(nn.Module):
     """
-    Equivariant IBC fourier energy head which uses the continuous SO2 group and cylindrical harmonics.
+    Equivariant IBC fourier energy head which uses the continuous SO2 group and
+    cylindrical harmonics.
     """
 
     def __init__(
@@ -507,7 +509,7 @@ class SO3CylindricalEnergyMLP(nn.Module):
         num_radii=100,
         num_phi=360,
         num_height=100,
-        num_so3=100,
+        num_so3=1000,
         initialize=True,
     ):
         super().__init__()
@@ -522,7 +524,6 @@ class SO3CylindricalEnergyMLP(nn.Module):
         self.num_radii = num_radii
         self.num_phi = num_phi
         self.num_height = num_height
-        num_so3 = 1000
         self.num_so3 = num_so3
 
         self.so2_group = group.so2_group(lmax)
@@ -597,33 +598,29 @@ class SO3CylindricalEnergyMLP(nn.Module):
         )
         self.so3_harmonics = SO3Harmonics(so3_freq, num_so3)
 
-    def forward(self, obs_feat, energy_coords=None):
+    def forward(self, obs_feat, actions=None):
         """Compute the energy function for all actions using Fourier transform."""
         B, Dz = obs_feat.shape
 
         s = self.in_type(obs_feat)
 
-        Pnm_geo = self.cylinder_coeffs_mlp(s)
-        f_geo = self.so3_coeffs_mlp(s)
-        Pnm = Pnm_geo.tensor
-        f = f_geo.tensor
-        if energy_coords is not None:
-            B, N, _, _ = energy_coords.shape
-            Pnm = Pnm.unsqueeze(1).repeat(1, N, 1).reshape(B * N, -1)
-            f = f.unsqueeze(1).repeat(1, N, 1).reshape(B * N, -1)
+        pos_w = self.cylinder_coeffs_mlp(s).tensor.view(B, 1, -1)
+        rot_w = self.so3_coeffs_mlp(s).tensor.view(B, 1, -1)
+        if actions is not None:
+            B, N, _, _ = actions.shape
+            pos_w = pos_w.repeat(1, N, 1).reshape(B * N, -1)
+            rot_w = rot_w.repeat(1, N, 1).reshape(B * N, -1)
             pos_energy = self.cylindrical_harmonics(
-                Pnm,
-                energy_coords[:, :, 0, 0].view(B * N, 1, 1, 1),
-                energy_coords[:, :, 0, 1].view(B * N, 1, 1, 1),
-                energy_coords[:, :, 0, 2].view(B * N, 1, 1, 1),
+                pos_w,
+                actions[:, :, 0, :3].view(B * N, -1),
             ).view(B, N)
-            rot_energy = self.so3_harmonics.evaluate(
-                f,
-                energy_coords[:, :, 0, 3:].view(B * N, 3),
+            rot_energy = self.so3_harmonics(
+                rot_w,
+                actions[:, :, 0, 3:].view(B * N, 3),
             ).view(B, N)
         else:
-            pos_energy = self.cylindrical_harmonics(Pnm.reshape(B, -1))
-            rot_energy = self.so3_harmonics.evaluate(f.reshape(B, -1))
+            pos_energy = self.cylindrical_harmonics(pos_w.reshape(B, -1))
+            rot_energy = self.so3_harmonics(rot_w.reshape(B, -1))
 
         gripper_pred = torch.sigmoid(self.gripper_mlp(s).tensor)
         return pos_energy, rot_energy, gripper_pred

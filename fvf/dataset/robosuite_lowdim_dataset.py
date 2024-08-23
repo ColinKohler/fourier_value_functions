@@ -12,6 +12,8 @@ from pytorch3d.transforms import (
     axis_angle_to_matrix,
     matrix_to_axis_angle,
     matrix_to_euler_angles,
+    matrix_to_quaternion,
+    quaternion_to_matrix,
 )
 
 from fvf.dataset.replay_buffer import ReplayBuffer
@@ -115,7 +117,7 @@ class RobosuiteLowdimDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         sample = self.sampler.sample_sequence(idx)
-        data = self._sample_to_data(sample)  #
+        data = self._sample_to_data(sample)
 
         cylindrical_action = action_utils.convert_action_coords(
             data["action"][:, :3], self.action_coords
@@ -161,8 +163,6 @@ def ws_normalizer(arr, num_keypoints, nmin=-1.0, nmax=1.0):
         "max": np.array(
             [0.3, 0.3, 1.2, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0] * num_keypoints + [0.05]
         ),
-        #'min': np.array([-0.15, -0.15, 0.8, 0., 0., 0., 0., 0.0, 0.] * num_keypoints + [0]),
-        #'max': np.array([ 0.15,  0.15, 1.2, 2*np.pi, 2*np.pi, 2*np.pi, 2*np.pi, 2*np.pi, 2*np.pi] * num_keypoints + [0.05]),
         "mean": np.mean(arr, axis=0),
         "std": np.std(arr, axis=0),
     }
@@ -175,8 +175,8 @@ def ws_normalizer(arr, num_keypoints, nmin=-1.0, nmax=1.0):
 
 def act_normalizer(arr, nmin=0.0, nmax=1.0):
     stat = {
-        "min": np.array([0.0, 0.0, -0.6, 0.0, 0.0, 0.0]),
-        "max": np.array([0.6, 2 * np.pi, 0.6, 2.0 * np.pi, 2.0 * np.pi, 2.0 * np.pi]),
+        "min": np.array([0.0, 0.0, -0.6, -np.pi, -np.pi, -np.pi]),
+        "max": np.array([0.6, 2 * np.pi, 0.6, np.pi, np.pi, np.pi]),
         "mean": np.mean(arr, axis=0),
         "std": np.std(arr, axis=0),
     }
@@ -215,13 +215,21 @@ def _data_to_obs(demo_dir: str) -> dict:
     obj_positions = []
     obj_rotations = []
     for obj_pose in obj_poses:
-        obj_pos, obj_rot = robosuite_utils.preprocess_pose(obj_pose)
+        obj_pose = obj_pose.reshape(-1, 4, 4)
+        obj_rot = matrix_to_quaternion(torch.from_numpy(obj_pose[:, :3, :3]))
+        obj_rot = quaternion_to_matrix(obj_rot[:, [3, 0, 1, 2]])
+        obj_pose[:, :3, :3] = obj_rot.numpy()
+        obj_pos, obj_rot = robosuite_utils.preprocess_pose(obj_pose.reshape(-1, 16))
 
         obj_positions.append(obj_pos)
         obj_rotations.append(obj_rot.reshape(-1, 6).numpy())
     obj_positions = np.concatenate(obj_positions, axis=-1)
     obj_rotations = np.concatenate(obj_rotations, axis=-1)
 
+    eef_pose = eef_pose.reshape(-1, 4, 4)
+    eef_rot = matrix_to_quaternion(torch.from_numpy(eef_pose[:, :3, :3]))
+    eef_rot = quaternion_to_matrix(eef_rot[:, [3, 0, 1, 2]])
+    eef_pose[:, :3, :3] = eef_rot.numpy()
     eef_pos, eef_rot = robosuite_utils.preprocess_pose(eef_pose)
     eef_rot = eef_rot.reshape(-1, 6).numpy()
 
