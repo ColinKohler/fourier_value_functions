@@ -179,7 +179,6 @@ nvidia-nccl-cu12=2.20.5=pypi_0
 nvidia-nvjitlink-cu12=12.5.82=pypi_0
 nvidia-nvtx-cu12=12.1.105=pypi_0
 omegaconf=2.3.0=pypi_0
-open3d=0.18.0=pypi_0
 opencv-python=4.10.0.84=pypi_0
 openssl=3.0.14=h5eee18b_0
 opentelemetry-api=1.26.0=pypi_0
