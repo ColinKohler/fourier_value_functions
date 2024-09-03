@@ -19,6 +19,7 @@ past_action_visible: False
 keypoint_visible_rate: 1.0
 z_dim: 1024
 is_harmonic: False
+action_coords: "rectangular"
 
 policy:
   _target_: fvf.policy.implicit_policy.ImplicitPolicy
@@ -45,19 +46,19 @@ obs_encoder:
 energy_head:
   _target_: fvf.model.implicit.energy_mlp.EnergyMLP
   obs_feat_dim: ${z_dim}
-  mid_channels: ${z_dim}
+  mlp_dim: ${z_dim}
   dropout: 0.1
   spec_norm: False
 
 dataloader:
-  batch_size: 128
+  batch_size: 256
   num_workers: 1
   shuffle: True
   pin_memory: True
   persistent_workers: False
 
 val_dataloader:
-  batch_size: 128
+  batch_size: 256
   num_workers: 1
   shuffle: False
   pin_memory: True
@@ -76,8 +77,8 @@ training:
   resume: True
   lr_warmup_steps: 500
   num_epochs: 200
-  checkpoint_every: 1
-  rollout_every: 1
+  checkpoint_every: 10
+  rollout_every: 10
   val_every: 1
   tqdm_interval_sec: 1.0
 
@@ -94,7 +95,7 @@ checkpoint:
   topk:
     monitor_key: test_mean_score
     mode: max
-    k: 5
+    k: 2
     format_str: 'epoch={epoch:04d}-test_mean_score={test_mean_score:.3f}.ckpt'
   save_last_checkpoint: True
   save_last_snapshot: False

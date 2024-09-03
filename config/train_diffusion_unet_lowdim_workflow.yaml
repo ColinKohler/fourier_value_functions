@@ -69,14 +69,14 @@ ema:
   max_value: 0.9999
 
 dataloader:
-  batch_size: 128
+  batch_size: 256
   num_workers: 1
   shuffle: True
   pin_memory: True
   persistent_workers: False
 
 val_dataloader:
-  batch_size: 128
+  batch_size: 256
   num_workers: 1
   shuffle: False
   pin_memory: True
@@ -95,11 +95,11 @@ training:
   resume: True
   lr_scheduler: cosine
   lr_warmup_steps: 500
-  num_epochs: 5000
+  num_epochs: 500
   gradient_accumulate_every: 1
   use_ema: True
-  rollout_every: 50
-  checkpoint_every: 50
+  rollout_every: 10
+  checkpoint_every: 10
   val_every: 1
   sample_every: 5
   max_train_steps: null
@@ -119,7 +119,7 @@ checkpoint:
   topk:
     monitor_key: test_mean_score
     mode: max
-    k: 5
+    k: 2
     format_str: 'epoch={epoch:04d}-test_mean_score={test_mean_score:.3f}.ckpt'
   save_last_checkpoint: True
   save_last_snapshot: False

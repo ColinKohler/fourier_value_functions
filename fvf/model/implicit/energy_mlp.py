@@ -20,7 +20,12 @@ class EnergyMLP(nn.Module):
     """Vanilla IBC energy head."""
 
     def __init__(
-        self, obs_feat_dim: int, mlp_dim: int, dropout: float, spec_norm: bool
+        self,
+        obs_feat_dim: int,
+        mlp_dim: int,
+        dropout: float,
+        spec_norm: bool = False,
+        initialize: bool = False,
     ):
         super().__init__()
         self.energy_mlp = MLP(
