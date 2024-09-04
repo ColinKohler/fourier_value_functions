@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Tuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -6,68 +6,63 @@ from einops import rearrange, reduce
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 
 from fvf.model.common.normalizer import LinearNormalizer
-from fvf.utils import torch_utils
 from fvf.policy.base_policy import BasePolicy
-
-from fvf.model.diffusion.conditional_unet1d import ConditionalUnet1D
+from fvf.model.diffusion.transformer_for_diffusion import TransformerForDiffusion
 from fvf.model.diffusion.mask_generator import LowdimMaskGenerator
 
 
-class DiffusionUnetPolicy(BasePolicy):
+class DiffusionTransformerLowdimPolicy(BasePolicy):
     def __init__(
         self,
-        model: ConditionalUnet1D,
+        model: TransformerForDiffusion,
         noise_scheduler: DDPMScheduler,
-        horizon: int,
-        obs_dim: int,
-        action_dim: int,
-        num_obs_steps: int,
-        num_action_steps: int,
-        num_inference_steps: bool = None,
-        obs_as_local_cond: bool = False,
-        obs_as_global_cond: bool = False,
-        pred_action_steps_only: bool = False,
-        oa_step_convention: bool = False,
+        horizon,
+        obs_dim,
+        action_dim,
+        num_action_steps,
+        num_obs_steps,
+        num_inference_steps=None,
+        obs_as_cond=False,
+        pred_action_steps_only=False,
         # parameters passed to step
         **kwargs,
     ):
         super().__init__(obs_dim, action_dim, num_obs_steps, num_action_steps)
-        assert not (obs_as_local_cond and obs_as_global_cond)
-
         if pred_action_steps_only:
-            assert obs_as_global_cond
+            assert obs_as_cond
 
         self.model = model
         self.noise_scheduler = noise_scheduler
         self.mask_generator = LowdimMaskGenerator(
             action_dim=action_dim,
-            obs_dim=0 if (obs_as_local_cond or obs_as_global_cond) else obs_dim,
+            obs_dim=0 if (obs_as_cond) else obs_dim,
             max_n_obs_steps=num_obs_steps,
             fix_obs_steps=True,
             action_visible=False,
         )
+        self.normalizer = LinearNormalizer()
         self.horizon = horizon
-        self.obs_as_local_cond = obs_as_local_cond
-        self.obs_as_global_cond = obs_as_global_cond
+        self.obs_as_cond = obs_as_cond
         self.pred_action_steps_only = pred_action_steps_only
-        self.oa_step_convention = oa_step_convention
         self.kwargs = kwargs
 
         if num_inference_steps is None:
             num_inference_steps = noise_scheduler.config.num_train_timesteps
         self.num_inference_steps = num_inference_steps
 
+    # ========= inference  ============
     def conditional_sample(
         self,
         condition_data,
         condition_mask,
-        local_cond=None,
-        global_cond=None,
+        cond=None,
         generator=None,
         # keyword arguments to scheduler.step
         **kwargs,
     ):
-        # Sample random trajectory
+        model = self.model
+        scheduler = self.noise_scheduler
+
         trajectory = torch.randn(
             size=condition_data.shape,
             dtype=condition_data.dtype,
@@ -75,67 +70,67 @@ class DiffusionUnetPolicy(BasePolicy):
             generator=generator,
         )
 
-        self.noise_scheduler.set_timesteps(self.num_inference_steps)
-        for t in self.noise_scheduler.timesteps:
+        # set step values
+        scheduler.set_timesteps(self.num_inference_steps)
+
+        for t in scheduler.timesteps:
             # 1. apply conditioning
             trajectory[condition_mask] = condition_data[condition_mask]
 
             # 2. predict model output
-            model_output = self.model(
-                trajectory, t, local_cond=local_cond, global_cond=global_cond
-            )
+            model_output = model(trajectory, t, cond)
 
             # 3. compute previous image: x_t -> x_t-1
-            trajectory = self.noise_scheduler.step(
+            trajectory = scheduler.step(
                 model_output, t, trajectory, generator=generator, **kwargs
             ).prev_sample
 
+        # finally make sure conditioning is enforced
         trajectory[condition_mask] = condition_data[condition_mask]
+
         return trajectory
 
-    def get_action(self, obs, device):
-        nobs = self.normalizer.normalize(obs)["keypoints"]
-        B = list(obs.values())[0].shape[0]
+    def get_action(self, obs_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+        """
+        obs_dict: must include "obs" key
+        result: must include "action" key
+        """
 
-        Do = self.obs_dim
-        Da = self.action_dim
+        assert "obs" in obs_dict
+        assert "past_action" not in obs_dict  # not implemented yet
+        nobs = self.normalizer["obs"].normalize(obs_dict["obs"])
+        B, _, Do = nobs.shape
         To = self.num_obs_steps
+        assert Do == self.obs_dim
         T = self.horizon
+        Da = self.action_dim
+
+        # build input
+        device = self.device
+        dtype = self.dtype
 
         # handle different ways of passing observation
-        local_cond = None
-        global_cond = None
-        if self.obs_as_local_cond:
-            # condition through local feature
-            # all zero except first To timesteps
-            local_cond = torch.zeros(size=(B, T, Do), device=device, dtype=self.dtype)
-            local_cond[:, :To] = nobs[:, :To]
-            shape = (B, T, Da)
-            cond_data = torch.zeros(size=shape, device=device, dtype=self.dtype)
-            cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
-        elif self.obs_as_global_cond:
-            # condition throught global feature
-            global_cond = nobs[:, :To].reshape(nobs.shape[0], -1)
+        cond = None
+        cond_data = None
+        cond_mask = None
+        if self.obs_as_cond:
+            cond = nobs[:, :To]
             shape = (B, T, Da)
             if self.pred_action_steps_only:
                 shape = (B, self.num_action_steps, Da)
-            cond_data = torch.zeros(size=shape, device=device, dtype=self.dtype)
+            cond_data = torch.zeros(size=shape, device=device, dtype=dtype)
             cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
         else:
             # condition through impainting
             shape = (B, T, Da + Do)
-            cond_data = torch.zeros(size=shape, device=device, dtype=self.dtype)
+            cond_data = torch.zeros(size=shape, device=device, dtype=dtype)
             cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
             cond_data[:, :To, Da:] = nobs[:, :To]
             cond_mask[:, :To, Da:] = True
 
         # run sampling
         nsample = self.conditional_sample(
-            cond_data,
-            cond_mask,
-            local_cond=local_cond,
-            global_cond=global_cond,
-            **self.kwargs,
+            cond_data, cond_mask, cond=cond, **self.kwargs
         )
 
         # unnormalize prediction
@@ -146,42 +141,45 @@ class DiffusionUnetPolicy(BasePolicy):
         if self.pred_action_steps_only:
             action = action_pred
         else:
-            start = To
-            if self.oa_step_convention:
-                start = To - 1
+            start = To - 1
             end = start + self.num_action_steps
             action = action_pred[:, start:end]
 
         result = {"action": action, "action_pred": action_pred}
-        if not (self.obs_as_local_cond or self.obs_as_global_cond):
+        if not self.obs_as_cond:
             nobs_pred = nsample[..., Da:]
-            obs_pred = self.normalizer.unnormalize(nobs_pred)
+            obs_pred = self.normalizer["obs"].unnormalize(nobs_pred)
             action_obs_pred = obs_pred[:, start:end]
             result["action_obs_pred"] = action_obs_pred
             result["obs_pred"] = obs_pred
         return result
 
+    # ========= training  ============
+    def set_normalizer(self, normalizer: LinearNormalizer):
+        self.normalizer.load_state_dict(normalizer.state_dict())
+
+    def get_optimizer(
+        self, weight_decay: float, learning_rate: float, betas: Tuple[float, float]
+    ) -> torch.optim.Optimizer:
+        return self.model.configure_optimizers(
+            weight_decay=weight_decay, learning_rate=learning_rate, betas=tuple(betas)
+        )
+
     def compute_loss(self, batch):
         # normalize input
         assert "valid_mask" not in batch
-        obs = self.normalizer.normalize(batch["obs"])["keypoints"]
-        action = self.normalizer["action"].normalize(batch["action"]).float()
+        nbatch = self.normalizer.normalize(batch)
+        obs = nbatch["obs"]
+        action = nbatch["action"]
 
         # handle different ways of passing observation
-        local_cond = None
-        global_cond = None
+        cond = None
         trajectory = action
-        if self.obs_as_local_cond:
-            # zero out observations after n_obs_steps
-            local_cond = obs
-            local_cond[:, self.num_obs_steps :, :] = 0
-        elif self.obs_as_global_cond:
-            global_cond = obs[:, : self.num_obs_steps, :].reshape(obs.shape[0], -1)
+        if self.obs_as_cond:
+            cond = obs[:, : self.num_obs_steps, :]
             if self.pred_action_steps_only:
                 To = self.num_obs_steps
-                start = To
-                if self.oa_step_convention:
-                    start = To - 1
+                start = To - 1
                 end = start + self.num_action_steps
                 trajectory = action[:, start:end]
         else:
@@ -214,9 +212,7 @@ class DiffusionUnetPolicy(BasePolicy):
         noisy_trajectory[condition_mask] = trajectory[condition_mask]
 
         # Predict the noise residual
-        pred = self.model(
-            noisy_trajectory, timesteps, local_cond=local_cond, global_cond=global_cond
-        )
+        pred = self.model(noisy_trajectory, timesteps, cond)
 
         pred_type = self.noise_scheduler.config.prediction_type
         if pred_type == "epsilon":
@@ -230,5 +226,4 @@ class DiffusionUnetPolicy(BasePolicy):
         loss = loss * loss_mask.type(loss.dtype)
         loss = reduce(loss, "b ... -> b (...)", "mean")
         loss = loss.mean()
-
         return loss

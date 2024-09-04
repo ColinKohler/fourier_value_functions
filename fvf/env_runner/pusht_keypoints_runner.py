@@ -151,7 +151,12 @@ class PushTKeypointsRunner(BaseRunner):
         self.max_steps = max_steps
         self.tqdm_interval_sec = tqdm_interval_sec
 
-    def run(self, policy: BasePolicy, plot_energy_fn: bool = False):
+    def run(
+        self,
+        policy: BasePolicy,
+        plot_energy_fn: bool = False,
+        plot_weights_basis_fns: bool = False,
+    ):
         device = policy.device
         dtype = policy.dtype
 
@@ -238,6 +243,7 @@ class PushTKeypointsRunner(BaseRunner):
                 )
                 action_dict = dict_apply(action_dict, lambda x: x.to("cpu").numpy())
                 action = action_dict["action"][:, self.num_latency_steps :]
+                # action = action_dict["action"][:, 0:1]
 
                 # Step env
                 obs, reward, done, timeout, info = env.step(action)

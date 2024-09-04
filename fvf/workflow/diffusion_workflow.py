@@ -29,7 +29,9 @@ OmegaConf.register_new_resolver("eval", eval, replace=True)
 class DiffusionWorkflow(BaseWorkflow):
     include_keys = ["global_step", "epoch"]
 
-    def __init__(self, config: OmegaConf, output_dir: Optional[str] = None):
+    def __init__(
+        self, config: OmegaConf, output_dir: Optional[str] = None, eval: bool = False
+    ):
         super().__init__(config, output_dir=output_dir)
 
         # Set random seed
@@ -88,13 +90,13 @@ class DiffusionWorkflow(BaseWorkflow):
         # Configure EMA
         ema: EMAModel = None
         if self.config.training.use_ema:
-            ema = hydra.utils.instantiate(
-                self.config.ema,
-                model=self.ema_model)
+            ema = hydra.utils.instantiate(self.config.ema, model=self.ema_model)
 
         # Env runner
         env_runner: BaseRunner
-        env_runner = hydra.utils.instantiate(self.config.task.env_runner, output_dir=self.output_dir)
+        env_runner = hydra.utils.instantiate(
+            self.config.task.env_runner, output_dir=self.output_dir
+        )
 
         # Setup logging
         wandb_run = wandb.init(
@@ -111,8 +113,8 @@ class DiffusionWorkflow(BaseWorkflow):
 
         # Checkpointer
         topk_manager = TopKCheckpointManager(
-            save_dir=os.path.join(self.output_dir, 'checkpoints'),
-            **self.config.checkpoint.topk
+            save_dir=os.path.join(self.output_dir, "checkpoints"),
+            **self.config.checkpoint.topk,
         )
 
         # Save batch for diffusion sampling
@@ -158,7 +160,7 @@ class DiffusionWorkflow(BaseWorkflow):
                             "train_loss": loss.item(),
                             "global_step": self.global_step,
                             "epoch": self.epoch,
-                            'lr': lr_scheduler.get_last_lr()[0],
+                            "lr": lr_scheduler.get_last_lr()[0],
                         }
 
                         is_last_batch = batch_idx == len(train_dataloader) - 1
@@ -205,18 +207,18 @@ class DiffusionWorkflow(BaseWorkflow):
                     with torch.no_grad():
                         # sample trajectory from training set, and evaluate difference
                         batch = train_sampling_batch
-                        gt_action = batch['action']
+                        gt_action = batch["action"]
 
-                        result = self.model.get_action(batch['obs'], device)
+                        result = self.model.get_action(batch["obs"], device)
                         if self.config.pred_action_steps_only:
-                            pred_action = result['action']
+                            pred_action = result["action"]
                             start = self.config.n_obs_steps - 1
                             end = start + self.config.n_action_steps
-                            gt_action = gt_action[:,start:end]
+                            gt_action = gt_action[:, start:end]
                         else:
-                            pred_action = result['action_pred']
+                            pred_action = result["action_pred"]
                         mse = torch.nn.functional.mse_loss(pred_action, gt_action)
-                        step_log['train_action_mse_error'] = mse.item()
+                        step_log["train_action_mse_error"] = mse.item()
 
                         # Free memory allocated to batch
                         del batch
@@ -232,7 +234,7 @@ class DiffusionWorkflow(BaseWorkflow):
 
                     metric_dict = dict()
                     for k, v in step_log.items():
-                        metric_dict[k.replace('/', '_')] = v
+                        metric_dict[k.replace("/", "_")] = v
                     topk_checkpoint_path = topk_manager.get_ckpt_path(metric_dict)
                     if topk_checkpoint_path is not None:
                         self.save_checkpoint(path=topk_checkpoint_path)

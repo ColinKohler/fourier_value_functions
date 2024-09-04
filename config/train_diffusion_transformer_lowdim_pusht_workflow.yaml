@@ -2,12 +2,11 @@ defaults:
   - _self_
   - task: pusht_lowdim
 
-name: train_diffusion_unet_lowdim
-_target_: fvf.workflow.diffusion_workflow.DiffusionWorkflow
+name: train_diffusion_transformer_lowdim
+_target_: fvf.workflow.diffusion_transformer_lowdim_workflow.DiffusionTransformerLowdimWorkflow
 
 obs_dim: ${task.obs_dim}
 action_dim: ${task.action_dim}
-keypoint_dim: ${task.keypoint_dim}
 task_name: ${task.name}
 exp_name: "default"
 
@@ -17,24 +16,31 @@ num_action_steps: 8
 num_latency_steps: 0
 past_action_visible: False
 keypoint_visible_rate: 1.0
-obs_as_local_cond: False
-obs_as_global_cond: True
+obs_as_cond: True
 pred_action_steps_only: False
 action_coords: "rectangular"
 
 policy:
-  _target_: fvf.policy.diffusion_unet_policy.DiffusionUnetPolicy
+  _target_: fvf.policy.diffusion_transformer_lowdim_policy.DiffusionTransformerLowdimPolicy
 
   model:
-    _target_: fvf.model.diffusion.conditional_unet1d.ConditionalUnet1D
-    input_dim: "${eval: ${task.action_dim} if ${obs_as_local_cond} or ${obs_as_global_cond} else ${task.obs_dim} + ${task.action_dim}}"
-    local_cond_dim: "${eval: ${task.obs_dim} if ${obs_as_local_cond} else None}"
-    global_cond_dim: "${eval: ${task.obs_dim}*${num_obs_steps} if ${obs_as_global_cond} else None}"
-    diffusion_step_embed_dim: 256
-    down_dims: [256, 512, 1024]
-    kernel_size: 5
-    n_groups: 8
-    cond_predict_scale: True
+    _target_: fvf.model.diffusion.transformer_for_diffusion.TransformerForDiffusion
+    input_dim: ${eval:'${action_dim} if ${obs_as_cond} else ${obs_dim} + ${action_dim}'}
+    output_dim: ${policy.model.input_dim}
+    horizon: ${horizon}
+    num_obs_steps: ${num_obs_steps}
+    cond_dim: ${eval:'${obs_dim} if ${obs_as_cond} else 0'}
+
+    n_layer: 8
+    n_head: 4
+    n_emb: 256
+    p_drop_emb: 0.0
+    p_drop_attn: 0.01
+
+    causal_attn: True
+    time_as_cond: True # if false, use BERT like encoder only arch, time as input
+    obs_as_cond: ${obs_as_cond}
+    n_cond_layers: 0 # >0: use transformer encoder for cond, otherwise use MLP
   
   noise_scheduler:
     _target_: diffusers.schedulers.scheduling_ddpm.DDPMScheduler
@@ -42,20 +48,18 @@ policy:
     beta_start: 0.0001
     beta_end: 0.02
     beta_schedule: squaredcos_cap_v2
-    variance_type: fixed_small
-    clip_sample: True 
+    variance_type: fixed_small # Yilun's paper uses fixed_small_log instead, but easy to cause Nan
+    clip_sample: True # required when predict_epsilon=False
     prediction_type: epsilon # or sample
 
   horizon: ${horizon}
   obs_dim: ${obs_dim}
   action_dim: ${action_dim}
-  num_action_steps: ${eval:'${num_action_steps}+${num_latency_steps}'}
+  num_action_steps: ${num_action_steps}
   num_obs_steps: ${num_obs_steps}
   num_inference_steps: 100
-  obs_as_local_cond: ${obs_as_local_cond}
-  obs_as_global_cond: ${obs_as_global_cond}
+  obs_as_cond: ${obs_as_cond}
   pred_action_steps_only: ${pred_action_steps_only}
-  oa_step_convention: True
 
   # scheduler.step params
   # predict_epsilon: True
@@ -83,27 +87,32 @@ val_dataloader:
   persistent_workers: False
 
 optimizer:
-  _target_: torch.optim.AdamW
-  lr: 1e-4
-  betas: [0.95, 0.999]
-  eps: 1e-8
-  weight_decay: 1e-6
+  learning_rate: 1.0e-4
+  weight_decay: 1.0e-1
+  betas: [0.9, 0.95]
 
 training:
   device: "cuda:0"
   seed: 0
+  debug: False
   resume: True
+  # optimization
   lr_scheduler: cosine
-  lr_warmup_steps: 500
-  num_epochs: 3500
+  # Transformer needs LR warmup
+  lr_warmup_steps: 1000
+  num_epochs: 8000
   gradient_accumulate_every: 1
   use_ema: True
+  # training loop control
+  # in epochs
   rollout_every: 50
   checkpoint_every: 50
   val_every: 1
   sample_every: 5
+  # steps per epoch
   max_train_steps: null
   max_val_steps: null
+  # misc
   tqdm_interval_sec: 1.0
 
 logging:
@@ -121,7 +130,7 @@ checkpoint:
     mode: max
     k: 2
     format_str: 'epoch={epoch:04d}-test_mean_score={test_mean_score:.3f}.ckpt'
-  save_last_checkpoint: True
+  save_last_ckpt: True
   save_last_snapshot: False
 
 multi_run:

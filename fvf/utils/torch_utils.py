@@ -84,6 +84,14 @@ def dict_apply(
     return result
 
 
+def optimizer_to(optimizer, device):
+    for state in optimizer.state.values():
+        for k, v in state.items():
+            if isinstance(v, torch.Tensor):
+                state[k] = v.to(device=device)
+    return optimizer
+
+
 def copy_to_cpu(x):
     if isinstance(x, torch.Tensor):
         return x.detach().to("cpu")
