@@ -90,15 +90,15 @@ class DiffusionTransformerLowdimPolicy(BasePolicy):
 
         return trajectory
 
-    def get_action(self, obs_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+    def get_action(
+        self, obs: Dict[str, torch.Tensor], device
+    ) -> Dict[str, torch.Tensor]:
         """
         obs_dict: must include "obs" key
         result: must include "action" key
         """
 
-        assert "obs" in obs_dict
-        assert "past_action" not in obs_dict  # not implemented yet
-        nobs = self.normalizer["obs"].normalize(obs_dict["obs"])
+        nobs = self.normalizer.normalize(obs)["keypoints"]
         B, _, Do = nobs.shape
         To = self.num_obs_steps
         assert Do == self.obs_dim
@@ -106,7 +106,6 @@ class DiffusionTransformerLowdimPolicy(BasePolicy):
         Da = self.action_dim
 
         # build input
-        device = self.device
         dtype = self.dtype
 
         # handle different ways of passing observation
@@ -168,9 +167,8 @@ class DiffusionTransformerLowdimPolicy(BasePolicy):
     def compute_loss(self, batch):
         # normalize input
         assert "valid_mask" not in batch
-        nbatch = self.normalizer.normalize(batch)
-        obs = nbatch["obs"]
-        action = nbatch["action"]
+        obs = self.normalizer.normalize(batch["obs"])["keypoints"]
+        action = self.normalizer["action"].normalize(batch["action"]).float()
 
         # handle different ways of passing observation
         cond = None
