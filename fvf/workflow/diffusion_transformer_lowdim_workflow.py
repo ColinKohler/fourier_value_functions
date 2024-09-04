@@ -252,10 +252,9 @@ class DiffusionTransformerLowdimWorkflow(BaseWorkflow):
                             train_sampling_batch,
                             lambda x: x.to(device, non_blocking=True),
                         )
-                        obs_dict = {"obs": batch["obs"]}
                         gt_action = batch["action"]
 
-                        result = policy.get_action(obs_dict, device)
+                        result = policy.get_action(batch["obs"], device)
                         if config.pred_action_steps_only:
                             pred_action = result["action"]
                             start = config.n_obs_steps - 1
@@ -266,7 +265,6 @@ class DiffusionTransformerLowdimWorkflow(BaseWorkflow):
                         mse = torch.nn.functional.mse_loss(pred_action, gt_action)
                         step_log["train_action_mse_error"] = mse.item()
                         del batch
-                        del obs_dict
                         del gt_action
                         del result
                         del pred_action
