@@ -255,7 +255,7 @@ class DiffusionTransformerLowdimWorkflow(BaseWorkflow):
                         obs_dict = {"obs": batch["obs"]}
                         gt_action = batch["action"]
 
-                        result = policy.predict_action(obs_dict)
+                        result = policy.get_action(obs_dict, device)
                         if config.pred_action_steps_only:
                             pred_action = result["action"]
                             start = config.n_obs_steps - 1
