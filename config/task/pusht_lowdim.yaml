@@ -22,6 +22,7 @@ env_runner:
   past_action: ${past_action_visible}
   num_envs: 30
   random_goal_pose: False
+  action_coords: ${action_coords}
 
 dataset:
   _target_: fvf.dataset.pusht_lowdim_dataset.PushTLowdimDataset

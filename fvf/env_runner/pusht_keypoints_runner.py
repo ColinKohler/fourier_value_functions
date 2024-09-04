@@ -45,9 +45,11 @@ class PushTKeypointsRunner(BaseRunner):
         tqdm_interval_sec=5.0,
         num_envs=None,
         random_goal_pose=False,
+        action_coords="rectangular",
     ):
         super().__init__(output_dir)
         num_envs = num_train + num_test if num_envs is None else num_envs
+        self.action_coords = action_coords
 
         env_num_obs_steps = num_obs_steps + num_latency_steps
         env_num_action_steps = num_action_steps
@@ -213,17 +215,18 @@ class PushTKeypointsRunner(BaseRunner):
                 obs_dict = dict_apply(
                     obs_dict, lambda x: torch.from_numpy(x).to(device)
                 )
-                x_obs = obs_dict["keypoints"].reshape(B, -1, 2)[:, :, 0] - 255.0
-                y_obs = (
-                    obs_dict["keypoints"].reshape(B, -1, 2)[:, :, 1] - 255.0
-                ) * -1.0
-                obs_dict["keypoints"] = (
-                    torch.concatenate(
-                        (x_obs.unsqueeze(-1), y_obs.unsqueeze(-1)), dim=-1
+                if self.action_coords == "polar":
+                    x_obs = obs_dict["keypoints"].reshape(B, -1, 2)[:, :, 0] - 255.0
+                    y_obs = (
+                        obs_dict["keypoints"].reshape(B, -1, 2)[:, :, 1] - 255.0
+                    ) * -1.0
+                    obs_dict["keypoints"] = (
+                        torch.concatenate(
+                            (x_obs.unsqueeze(-1), y_obs.unsqueeze(-1)), dim=-1
+                        )
+                        .view(B, -1)
+                        .view(B, 2, Do)
                     )
-                    .view(B, -1)
-                    .view(B, 2, Do)
-                )
 
                 with torch.no_grad():
                     action_dict = policy.get_action(obs_dict, device)
@@ -236,14 +239,14 @@ class PushTKeypointsRunner(BaseRunner):
                             policy.plot_energy_fn(img, action_dict["energy"][i])
                         )
 
-                x_act = action_dict["action"][:, :, 0]
-                y_act = action_dict["action"][:, :, 1] * -1
-                action_dict["action"] = torch.concatenate((x_act, y_act), dim=-1).view(
-                    B, self.num_action_steps, 2
-                )
+                if self.action_coords == "polar":
+                    x_act = action_dict["action"][:, :, 0]
+                    y_act = action_dict["action"][:, :, 1] * -1
+                    action_dict["action"] = torch.concatenate(
+                        (x_act, y_act), dim=-1
+                    ).view(B, self.num_action_steps, 2)
                 action_dict = dict_apply(action_dict, lambda x: x.to("cpu").numpy())
                 action = action_dict["action"][:, self.num_latency_steps :]
-                # action = action_dict["action"][:, 0:1]
 
                 # Step env
                 obs, reward, done, timeout, info = env.step(action)
