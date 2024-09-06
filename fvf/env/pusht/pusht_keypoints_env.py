@@ -25,7 +25,8 @@ class PushTKeypointsEnv(PushTEnv):
             render_size=render_size,
             reset_to_state=reset_to_state,
             render_action=render_action,
-            random_goal_pose=random_goal_pose)
+            random_goal_pose=random_goal_pose,
+            render_mode='human')
         ws = self.window_size
 
         if local_keypoint_map is None:

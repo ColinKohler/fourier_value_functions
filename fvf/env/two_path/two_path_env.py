@@ -1,7 +1,5 @@
 import os
 
-os.environ["SDL_VIDEODRIVER"] = "dummy"
-
 import gymnasium as gym
 from gymnasium import spaces
 
@@ -108,11 +106,11 @@ class TwoPathEnv(gym.Env):
             rs = np.random.RandomState(seed=seed)
             state = np.array(
                 [
-                    rs.randint(50, 450),
-                    rs.randint(50, 450),
-                    rs.randint(100, 400),
-                    rs.randint(100, 400),
-                    rs.randn() * 2 * np.pi - np.pi,
+                    self.window_size // 2,
+                    self.window_size // 2,
+                    rs.randint(self.window_size // 2 - 1, self.window_size // 2 + 1),
+                    rs.randint(140, 160),
+                    0,
                 ]
             )
         self._set_state(state)
@@ -128,10 +126,7 @@ class TwoPathEnv(gym.Env):
             self.latest_action = action
             for i in range(n_steps):
                 # Step PD control.
-                self.agent.velocity = self.k_p * (
-                    (self.agent.position + action) - self.agent.position
-                )  # P control works too.
-                # self.agent.velocity = self.k_p * (action - self.agent.position)    # P control works too.
+                self.agent.velocity = self.k_p * Vec2d(*action)
 
                 # acceleration = self.k_p * (action - self.agent.position) + self.k_v * (Vec2d(0, 0) - self.agent.velocity)
                 # self.agent.velocity += acceleration * dt
@@ -327,25 +322,6 @@ class TwoPathEnv(gym.Env):
         # Run physics to take effect
         self.space.step(1.0 / self.sim_hz)
 
-    def _set_state_local(self, state_local):
-        agent_pos_local = state_local[:2]
-        block_pose_local = state_local[2:]
-        tf_img_obj = st.AffineTransform(
-            translation=self.goal_pose[:2], rotation=self.goal_pose[2]
-        )
-        tf_obj_new = st.AffineTransform(
-            translation=block_pose_local[:2], rotation=block_pose_local[2]
-        )
-        tf_img_new = st.AffineTransform(matrix=tf_img_obj.params @ tf_obj_new.params)
-        agent_pos_new = tf_img_new(agent_pos_local)
-        new_state = np.array(
-            list(agent_pos_new[0])
-            + list(tf_img_new.translation)
-            + [tf_img_new.rotation]
-        )
-        self._set_state(new_state)
-        return new_state
-
     def _setup(self):
         self.space = pymunk.Space()
         self.space.gravity = 0, 0
@@ -364,7 +340,7 @@ class TwoPathEnv(gym.Env):
 
         # Add agent, block, and goal zone.
         self.agent = self.add_circle((256, 100), 15)
-        self.wall = self.add_box((256, 256), 20, 10)
+        self.wall = self.add_box((256, 256), 200, 50)
         self.goal_color = pygame.Color("LightGreen")
         self.goal_pose = np.array([256, 300])  # x, y
 
@@ -384,7 +360,7 @@ class TwoPathEnv(gym.Env):
         return shape
 
     def add_circle(self, position, radius):
-        body = pymunk.Body(body_type=pymunk.Body.KINEMATIC)
+        body = pymunk.Body(10, float("inf"))
         body.position = position
         body.friction = 1
         shape = pymunk.Circle(body, radius)

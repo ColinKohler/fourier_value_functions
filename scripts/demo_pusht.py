@@ -5,8 +5,8 @@ sys.path.insert(0, os.path.abspath("."))
 
 import numpy as np
 import click
-from imitation_learning.dataset.replay_buffer import ReplayBuffer
-from imitation_learning.env.pusht.pusht_keypoints_env import PushTKeypointsEnv
+from fvf.dataset.replay_buffer import ReplayBuffer
+from fvf.env.pusht.pusht_keypoints_env import PushTKeypointsEnv
 import pygame
 
 @click.command()
@@ -50,7 +50,7 @@ def main(output, render_size, control_hz):
         # reset env and get observations (including info and render for recording)
         obs = env.reset(seed, None)
         info = env._get_info()
-        img = env.render(mode='human')
+        img = env.render()
 
         # loop state
         retry = False
@@ -106,8 +106,8 @@ def main(output, render_size, control_hz):
                 episode.append(data)
 
             # step env and render
-            obs, reward, done, info = env.step(act)
-            img = env.render(mode='human')
+            obs, reward, done, _, info = env.step(act)
+            img = env.render()
 
             # regulate control frequency
             clock.tick(control_hz)

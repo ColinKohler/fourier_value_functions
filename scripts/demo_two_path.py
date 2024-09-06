@@ -6,7 +6,6 @@ import pygame
 from fvf.dataset.replay_buffer import ReplayBuffer
 from fvf.env.two_path.two_path_env import TwoPathEnv
 
-
 @click.command()
 @click.option("-o", "--output", required=True)
 @click.option("-rs", "--render_size", default=96, type=int)
@@ -42,7 +41,8 @@ def main(output, render_size, control_hz):
     while True:
         episode = list()
         # record in seed order, starting with 0
-        seed = replay_buffer.n_episodes
+        import numpy.random as npr
+        seed = npr.randint(10)#replay_buffer.n_episodes
         print(f"starting seed {seed}")
 
         # set seed for env
@@ -88,24 +88,24 @@ def main(output, render_size, control_hz):
             # get action from mouse
             # None if mouse is not close to the agent
             act = agent.act(obs)
-            # if not act is None:
-            # teleop started
-            # state dim 2+3
-            state = np.concatenate([info["pos_agent"], info["wall_pose"]])
-            # discard unused information such as visibility mask and agent pos
-            # for compatibility
-            # @keypoint = obs.reshape(2, -1)[0].reshape(-1, 2)[:18]
-            keypoint = np.array([0])
-            # ap = info['pos_agent'] - 255.0
-            # ap[1] *= -1
-            data = {
-                "img": img,
-                "state": np.float32(state),
-                "keypoint": np.float32(keypoint),
-                "action": np.float32(act),
-                "n_contacts": np.float32([info["n_contacts"]]),
-            }
-            episode.append(data)
+            if not act is None:
+                # teleop started
+                # state dim 2+3
+                state = np.concatenate([info["pos_agent"], info["wall_pose"]])
+                # discard unused information such as visibility mask and agent pos
+                # for compatibility
+                # @keypoint = obs.reshape(2, -1)[0].reshape(-1, 2)[:18]
+                keypoint = np.array([0])
+                # ap = info['pos_agent'] - 255.0
+                # ap[1] *= -1
+                data = {
+                    "img": img,
+                    "state": np.float32(state),
+                    "keypoint": np.float32(keypoint),
+                    "action": np.float32(act),
+                    "n_contacts": np.float32([info["n_contacts"]]),
+                }
+                episode.append(data)
 
             # step env and render
             obs, reward, done, terminated, info = env.step(act)
