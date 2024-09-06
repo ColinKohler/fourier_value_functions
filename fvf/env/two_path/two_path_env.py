@@ -38,7 +38,6 @@ class TwoPathEnv(gym.Env):
     def __init__(
         self,
         legacy=False,
-        block_cog=None,
         damping=None,
         render_action=True,
         render_size=96,
@@ -77,7 +76,6 @@ class TwoPathEnv(gym.Env):
             dtype=np.float64,
         )
 
-        self.block_cog = block_cog
         self.damping = damping
         self.render_action = render_action
 
@@ -101,8 +99,6 @@ class TwoPathEnv(gym.Env):
     def reset(self, seed, options):
         seed = self._seed
         self._setup()
-        if self.block_cog is not None:
-            self.block.center_of_gravity = self.block_cog
         if self.damping is not None:
             self.space.damping = self.damping
 
@@ -145,19 +141,21 @@ class TwoPathEnv(gym.Env):
 
         # compute reward
         goal_body = self._get_goal_pose_body(self.goal_pose)
-        goal_geom = pymunk_to_shapely(goal_body, self.block.shapes)
-        block_geom = pymunk_to_shapely(self.block, self.block.shapes)
+        # goal_geom = pymunk_to_shapely(goal_body, self.block.shapes)
+        # block_geom = pymunk_to_shapely(self.block, self.block.shapes)
 
-        block_geom = block_geom.buffer(0)
-        goal_geom = goal_geom.buffer(0)
-        if goal_geom.intersects(block_geom):
-            intersection_area = goal_geom.intersection(block_geom).area
-            goal_area = goal_geom.area
-            coverage = intersection_area / goal_area
-        else:
-            coverage = 0
-        reward = np.clip(coverage / self.success_threshold, 0, 1)
-        done = coverage > self.success_threshold
+        # block_geom = block_geom.buffer(0)
+        # goal_geom = goal_geom.buffer(0)
+        # if goal_geom.intersects(block_geom):
+        #    intersection_area = goal_geom.intersection(block_geom).area
+        #    goal_area = goal_geom.area
+        #    coverage = intersection_area / goal_area
+        # else:
+        #    coverage = 0
+        # reward = np.clip(coverage / self.success_threshold, 0, 1)
+        # done = coverage > self.success_threshold
+        reward = 0
+        done = False
 
         observation = self._get_obs()
         info = self._get_info()
@@ -222,8 +220,6 @@ class TwoPathEnv(gym.Env):
         mass = 1
         inertia = pymunk.moment_for_box(mass, (50, 100))
         body = pymunk.Body(mass, inertia)
-        # preserving the legacy assignment order for compatibility
-        # the order here doesn't matter somehow, maybe because CoM is aligned with body origin
         body.position = pose[:2].tolist()
         return body
 
@@ -233,7 +229,7 @@ class TwoPathEnv(gym.Env):
         info = {
             "pos_agent": np.array(self.agent.position),
             "vel_agent": np.array(self.agent.velocity),
-            "block_pose": np.array(list(self.block.position) + [self.block.angle]),
+            "wall_pose": np.array(list(self.wall.position) + [self.wall.angle]),
             "goal_pose": self.goal_pose,
             "n_contacts": n_contact_points_per_step,
         }
@@ -256,7 +252,7 @@ class TwoPathEnv(gym.Env):
 
         # Draw goal pose.
         goal_body = self._get_goal_pose_body(self.goal_pose)
-        for shape in self.block.shapes:
+        for shape in self.wall.shapes:
             goal_points = [
                 pymunk.pygame_util.to_pygame(
                     goal_body.local_to_world(v), draw_options.surface
@@ -322,11 +318,11 @@ class TwoPathEnv(gym.Env):
         # therefore should be modified first.
         if self.legacy:
             # for compatibility with legacy data
-            self.block.position = pos_block
-            self.block.angle = rot_block
+            self.wall.position = pos_block
+            self.wall.angle = rot_block
         else:
-            self.block.angle = rot_block
-            self.block.position = pos_block
+            self.wall.angle = rot_block
+            self.wall.position = pos_block
 
         # Run physics to take effect
         self.space.step(1.0 / self.sim_hz)
@@ -368,9 +364,9 @@ class TwoPathEnv(gym.Env):
 
         # Add agent, block, and goal zone.
         self.agent = self.add_circle((256, 100), 15)
-        self.block = self.add_box((256, 256), 20, 10)
+        self.wall = self.add_box((256, 256), 20, 10)
         self.goal_color = pygame.Color("LightGreen")
-        self.goal_pose = np.array([256, 300])  # x, y, theta (in radians)
+        self.goal_pose = np.array([256, 300])  # x, y
 
         # Add collision handling
         self.collision_handeler = self.space.add_collision_handler(0, 0)
