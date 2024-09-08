@@ -50,6 +50,47 @@ class PymunkKeypointManager:
         }
 
     @classmethod
+    def create_from_paths_env(cls, env, n_wall_kps=4, n_agent_kps=3, seed=0, **kwargs):
+        rng = np.random.default_rng(seed=seed)
+        local_keypoint_map = dict()
+        for name in ['wall','agent', 'goal']:
+            self = env
+            self.space = pymunk.Space()
+            if name == 'agent':
+                self.agent = obj = self.add_circle((256, 400), 15)
+                n_kps = n_agent_kps
+            elif name == 'goal':
+                self.goal = obj = self.add_wall((256, 300), 0)
+                n_kps = n_block_kps
+            else:
+                self.wall = obj = self.add_wall((256, 300), 0)
+                n_kps = n_block_kps
+
+            self.screen = pygame.Surface((512,512))
+            self.screen.fill(pygame.Color("white"))
+            draw_options = DrawOptions(self.screen)
+            self.space.debug_draw(draw_options)
+            # pygame.display.flip()
+            img = np.uint8(pygame.surfarray.array3d(self.screen).transpose(1, 0, 2))
+            obj_mask = (img != np.array([255,255,255],dtype=np.uint8)).any(axis=-1)
+
+            tf_img_obj = cls.get_tf_img_obj(obj)
+            xy_img = np.moveaxis(np.array(np.indices((512,512))), 0, -1)[:,:,::-1]
+            local_coord_img = tf_img_obj.inverse(xy_img.reshape(-1,2)).reshape(xy_img.shape)
+            obj_local_coords = local_coord_img[obj_mask]
+
+            # furthest point sampling
+            init_idx = rng.choice(len(obj_local_coords))
+            obj_local_kps = farthest_point_sampling(obj_local_coords, n_kps, init_idx)
+            small_shift = rng.uniform(0, 1, size=obj_local_kps.shape)
+            obj_local_kps += small_shift
+
+            local_keypoint_map[name] = obj_local_kps
+
+        return cls(local_keypoint_map=local_keypoint_map, **kwargs)
+
+
+    @classmethod
     def create_from_pusht_env(cls, env, n_block_kps=9, n_agent_kps=3, seed=0, **kwargs):
         rng = np.random.default_rng(seed=seed)
         local_keypoint_map = dict()

@@ -41,8 +41,7 @@ def main(output, render_size, control_hz):
     while True:
         episode = list()
         # record in seed order, starting with 0
-        import numpy.random as npr
-        seed = npr.randint(10)#replay_buffer.n_episodes
+        seed = replay_buffer.n_episodes
         print(f"starting seed {seed}")
 
         # set seed for env
@@ -90,14 +89,9 @@ def main(output, render_size, control_hz):
             act = agent.act(obs)
             if not act is None:
                 # teleop started
-                # state dim 2+3
                 state = np.concatenate([info["pos_agent"], info["wall_pose"]])
-                # discard unused information such as visibility mask and agent pos
-                # for compatibility
-                # @keypoint = obs.reshape(2, -1)[0].reshape(-1, 2)[:18]
+                #keypoint = obs.reshape(2,-1)[0].reshape(-1,2)[:18]
                 keypoint = np.array([0])
-                # ap = info['pos_agent'] - 255.0
-                # ap[1] *= -1
                 data = {
                     "img": img,
                     "state": np.float32(state),

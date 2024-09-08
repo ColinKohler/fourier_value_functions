@@ -53,6 +53,7 @@ class TwoPathEnv(gym.Env):
         self.control_hz = self.metadata["video.frames_per_second"]
         # legcay set_state for data compatibility
         self.legacy = legacy
+        self.goal_th = 25
 
         # agent_pos, block_pos, block_angle
         ws = self.window_size
@@ -106,9 +107,9 @@ class TwoPathEnv(gym.Env):
             rs = np.random.RandomState(seed=seed)
             state = np.array(
                 [
-                    self.window_size // 2,
-                    self.window_size // 2,
-                    rs.randint(self.window_size // 2 - 1, self.window_size // 2 + 1),
+                    rs.randint(self.window_size // 2 - 5, self.window_size // 2 + 5),
+                    rs.randint(self.window_size // 2 - 5, self.window_size // 2 + 5),
+                    rs.randint(self.window_size // 2 - 5, self.window_size // 2 + 5),
                     rs.randint(140, 160),
                     0,
                 ]
@@ -135,22 +136,12 @@ class TwoPathEnv(gym.Env):
                 self.space.step(dt)
 
         # compute reward
-        goal_body = self._get_goal_pose_body(self.goal_pose)
-        # goal_geom = pymunk_to_shapely(goal_body, self.block.shapes)
-        # block_geom = pymunk_to_shapely(self.block, self.block.shapes)
-
-        # block_geom = block_geom.buffer(0)
-        # goal_geom = goal_geom.buffer(0)
-        # if goal_geom.intersects(block_geom):
-        #    intersection_area = goal_geom.intersection(block_geom).area
-        #    goal_area = goal_geom.area
-        #    coverage = intersection_area / goal_area
-        # else:
-        #    coverage = 0
-        # reward = np.clip(coverage / self.success_threshold, 0, 1)
-        # done = coverage > self.success_threshold
-        reward = 0
-        done = False
+        goal_center = Vec2d(
+            self.goal_pose[0] + self.goal_size // 2,
+            self.goal_pose[1] + self.goal_size // 2
+        )
+        done = self.agent.position.get_distance(goal_center) < self.goal_th 
+        reward = float(done)
 
         observation = self._get_obs()
         info = self._get_info()
@@ -213,7 +204,7 @@ class TwoPathEnv(gym.Env):
 
     def _get_goal_pose_body(self, pose):
         mass = 1
-        inertia = pymunk.moment_for_box(mass, (50, 100))
+        inertia = pymunk.moment_for_box(mass, (self.goal_size, self.goal_size))
         body = pymunk.Body(mass, inertia)
         body.position = pose[:2].tolist()
         return body
@@ -246,16 +237,8 @@ class TwoPathEnv(gym.Env):
         draw_options = DrawOptions(canvas)
 
         # Draw goal pose.
-        goal_body = self._get_goal_pose_body(self.goal_pose)
-        for shape in self.wall.shapes:
-            goal_points = [
-                pymunk.pygame_util.to_pygame(
-                    goal_body.local_to_world(v), draw_options.surface
-                )
-                for v in shape.get_vertices()
-            ]
-            goal_points += [goal_points[0]]
-            pygame.draw.polygon(canvas, self.goal_color, goal_points)
+        goal_points = pygame.Rect(*self.goal_pose, 50,50)
+        pygame.draw.rect(canvas, self.goal_color, goal_points)
 
         # Draw agent and block.
         self.space.debug_draw(draw_options)
@@ -340,17 +323,18 @@ class TwoPathEnv(gym.Env):
 
         # Add agent, block, and goal zone.
         self.agent = self.add_circle((256, 100), 15)
-        self.wall = self.add_box((256, 256), 200, 50)
+        self.wall = self.add_wall((256, 256), 200, 20)
         self.goal_color = pygame.Color("LightGreen")
-        self.goal_pose = np.array([256, 300])  # x, y
+        self.goal_size = 50
+        self.goal_pose = np.array([
+            self.window_size // 2 - self.goal_size // 2, 
+            75 - self.goal_size // 2
+        ])  # x, y
 
         # Add collision handling
         self.collision_handeler = self.space.add_collision_handler(0, 0)
         self.collision_handeler.post_solve = self._handle_collision
         self.n_contact_points = 0
-
-        self.max_score = 50 * 100
-        self.success_threshold = 0.90  # 95% coverage.
 
     def _add_segment(self, a, b, radius):
         shape = pymunk.Segment(self.space.static_body, a, b, radius)
@@ -368,7 +352,7 @@ class TwoPathEnv(gym.Env):
         self.space.add(body, shape)
         return body
 
-    def add_box(self, position, height, width):
+    def add_wall(self, position, height, width):
         mass = 10000
         inertia = pymunk.moment_for_box(mass, (height, width))
         body = pymunk.Body(mass, inertia)
