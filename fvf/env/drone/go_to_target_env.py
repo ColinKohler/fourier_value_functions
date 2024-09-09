@@ -1,4 +1,6 @@
 import numpy as np
+import numpy.random as npr
+import pybullet as pb
 
 from gym_pybullet_drones.envs.BaseRLAviary import BaseRLAviary
 from gym_pybullet_drones.utils.enums import (
@@ -24,8 +26,6 @@ class GoToTargetEnv(BaseRLAviary):
         ctrl_freq: int = 30,
         gui=False,
         record=False,
-        obs: ObservationType = ObservationType.KIN,
-        act: ActionType = ActionType.RPM,
     ):
         """Initialization of a single agent RL environment.
 
@@ -55,8 +55,10 @@ class GoToTargetEnv(BaseRLAviary):
             The type of action space (1 or 3D; RPMS, thurst and torques, or waypoint with PID control)
 
         """
-        self.TARGET_POS = np.array([0, 0, 1])
+        self.workspace = np.array([[-1.5, -1.5, 0], [1.5, 1.5, 1.5]])
         self.EPISODE_LEN_SEC = 8
+        self.SUCCESS_TH = 1e-1
+
         super().__init__(
             drone_model=drone_model,
             num_drones=1,
@@ -67,11 +69,25 @@ class GoToTargetEnv(BaseRLAviary):
             ctrl_freq=ctrl_freq,
             gui=gui,
             record=record,
-            obs=obs,
-            act=act,
+            obs=ObservationType.KIN,
+            act=ActionType.PID,
         )
 
+    def reset(self, seed: int=None, options: dict = None):
+        self.TARGET_POS = npr.uniform(self.workspace[0], self.workspace[1])
+        obs = super().reset(seed, options)
+
+        target_idx = pb.createVisualShape(pb.GEOM_SPHERE, radius=5e-2, rgbaColor=[1,0,0,1])
+        pb.createMultiBody(baseVisualShapeIndex=target_idx, basePosition=self.TARGET_POS)
+
+        return obs
+
     ################################################################################
+    def step(self, delta_act):
+        state = self._getDroneStateVector(0)
+        pos = state[:3]
+        act = (pos + delta_act).reshape(1, -1)
+        return super().step(act)
 
     def _computeReward(self):
         """Computes the current reward value.
@@ -83,7 +99,7 @@ class GoToTargetEnv(BaseRLAviary):
 
         """
         state = self._getDroneStateVector(0)
-        ret = float(np.linalg.norm(self.TARGET_POS - state[0:3]) < 0.0001)
+        ret = float(np.linalg.norm(self.TARGET_POS - state[0:3]) < self.SUCCESS_TH)
 
         return ret
 
@@ -99,7 +115,7 @@ class GoToTargetEnv(BaseRLAviary):
 
         """
         state = self._getDroneStateVector(0)
-        if np.linalg.norm(self.TARGET_POS - state[0:3]) < 0.0001:
+        if np.linalg.norm(self.TARGET_POS - state[0:3]) < self.SUCCESS_TH:
             return True
         else:
             return False
@@ -140,7 +156,7 @@ class GoToTargetEnv(BaseRLAviary):
         """
         drone_obs_full = self._getDroneStateVector(0)
         drone_obs_pos = drone_obs_full[:3]
-        obs = np.concat([drone_obs_pos, self.TARGET_POS], axis=-1)
+        obs = np.concatenate([drone_obs_pos, self.TARGET_POS], axis=-1)
 
         return obs
 
