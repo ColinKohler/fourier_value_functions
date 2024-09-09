@@ -1,5 +1,7 @@
 import os
 
+os.environ["SDL_VIDEODRIVER"] = "dummy"
+
 import gymnasium as gym
 from gymnasium import spaces
 
@@ -138,9 +140,9 @@ class TwoPathEnv(gym.Env):
         # compute reward
         goal_center = Vec2d(
             self.goal_pose[0] + self.goal_size // 2,
-            self.goal_pose[1] + self.goal_size // 2
+            self.goal_pose[1] + self.goal_size // 2,
         )
-        done = self.agent.position.get_distance(goal_center) < self.goal_th 
+        done = self.agent.position.get_distance(goal_center) < self.goal_th
         reward = float(done)
 
         observation = self._get_obs()
@@ -237,7 +239,7 @@ class TwoPathEnv(gym.Env):
         draw_options = DrawOptions(canvas)
 
         # Draw goal pose.
-        goal_points = pygame.Rect(*self.goal_pose, 50,50)
+        goal_points = pygame.Rect(*self.goal_pose, 50, 50)
         pygame.draw.rect(canvas, self.goal_color, goal_points)
 
         # Draw agent and block.
@@ -326,10 +328,9 @@ class TwoPathEnv(gym.Env):
         self.wall = self.add_wall((256, 256), 200, 20)
         self.goal_color = pygame.Color("LightGreen")
         self.goal_size = 50
-        self.goal_pose = np.array([
-            self.window_size // 2 - self.goal_size // 2, 
-            75 - self.goal_size // 2
-        ])  # x, y
+        self.goal_pose = np.array(
+            [self.window_size // 2 - self.goal_size // 2, 75 - self.goal_size // 2]
+        )  # x, y
 
         # Add collision handling
         self.collision_handeler = self.space.add_collision_handler(0, 0)

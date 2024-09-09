@@ -19,8 +19,8 @@ past_action_visible: False
 z_dim: 128
 lmax: 3
 min_radius: 0.1
-radial_freq: 2
-angular_freq: 3
+radial_freq: 1
+angular_freq: 2
 N: 8
 action_coords: "polar"
 

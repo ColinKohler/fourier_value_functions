@@ -19,7 +19,7 @@ past_action_visible: False
 z_dim: 256
 lmax: 3
 N: 8
-is_harmonic: False
+action_coords: "rectangular"
 
 policy:
   _target_: fvf.policy.implicit_policy.ImplicitPolicy
