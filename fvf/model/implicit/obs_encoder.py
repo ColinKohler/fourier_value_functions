@@ -8,7 +8,7 @@ from escnn.gspaces.r2 import GSpace2D
 
 from fvf.model.modules.vision_encoder import ImageEncoder, CyclicImageEncoder
 from fvf.model.modules.fourier import Fourier
-from fvf.model.modules.equiv_layers import SO2MLP
+from fvf.model.modules.equiv_layers import SO2MLP, SO3MLP
 from fvf.model.modules.layers import MLP
 
 
@@ -88,31 +88,26 @@ class SO3KeypointEncoder(nn.Module):
     ):
         super().__init__()
 
-        self.so2_group = group.so2_group(lmax)
-        self.so3_group = group.so3_group(lmax)
-        self.so2_id = (False, -1)
-        self.gspace = gspaces.no_base_space(self.so2_group)
+        self.G = group.so3_group(lmax)
+        self.gspace = gspaces.no_base_space(self.G)
         self.num_layers = num_layers
         self.z_dim = z_dim
 
-        keypoint_type = [
-            self.gspace.irrep(1),
-            self.gspace.irrep(0),
-            # self.so3_group.standard_representation().restrict(self.so2_id)
-        ] + 3 * [self.gspace.irrep(1)]
-        gripper_type = [self.gspace.irrep(0)]
-        obs_type = num_keypoints * keypoint_type + gripper_type
+        keypoint_type = [self.gspace.irrep(1)]
+        obs_type = num_keypoints * keypoint_type
         self.in_type = enn.FieldType(self.gspace, num_obs * obs_type)
-        self.keypoint_enc = SO2MLP(
+        rho = self.G.spectral_regular_representation(*self.G.bl_irreps(L=lmax))
+        self.out_type = enn.FieldType(self.gspace, z_dim * [rho])
+        self.keypoint_enc = SO3MLP(
             self.in_type,
             channels=[z_dim] * num_layers,
             lmaxs=[lmax] * num_layers,
+            out_type=self.out_type,
             N=N,
             dropout=dropout,
-            act_out=True,
+            act_out=False,
             initialize=initialize,
         )
-        self.out_type = self.keypoint_enc.out_type
 
     def forward(self, obs) -> torch.Tensor:
         B, T, Do = obs["keypoints"].shape

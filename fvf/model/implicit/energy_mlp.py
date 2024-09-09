@@ -8,10 +8,11 @@ from escnn import nn as enn
 from escnn import group
 
 from fvf.model.modules.layers import MLP
-from fvf.model.modules.equiv_layers import CyclicMLP, SO2MLP
+from fvf.model.modules.equiv_layers import CyclicMLP, SO2MLP, SO3MLP
 
 from torch_harmonics.circular_harmonics import CircularHarmonics
 from torch_harmonics.polar_harmonics import PolarHarmonics
+from torch_harmonics.spherical_harmonics_old import SphericalHarmonics
 from torch_harmonics.cylindrical_harmonics import CylindricalHarmonics
 from torch_harmonics.so3_harmonics import SO3Harmonics
 
@@ -378,6 +379,106 @@ class SO2PolarEnergyMLP(nn.Module):
             out = self.ph(w, actions.view(B * N, 2)).view(B, N)
         else:
             out = self.ph(w.reshape(B, -1))
+
+        if return_coeffs:
+            return out, w
+        else:
+            return out
+
+
+class SO3SphereEnergyMLP(nn.Module):
+    """
+    Equivariant IBC fourier energy head which uses the continuous SO3 group and spherical harmonics.
+
+    Args:
+        obs_feat_dim - Dimensionality of encoded observations.
+        mlp_dim - Dimensionality of the MLP.
+        lmax - Maxiumum frequency within the MLP.
+        num_layers - Number of layers in the MLP.
+        N - Number of discrete activation features in the MLP.
+        dropout - Dropout of the MLP.
+        angular_freq - Maximum angular frequneyc of the Polar harmoincs (L).
+        min_radius - Minimum value of the radius.
+        max_radius - Maximum value of the radius.
+        num_radii - Number of radii
+        num_phi - Number of angular components in the basis grid.
+        initialize - Initialize the model weights.
+    """
+
+    def __init__(
+        self,
+        obs_feat_dim: int,
+        mlp_dim: int,
+        lmax: int,
+        num_layers: int,
+        angular_freq: int,
+        dropout: float,
+        min_radius: float,
+        max_radius: float,
+        N: int = 16,
+        num_radii: int = 100,
+        num_theta: int = 360,
+        initialize: bool = True,
+    ):
+        super().__init__()
+        self.num_layers = num_layers
+        self.lmax = lmax
+        self.num_radii = num_radii
+
+        self.G = group.so3_group()
+        self.gspace = gspaces.no_base_space(self.G)
+        rho = self.G.spectral_regular_representation(*self.G.bl_irreps(L=self.lmax))
+
+        self.in_type = enn.FieldType(self.gspace, obs_feat_dim * [rho])
+        out_type = enn.FieldType(
+            self.gspace,
+            num_radii * [self.gspace.irrep(l) for l in range(angular_freq + 1)],
+        )
+
+        self.energy_mlp = SO3MLP(
+            self.in_type,
+            channels=[mlp_dim] * num_layers,
+            lmaxs=[self.lmax] * num_layers,
+            out_type=out_type,
+            N=N,
+            dropout=dropout,
+            act_out=False,
+            initialize=initialize,
+        )
+        self.sh = SphericalHarmonics(
+            angular_freq,
+            angular_freq,
+            num_theta,
+            num_theta,
+        )
+
+    def forward(
+        self,
+        obs_feat: torch.Tensor,
+        actions: torch.Tensor = None,
+        return_coeffs: bool = False,
+    ):
+        """
+        Compute the energy function for all actions using Spherical Fourier transform. If actions are
+        specified
+
+        Args:
+            obs_feat: Encoded observations.
+            actions: Action coordinates to evaluate the polar harmoincs at.
+            return_coeffs: Return Fourier coefficients.
+        """
+        B, _ = obs_feat.shape
+        s = self.in_type(obs_feat)
+        w = self.energy_mlp(s).tensor.view(B, 1, self.num_radii, -1)
+        if actions is not None:
+            B, N, _ = actions.shape
+            act_flat = actions.view(B * N, -1)
+            w_a = w.repeat(1, N, 1, 1).view(B * N, self.num_radii, -1)
+            w_r = w_a[torch.arange(B * N), act_flat[:, 0].int()].reshape(B * N, -1)
+            out = self.sh(w_r, act_flat[:, 1:]).view(B, N)
+        else:
+            out = self.sh(w.reshape(B * self.num_radii, -1))
+            out = out.reshape(B, self.num_radii, self.sh.num_lon, self.sh.num_lat)
 
         if return_coeffs:
             return out, w

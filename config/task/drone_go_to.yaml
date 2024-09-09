@@ -1,0 +1,35 @@
+name: drone_go_to 
+
+obs_dim: 6 # Drone Pos + Target Pos
+action_dim: 3
+keypoint_dim: 2
+
+env_runner:
+  _target_: fvf.env_runner.drone_runner.DroneRunner
+  keypoint_visible_rate: ${keypoint_visible_rate}
+  num_train: 10
+  num_train_vis: 0
+  train_start_seed: 0
+  num_test: 50
+  num_test_vis: 0
+  test_start_seed: 100000
+  max_steps: 500
+  num_obs_steps: ${num_obs_steps}
+  num_action_steps: ${num_action_steps}
+  num_latency_steps: ${num_latency_steps}
+  fps: 10
+  agent_keypoints: False
+  past_action: ${past_action_visible}
+  num_envs: 30
+  action_coords: ${action_coords}
+
+dataset:
+  _target_: fvf.dataset.drone_dataset.DroneDataset
+  path: data/drone_gt_10
+  horizon: ${horizon}
+  pad_before: ${eval:'${num_obs_steps}-1+${num_latency_steps}'}
+  pad_after: ${eval:'${num_action_steps}-1'}
+  seed: 0
+  action_coords: ${action_coords}
+  val_ratio: 0.02
+  max_train_episodes: 9

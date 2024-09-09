@@ -1,6 +1,7 @@
 import numpy as np
 import numpy.random as npr
 import pybullet as pb
+from gymnasium import spaces
 
 from gym_pybullet_drones.envs.BaseRLAviary import BaseRLAviary
 from gym_pybullet_drones.utils.enums import (
@@ -58,6 +59,7 @@ class GoToTargetEnv(BaseRLAviary):
         self.workspace = np.array([[-1.5, -1.5, 0], [1.5, 1.5, 1.5]])
         self.EPISODE_LEN_SEC = 8
         self.SUCCESS_TH = 1e-1
+        self.seed = None
 
         super().__init__(
             drone_model=drone_model,
@@ -73,12 +75,25 @@ class GoToTargetEnv(BaseRLAviary):
             act=ActionType.PID,
         )
 
-    def reset(self, seed: int=None, options: dict = None):
-        self.TARGET_POS = npr.uniform(self.workspace[0], self.workspace[1])
-        obs = super().reset(seed, options)
+    def _observationSpace(self):
+        obs_lower_bound = np.array([-np.inf, -np.inf, 0, -np.inf, -np.inf, 0])
+        obs_upper_bound = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
+        return spaces.Box(low=obs_lower_bound, high=obs_upper_bound, dtype=np.float32)
 
-        target_idx = pb.createVisualShape(pb.GEOM_SPHERE, radius=5e-2, rgbaColor=[1,0,0,1])
-        pb.createMultiBody(baseVisualShapeIndex=target_idx, basePosition=self.TARGET_POS)
+    def set_seed(self, seed):
+        self.seed = seed
+
+    def reset(self, seed: int = None, options: dict = None):
+        self.TARGET_POS = npr.uniform(self.workspace[0], self.workspace[1])
+        seed = self.seed if self.seed else seed
+        obs, info = super().reset(seed, options)
+
+        target_idx = pb.createVisualShape(
+            pb.GEOM_SPHERE, radius=5e-2, rgbaColor=[1, 0, 0, 1]
+        )
+        pb.createMultiBody(
+            baseVisualShapeIndex=target_idx, basePosition=self.TARGET_POS
+        )
 
         return obs
 

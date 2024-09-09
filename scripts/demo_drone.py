@@ -15,8 +15,7 @@ def main(output):
     # create replay buffer in read-write mode
     replay_buffer = ReplayBuffer.create_from_path(output, mode='a')
 
-    # create PushT env with keypoints
-    env = GoToTargetEnv(gui=True)
+    env = GoToTargetEnv(gui=False)
 
     for _ in range(10):
         episode: list = []

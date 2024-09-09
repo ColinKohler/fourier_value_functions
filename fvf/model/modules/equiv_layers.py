@@ -9,17 +9,18 @@ from escnn import nn as enn
 from escnn import group
 from escnn.gspaces.r2 import GSpace2D
 
+
 class SO2MLP(nn.Module):
     def __init__(
         self,
         in_type: enn.FieldType,
         channels: List[int],
         lmaxs: List[int],
-        out_type: enn.FieldType=None,
-        N: int=8,
-        dropout: float=0.0,
-        act_out: bool=True,
-        initialize: bool=True
+        out_type: enn.FieldType = None,
+        N: int = 8,
+        dropout: float = 0.0,
+        act_out: bool = True,
+        initialize: bool = True,
     ):
         super().__init__()
 
@@ -53,21 +54,67 @@ class SO2MLP(nn.Module):
     def forward(self, x: enn.GeometricTensor) -> enn.GeometricTensor:
         return self.so2_mlp(x)
 
+
+class SO3MLP(nn.Module):
+    def __init__(
+        self,
+        in_type: enn.FieldType,
+        channels: List[int],
+        lmaxs: List[int],
+        out_type: enn.FieldType = None,
+        N: int = 8,
+        dropout: float = 0.0,
+        act_out: bool = True,
+        initialize: bool = True,
+    ):
+        super().__init__()
+
+        self.G = group.so3_group()
+        self.gspace = gspaces.no_base_space(self.G)
+        self.in_type = in_type
+
+        blocks = list()
+        in_type = self.in_type
+        for i, (c, l) in enumerate(zip(channels, lmaxs)):
+            act = enn.QuotientFourierELU(
+                self.gspace,
+                subgroup_id=(False, -1),
+                channels=c,
+                irreps=self.G.bl_sphere_representation(L=l).irreps,
+                grid=self.G.sphere_grid(type="thomson", N=N),
+                inplace=True,
+            )
+            is_last_layer = i == len(channels) - 1
+            if not is_last_layer or act_out:
+                blocks.append(enn.Linear(in_type, act.in_type, initialize=initialize))
+                blocks.append(enn.FieldDropout(act.in_type, dropout))
+                blocks.append(act)
+            else:
+                blocks.append(enn.Linear(in_type, out_type, initialize=initialize))
+            in_type = act.out_type
+
+        self.so3_mlp = enn.SequentialModule(*blocks)
+        self.out_type = self.so3_mlp.out_type
+
+    def forward(self, x: enn.GeometricTensor) -> enn.GeometricTensor:
+        return self.so3_mlp(x)
+
+
 class CyclicMLP(nn.Module):
     def __init__(
         self,
         in_type: enn.FieldType,
         channels: List[int],
         lmaxs: List[int],
-        out_type: enn.FieldType=None,
-        N: int=8,
-        dropout: float=0.0,
-        act_out: bool=True,
-        initialize: bool=True
+        out_type: enn.FieldType = None,
+        N: int = 8,
+        dropout: float = 0.0,
+        act_out: bool = True,
+        initialize: bool = True,
     ):
         super().__init__()
 
-        self.G =  group.CyclicGroup(N)
+        self.G = group.CyclicGroup(N)
         self.gspace = gspaces.no_base_space(self.G)
         self.in_type = in_type
 
@@ -90,16 +137,15 @@ class CyclicMLP(nn.Module):
         return self.so2_mlp(x)
 
 
-
 class CyclicResNetBlock(nn.Module):
     def __init__(
         self,
         in_type: enn.FieldType,
         channels: int,
-        kernel_size: int=3,
-        stride: int=1,
-        N: int=8,
-        initialize: bool=True,
+        kernel_size: int = 3,
+        stride: int = 1,
+        N: int = 8,
+        initialize: bool = True,
     ):
         super().__init__()
 
@@ -115,9 +161,9 @@ class CyclicResNetBlock(nn.Module):
                 kernel_size=kernel_size,
                 padding=(kernel_size - 1) // 2,
                 stride=stride,
-                initialize=initialize
+                initialize=initialize,
             ),
-            enn.ReLU(self.out_type, inplace=True)
+            enn.ReLU(self.out_type, inplace=True),
         )
 
         self.act = enn.ReLU(self.out_type, inplace=True)
@@ -127,7 +173,7 @@ class CyclicResNetBlock(nn.Module):
             kernel_size=kernel_size,
             padding=(kernel_size - 1) // 2,
             stride=stride,
-            initialize=initialize
+            initialize=initialize,
         )
 
         self.upscale = None
@@ -138,7 +184,7 @@ class CyclicResNetBlock(nn.Module):
                 kernel_size=1,
                 stride=stride,
                 bias=False,
-                initialize=initialize
+                initialize=initialize,
             )
 
     def forward(self, x: enn.GeometricTensor) -> enn.GeometricTensor:
@@ -159,11 +205,11 @@ class SO2ResNetBlock(nn.Module):
         self,
         in_type: enn.FieldType,
         channels: int,
-        kernel_size: int=3,
-        stride: int=1,
-        lmax: int=3,
-        N: int=8,
-        initialize: bool=True,
+        kernel_size: int = 3,
+        stride: int = 1,
+        lmax: int = 3,
+        N: int = 8,
+        initialize: bool = True,
     ):
         super().__init__()
 
@@ -186,9 +232,9 @@ class SO2ResNetBlock(nn.Module):
                 kernel_size=kernel_size,
                 padding=(kernel_size - 1) // 2,
                 stride=stride,
-                initialize=initialize
+                initialize=initialize,
             ),
-            act1
+            act1,
         )
 
         self.act = enn.FourierELU(
@@ -205,7 +251,7 @@ class SO2ResNetBlock(nn.Module):
             kernel_size=kernel_size,
             padding=(kernel_size - 1) // 2,
             stride=stride,
-            initialize=initialize
+            initialize=initialize,
         )
         self.out_type = self.act.out_type
 
@@ -217,9 +263,8 @@ class SO2ResNetBlock(nn.Module):
                 kernel_size=1,
                 stride=stride,
                 bias=False,
-                initialize=initialize
+                initialize=initialize,
             )
-
 
     def forward(self, x: enn.GeometricTensor) -> enn.GeometricTensor:
         res = x
