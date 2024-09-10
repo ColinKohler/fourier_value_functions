@@ -13,7 +13,7 @@ env_runner:
   num_test: 50
   num_test_vis: 0
   test_start_seed: 100000
-  max_steps: 500
+  max_steps: 100
   num_obs_steps: ${num_obs_steps}
   num_action_steps: ${num_action_steps}
   num_latency_steps: ${num_latency_steps}
@@ -25,11 +25,11 @@ env_runner:
 
 dataset:
   _target_: fvf.dataset.drone_dataset.DroneDataset
-  path: data/drone_gt_10
+  path: data/drone_gt_50
   horizon: ${horizon}
   pad_before: ${eval:'${num_obs_steps}-1+${num_latency_steps}'}
   pad_after: ${eval:'${num_action_steps}-1'}
   seed: 0
   action_coords: ${action_coords}
   val_ratio: 0.02
-  max_train_episodes: 9
+  max_train_episodes: 45

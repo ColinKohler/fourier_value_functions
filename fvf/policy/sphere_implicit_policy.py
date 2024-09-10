@@ -71,11 +71,9 @@ class SphereImplicitPolicy(BasePolicy):
         )
         r = r.view(1, -1).repeat(B, 1).to(device)
 
-        tedges, theta = grid.grid1D(2.0 * torch.pi, self.energy_head.sh.num_lon)
+        theta = torch.linspace(0, 2.0 * torch.pi, self.energy_head.sh.num_lon)
         theta = theta.view(1, -1).repeat(B, 1).to(device)
-        pedges, phi = grid.grid1D(
-            torch.pi / 2.0, self.energy_head.sh.num_lat, origin=-torch.pi / 2.0
-        )
+        phi = torch.linspace(0, torch.pi, self.energy_head.sh.num_lat)
         phi = phi.view(1, -1).repeat(B, 1).to(device)
 
         obs_feat = self.obs_encoder(nobs)
@@ -109,9 +107,10 @@ class SphereImplicitPolicy(BasePolicy):
         )
 
         r = self.normalizer["action"].unnormalize(nactions)[:, :, 0]
-        theta = nactions[:, :, 1]
-        phi = nactions[:, :, 2]
-        x = r * torch.cos(phi) * torch.sin(theta)
+        # r = nactions[:, :, 0]
+        theta = nactions[:, :, 1] - 1e-3
+        phi = nactions[:, :, 2] - 1e-3
+        x = r * torch.sin(phi) * torch.cos(theta)
         y = r * torch.sin(phi) * torch.sin(theta)
         z = r * torch.cos(phi)
         actions = torch.concat(
@@ -217,37 +216,26 @@ class SphereImplicitPolicy(BasePolicy):
 
     def plot_energy_fn(self, img, energy):
         probs = torch.softmax(energy.view(1, -1) / self.temperature, dim=-1).view(
-            self.energy_head.ph.num_radii, self.energy_head.ph.num_phi
-        )
-
-        action_stats = self.get_action_stats()
-        r = torch.linspace(
-            action_stats["min"][0].item(),
-            action_stats["max"][0].item(),
-            self.energy_head.ph.num_radii,
-        )
-        r0_rmin = torch.linspace(0, action_stats["min"][0], 10)
-        r = torch.concat([r0_rmin, r])
-        energy = torch.concat(
-            [torch.zeros(10, self.energy_head.ph.num_phi), energy.cpu()]
-        )
-        phi = torch.linspace(0, 2 * np.pi, self.energy_head.ph.num_phi)
-
-        probs = torch.concat(
-            [torch.zeros(10, self.energy_head.ph.num_phi), probs.cpu()]
+            self.energy_head.num_radii,
+            self.energy_head.sh.num_lon,
+            self.energy_head.sh.num_lat,
         )
 
         fig = plt.figure()
-        subfigs = fig.subfigures(1, 3)
-        ax1 = subfigs[2].add_subplot()
+        subfigs = fig.subfigures(1, 2)
+        # ax1 = subfigs[2].add_subplot()
 
         if img is not None:
             ax1.imshow(img[-1].transpose(1, 2, 0))
             ax1.set_title("Rollouts", va="bottom")
             ax1.set_axis_off()
 
-        plotting.plot_polar_fn(energy, r=r, phi=phi, fig=subfigs[0], title="Energy")
-        plotting.plot_polar_fn(probs, r=r, phi=phi, fig=subfigs[1], title="Softmax")
+        plotting.plot_mollweide_spherical_fn(
+            energy[-1].cpu(), fig=subfigs[0], title="Energy"
+        )
+        plotting.plot_mollweide_spherical_fn(
+            probs[-1].cpu(), fig=subfigs[1], title="Prob"
+        )
 
         io_buf = io.BytesIO()
         fig.savefig(io_buf, format="raw")

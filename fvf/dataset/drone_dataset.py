@@ -38,13 +38,14 @@ class DroneDataset(BaseDataset):
         data["action"] = action_utils.convert_action_coords(
             data["action"], self.action_coords
         )
+        breakpoint()
 
         normalizer = super().get_normalizer(data, mode=mode, **kwargs)
 
-        # if self.action_coords == "spherical":
-        #    act_norm = SingleFieldLinearNormalizer()
-        #    act_norm.fit(data=data["action"], output_min=0.1, output_max=1)
-        #    normalizer["action"] = act_norm
+        if self.action_coords == "spherical":
+            act_norm = SingleFieldLinearNormalizer()
+            act_norm.fit(data=data["action"], output_min=0.1, output_max=1)
+            normalizer["action"] = act_norm
 
         return normalizer
 
@@ -52,7 +53,6 @@ class DroneDataset(BaseDataset):
         obs = sample["obs"]
 
         T = obs.shape[0]
-        Do = obs.shape[-1] // 2
         action = sample["action"].reshape(T, 3)
 
         data = {

@@ -17,11 +17,11 @@ num_action_steps: 1
 num_latency_steps: 0
 past_action_visible: False
 keypoint_visible_rate: 1.0
-z_dim: 512 
+z_dim: 256 
 lmax: 3
 min_radius: 0.1
-num_radii: 10
-angular_freq: 3
+num_radii: 2
+angular_freq: 2
 N: 16
 action_coords: "spherical"
 
@@ -60,7 +60,7 @@ energy_head:
   min_radius: 0.1
   max_radius: 1.0
   num_radii: ${num_radii}
-  num_theta: 90 
+  num_theta: 20 
   N: ${N}
 
 dataloader:

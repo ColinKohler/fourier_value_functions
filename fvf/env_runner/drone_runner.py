@@ -196,6 +196,7 @@ class DroneRunner(BaseRunner):
                 obs_dict = {
                     "keypoints": obs[..., : self.num_obs_steps, :].astype(np.float32),
                 }
+                # print(obs_dict["keypoints"].round(3))
 
                 if self.past_action and (past_action is not None):
                     obs["past_action"] = past_action[
@@ -208,11 +209,13 @@ class DroneRunner(BaseRunner):
 
                 with torch.no_grad():
                     action_dict = policy.get_action(obs_dict, device)
+                print(action_dict["action"])
 
                 if plot_energy_fn:
                     for i, env_id in enumerate(range(start, end)):
-                        img = env.call_each("render2")[0]
-                        img = img.reshape(1, 96, 96, 3).transpose(0, 3, 1, 2)
+                        # img = env.call_each("render2")[0]
+                        # img = img.reshape(1, 96, 96, 3).transpose(0, 3, 1, 2)
+                        img = None
                         energy_fn_plots[env_id].append(
                             policy.plot_energy_fn(img, action_dict["energy"][i])
                         )
@@ -243,6 +246,10 @@ class DroneRunner(BaseRunner):
             max_reward = np.max(all_rewards[i])
             max_rewards[prefix].append(max_reward)
             log_data[prefix + f"sim_max_reward_{seed}"] = max_reward
+
+            if plot_energy_fn:
+                energy_fn_plot_path = f"sh_energy_fn.mp4"
+                imageio.mimwrite(energy_fn_plot_path, energy_fn_plots[i])
 
             # Visualize sim
             video_path = all_video_paths[i]
