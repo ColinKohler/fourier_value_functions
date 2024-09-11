@@ -58,7 +58,7 @@ class GoToTargetEnv(BaseRLAviary):
         """
         self.workspace = np.array([[-0.75, -0.75, 0], [0.75, 0.75, 0.75]])
         self.EPISODE_LEN_SEC = 8
-        self.SUCCESS_TH = 2e-1
+        self.SUCCESS_TH = 1e-1
         self.seed = None
 
         super().__init__(
