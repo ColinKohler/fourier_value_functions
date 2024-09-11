@@ -18,7 +18,7 @@ def main(output):
 
     env = GoToTargetEnv(gui=False)
 
-    for _ in range(50):
+    for _ in range(100):
         episode: list = []
         seed = replay_buffer.n_episodes
         print(f"starting seed {seed}")
@@ -26,8 +26,10 @@ def main(output):
         obs = env.reset(seed=seed)
         done = False
 
+        i = 0
         while not done:
-            action = np.clip(obs[3:] - obs[:3], -0.1, 0.1)
+            i += 1
+            action = np.clip(obs[3:] - obs[:3], -0.2, 0.2)
             data = {
                 "obs": np.float32(obs),
                 "action": np.float32(action),

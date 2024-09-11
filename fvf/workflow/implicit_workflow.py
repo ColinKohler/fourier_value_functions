@@ -112,10 +112,12 @@ class ImplicitWorkflow(BaseWorkflow):
             **self.config.checkpoint.topk,
         )
 
-        # Training
+        # Training Loop
         with JsonLogger(log_path) as json_logger:
             for epoch in range(self.config.training.num_epochs):
                 step_log = dict()
+
+                # Training
                 train_losses = list()
                 self.model.train()
                 with tqdm(

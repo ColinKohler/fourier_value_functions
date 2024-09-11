@@ -56,9 +56,9 @@ class GoToTargetEnv(BaseRLAviary):
             The type of action space (1 or 3D; RPMS, thurst and torques, or waypoint with PID control)
 
         """
-        self.workspace = np.array([[-1.5, -1.5, 0], [1.5, 1.5, 1.5]])
+        self.workspace = np.array([[-0.75, -0.75, 0], [0.75, 0.75, 0.75]])
         self.EPISODE_LEN_SEC = 8
-        self.SUCCESS_TH = 1e-1
+        self.SUCCESS_TH = 2e-1
         self.seed = None
 
         super().__init__(
@@ -80,12 +80,18 @@ class GoToTargetEnv(BaseRLAviary):
         obs_upper_bound = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
         return spaces.Box(low=obs_lower_bound, high=obs_upper_bound, dtype=np.float32)
 
+    def render2(self):
+        return self.render()
+
     def set_seed(self, seed):
         self.seed = seed
 
     def reset(self, seed: int = None, options: dict = None):
-        self.TARGET_POS = npr.uniform(self.workspace[0], self.workspace[1])
         seed = self.seed if self.seed else seed
+        npr.seed(seed)
+
+        self.TARGET_POS = npr.uniform(self.workspace[0], self.workspace[1])
+        # self.TARGET_POS = np.array([0, 0, 0.5])
         obs, info = super().reset(seed, options)
 
         target_idx = pb.createVisualShape(
@@ -130,10 +136,7 @@ class GoToTargetEnv(BaseRLAviary):
 
         """
         state = self._getDroneStateVector(0)
-        if np.linalg.norm(self.TARGET_POS - state[0:3]) < self.SUCCESS_TH:
-            return True
-        else:
-            return False
+        return np.linalg.norm(self.TARGET_POS - state[0:3]) < self.SUCCESS_TH
 
     ################################################################################
 
@@ -146,19 +149,20 @@ class GoToTargetEnv(BaseRLAviary):
             Whether the current episode timed out.
 
         """
-        state = self._getDroneStateVector(0)
-        if (
-            abs(state[0]) > 1.5
-            or abs(state[1]) > 1.5
-            or state[2] > 2.0  # Truncate when the drone is too far away
-            or abs(state[7]) > 0.4
-            or abs(state[8]) > 0.4  # Truncate when the drone is too tilted
-        ):
-            return True
-        if self.step_counter / self.PYB_FREQ > self.EPISODE_LEN_SEC:
-            return True
-        else:
-            return False
+        return False
+        # state = self._getDroneStateVector(0)
+        # if (
+        #    abs(state[0]) > 1.5
+        #    or abs(state[1]) > 1.5
+        #    or state[2] > 2.0  # Truncate when the drone is too far away
+        #    or abs(state[7]) > 0.4
+        #    or abs(state[8]) > 0.4  # Truncate when the drone is too tilted
+        # ):
+        #    return True
+        # if self.step_counter / self.PYB_FREQ > self.EPISODE_LEN_SEC:
+        #    return True
+        # else:
+        #    return False
 
     def _computeObs(self):
         """Returns the current observation of the environment.

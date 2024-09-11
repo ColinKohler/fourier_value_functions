@@ -469,7 +469,8 @@ class SO3SphereEnergyMLP(nn.Module):
         """
         B, _ = obs_feat.shape
         s = self.in_type(obs_feat)
-        w = self.energy_mlp(s).tensor.view(B, 1, self.num_radii, -1)
+        w = self.energy_mlp(s)
+        w = w.tensor.view(B, 1, self.num_radii, -1)
         if actions is not None:
             B, N, _ = actions.shape
             act_flat = actions.view(B * N, -1)

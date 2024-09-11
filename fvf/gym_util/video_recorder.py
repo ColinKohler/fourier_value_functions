@@ -3,15 +3,17 @@ import numpy as np
 import av
 from fvf.utils.timestamp_accumulator import get_accumulate_timestamp_idxs
 
+
 def read_video(
-        video_path: str, dt: float,
-        video_start_time: float=0.0,
-        start_time: float=0.0,
-        img_transform: Optional[Callable[[np.ndarray], np.ndarray]]=None,
-        thread_type: str="AUTO",
-        thread_count: int=0,
-        max_pad_frames: int=10
-        ) -> Generator[np.ndarray, None, None]:
+    video_path: str,
+    dt: float,
+    video_start_time: float = 0.0,
+    start_time: float = 0.0,
+    img_transform: Optional[Callable[[np.ndarray], np.ndarray]] = None,
+    thread_type: str = "AUTO",
+    thread_count: int = 0,
+    max_pad_frames: int = 10,
+) -> Generator[np.ndarray, None, None]:
     frame = None
     with av.open(video_path) as container:
         stream = container.streams.video[0]
@@ -22,31 +24,32 @@ def read_video(
             # The presentation time in seconds for this frame.
             since_start = frame.time
             frame_time = video_start_time + since_start
-            local_idxs, global_idxs, next_global_idx \
-                = get_accumulate_timestamp_idxs(
+            local_idxs, global_idxs, next_global_idx = get_accumulate_timestamp_idxs(
                 # only one timestamp
                 timestamps=[frame_time],
                 start_time=start_time,
                 dt=dt,
-                next_global_idx=next_global_idx
+                next_global_idx=next_global_idx,
             )
             if len(global_idxs) > 0:
-                array = frame.to_ndarray(format='rgb24')
+                array = frame.to_ndarray(format="rgb24")
                 img = array
                 if img_transform is not None:
                     img = img_transform(array)
                 for global_idx in global_idxs:
                     yield img
     # repeat last frame max_pad_frames times
-    array = frame.to_ndarray(format='rgb24')
+    array = frame.to_ndarray(format="rgb24")
     img = array
     if img_transform is not None:
         img = img_transform(array)
     for i in range(max_pad_frames):
         yield img
 
+
 class VideoRecorder:
-    def __init__(self,
+    def __init__(
+        self,
         fps,
         codec,
         input_pix_fmt,
@@ -73,28 +76,25 @@ class VideoRecorder:
         self.next_global_idx = 0
 
     @classmethod
-    def create_h264(cls,
-            fps,
-            codec='h264',
-            input_pix_fmt='rgb24',
-            output_pix_fmt='yuv420p',
-            crf=18,
-            profile='high',
-            **kwargs
-        ):
+    def create_h264(
+        cls,
+        fps,
+        codec="h264",
+        input_pix_fmt="rgb24",
+        output_pix_fmt="yuv420p",
+        crf=18,
+        profile="high",
+        **kwargs
+    ):
         obj = cls(
             fps=fps,
             codec=codec,
             input_pix_fmt=input_pix_fmt,
             pix_fmt=output_pix_fmt,
-            options={
-                'crf': str(crf),
-                'profile': profile
-            },
+            options={"crf": str(crf), "profile": profile},
             **kwargs
         )
         return obj
-
 
     def __del__(self):
         self.stop()
@@ -107,7 +107,7 @@ class VideoRecorder:
             # if still recording, stop first and start anew.
             self.stop()
 
-        self.container = av.open(file_path, mode='w')
+        self.container = av.open(file_path, mode="w")
         self.stream = self.container.add_stream(self.codec, rate=self.fps)
         codec_context = self.stream.codec_context
         for k, v in self.kwargs.items():
@@ -116,17 +116,18 @@ class VideoRecorder:
 
     def write_frame(self, img: np.ndarray, frame_time=None):
         if not self.is_ready():
-            raise RuntimeError('Must run start() before writing!')
+            raise RuntimeError("Must run start() before writing!")
 
         n_repeats = 1
         if self.start_time is not None:
-            local_idxs, global_idxs, self.next_global_idx \
-                = get_accumulate_timestamp_idxs(
-                # only one timestamp
-                timestamps=[frame_time],
-                start_time=self.start_time,
-                dt=1/self.fps,
-                next_global_idx=self.next_global_idx
+            local_idxs, global_idxs, self.next_global_idx = (
+                get_accumulate_timestamp_idxs(
+                    # only one timestamp
+                    timestamps=[frame_time],
+                    start_time=self.start_time,
+                    dt=1 / self.fps,
+                    next_global_idx=self.next_global_idx,
+                )
             )
             # number of appearance means repeats
             n_repeats = len(local_idxs)
@@ -134,14 +135,15 @@ class VideoRecorder:
         if self.shape is None:
             self.shape = img.shape
             self.dtype = img.dtype
-            h,w,c = img.shape
+            h, w, c = img.shape
             self.stream.width = w
             self.stream.height = h
         assert img.shape == self.shape
         assert img.dtype == self.dtype
 
-        frame = av.VideoFrame.from_ndarray(
-            img, format=self.input_pix_fmt)
+        if img.shape[2] == 4:
+            img = rgba2rgb(img)
+        frame = av.VideoFrame.from_ndarray(img, format=self.input_pix_fmt)
         for i in range(n_repeats):
             for packet in self.stream.encode(frame):
                 self.container.mux(packet)
@@ -159,3 +161,25 @@ class VideoRecorder:
 
         # reset runtime parameters
         self._reset_state()
+
+
+def rgba2rgb(rgba, background=(255, 255, 255)):
+    row, col, ch = rgba.shape
+
+    if ch == 3:
+        return rgba
+
+    assert ch == 4, "RGBA image has 4 channels."
+
+    rgb = np.zeros((row, col, 3), dtype="float32")
+    r, g, b, a = rgba[:, :, 0], rgba[:, :, 1], rgba[:, :, 2], rgba[:, :, 3]
+
+    a = np.asarray(a, dtype="float32") / 255.0
+
+    R, G, B = background
+
+    rgb[:, :, 0] = r * a + (1.0 - a) * R
+    rgb[:, :, 1] = g * a + (1.0 - a) * G
+    rgb[:, :, 2] = b * a + (1.0 - a) * B
+
+    return np.asarray(rgb, dtype="uint8")

@@ -107,9 +107,8 @@ class SphereImplicitPolicy(BasePolicy):
         )
 
         r = self.normalizer["action"].unnormalize(nactions)[:, :, 0]
-        # r = nactions[:, :, 0]
-        theta = nactions[:, :, 1] - 1e-3
-        phi = nactions[:, :, 2] - 1e-3
+        theta = nactions[:, :, 1]
+        phi = nactions[:, :, 2]
         x = r * torch.sin(phi) * torch.cos(theta)
         y = r * torch.sin(phi) * torch.sin(theta)
         z = r * torch.cos(phi)
@@ -151,7 +150,8 @@ class SphereImplicitPolicy(BasePolicy):
             dtype=naction.dtype,
             device=naction.device,
         )
-        noisy_actions = naction + action_noise
+        # noisy_actions = naction + action_noise
+        noisy_actions = naction
 
         # Sample negatives: (B, train_n_neg, Da)
         action_stats = self.get_action_stats()
@@ -222,8 +222,8 @@ class SphereImplicitPolicy(BasePolicy):
         )
 
         fig = plt.figure()
-        subfigs = fig.subfigures(1, 2)
-        # ax1 = subfigs[2].add_subplot()
+        subfigs = fig.subfigures(1, 3)
+        ax1 = subfigs[2].add_subplot()
 
         if img is not None:
             ax1.imshow(img[-1].transpose(1, 2, 0))

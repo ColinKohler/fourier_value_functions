@@ -17,12 +17,12 @@ num_action_steps: 1
 num_latency_steps: 0
 past_action_visible: False
 keypoint_visible_rate: 1.0
-z_dim: 256 
+z_dim: 512
 lmax: 3
 min_radius: 0.1
 num_radii: 2
-angular_freq: 2
-N: 16
+angular_freq: 3
+N: 8
 action_coords: "spherical"
 
 policy:
@@ -60,7 +60,7 @@ energy_head:
   min_radius: 0.1
   max_radius: 1.0
   num_radii: ${num_radii}
-  num_theta: 20 
+  num_theta: 20
   N: ${N}
 
 dataloader:
@@ -88,7 +88,7 @@ training:
   device: 'cuda:0'
   seed: 0
   resume: True
-  lr_warmup_steps: 500
+  lr_warmup_steps: 50
   num_epochs: 500
   checkpoint_every: 10
   rollout_every: 10

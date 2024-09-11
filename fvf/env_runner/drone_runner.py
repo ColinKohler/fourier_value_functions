@@ -193,6 +193,12 @@ class DroneRunner(BaseRunner):
             done = False
             while not done:
                 B = obs.shape[0]
+
+                obs = obs.reshape(B, -1, 2, 3)
+                # obs = obs[:, :, :, [1, 0, 2]]
+                obs[:, :, :, 1] = -obs[:, :, :, 1]
+                obs = obs.reshape(B, -1, 6)
+
                 obs_dict = {
                     "keypoints": obs[..., : self.num_obs_steps, :].astype(np.float32),
                 }
@@ -209,19 +215,23 @@ class DroneRunner(BaseRunner):
 
                 with torch.no_grad():
                     action_dict = policy.get_action(obs_dict, device)
-                print(action_dict["action"])
+                # print(action_dict["action"])
 
                 if plot_energy_fn:
                     for i, env_id in enumerate(range(start, end)):
-                        # img = env.call_each("render2")[0]
-                        # img = img.reshape(1, 96, 96, 3).transpose(0, 3, 1, 2)
-                        img = None
+                        img = env.call_each("render2")[0]
+                        h, w, c = img.shape
+                        img = rgba2rgb(img)
+                        img = img.reshape(1, h, w, 3).transpose(0, 3, 1, 2)
                         energy_fn_plots[env_id].append(
                             policy.plot_energy_fn(img, action_dict["energy"][i])
                         )
 
                 action_dict = dict_apply(action_dict, lambda x: x.to("cpu").numpy())
                 action = action_dict["action"][:, self.num_latency_steps :]
+
+                action[:, :, 1] = -action[:, :, 1]
+                # action = action[:, :, [1, 0, 2]]
 
                 # Step env
                 obs, reward, done, timeout, info = env.step(action)
@@ -231,7 +241,7 @@ class DroneRunner(BaseRunner):
                 pbar.update(action.shape[1])
             pbar.close()
 
-            # all_video_paths[this_global_slice] = env.render()[this_local_slice]
+            all_video_paths[this_global_slice] = env.render()[this_local_slice]
             all_rewards[this_global_slice] = env.call("get_attr", "reward")[
                 this_local_slice
             ]
@@ -247,10 +257,6 @@ class DroneRunner(BaseRunner):
             max_rewards[prefix].append(max_reward)
             log_data[prefix + f"sim_max_reward_{seed}"] = max_reward
 
-            if plot_energy_fn:
-                energy_fn_plot_path = f"sh_energy_fn.mp4"
-                imageio.mimwrite(energy_fn_plot_path, energy_fn_plots[i])
-
             # Visualize sim
             video_path = all_video_paths[i]
             if video_path is not None:
@@ -258,7 +264,7 @@ class DroneRunner(BaseRunner):
                 log_data[prefix + f"sim_video_{seed}"] = sim_video
                 if plot_energy_fn:
                     media_path = video_path.rpartition(".")[0]
-                    energy_fn_plot_path = f"{media_path}_energy_fn.gif"
+                    energy_fn_plot_path = f"{media_path}_energy_fn.mp4"
                     # log_data[prefix+f'energy_fn_{seed}'] = energy_fn_plot_path
                     imageio.mimwrite(energy_fn_plot_path, energy_fn_plots[i])
 
@@ -267,3 +273,25 @@ class DroneRunner(BaseRunner):
             log_data[prefix + "mean_score"] = np.mean(v)
 
         return log_data
+
+
+def rgba2rgb(rgba, background=(255, 255, 255)):
+    row, col, ch = rgba.shape
+
+    if ch == 3:
+        return rgba
+
+    assert ch == 4, "RGBA image has 4 channels."
+
+    rgb = np.zeros((row, col, 3), dtype="float32")
+    r, g, b, a = rgba[:, :, 0], rgba[:, :, 1], rgba[:, :, 2], rgba[:, :, 3]
+
+    a = np.asarray(a, dtype="float32") / 255.0
+
+    R, G, B = background
+
+    rgb[:, :, 0] = r * a + (1.0 - a) * R
+    rgb[:, :, 1] = g * a + (1.0 - a) * G
+    rgb[:, :, 2] = b * a + (1.0 - a) * B
+
+    return np.asarray(rgb, dtype="uint8")
