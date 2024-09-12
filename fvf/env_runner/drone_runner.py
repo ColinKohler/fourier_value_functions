@@ -194,10 +194,10 @@ class DroneRunner(BaseRunner):
             while not done:
                 B = obs.shape[0]
 
-                obs = obs.reshape(B, -1, 2, 3)
+                # obs = obs.reshape(B, -1, 2, 3)
                 # obs = obs[:, :, :, [1, 0, 2]]
-                obs[:, :, :, 1] = -obs[:, :, :, 1]
-                obs = obs.reshape(B, -1, 6)
+                # obs[:, :, :, 1] = -obs[:, :, :, 1]
+                # obs = obs.reshape(B, -1, 6)
 
                 obs_dict = {
                     "keypoints": obs[..., : self.num_obs_steps, :].astype(np.float32),
@@ -230,7 +230,7 @@ class DroneRunner(BaseRunner):
                 action_dict = dict_apply(action_dict, lambda x: x.to("cpu").numpy())
                 action = action_dict["action"][:, self.num_latency_steps :]
 
-                action[:, :, 1] = -action[:, :, 1]
+                # action[:, :, 1] = -action[:, :, 1]
                 # action = action[:, :, [1, 0, 2]]
 
                 # Step env

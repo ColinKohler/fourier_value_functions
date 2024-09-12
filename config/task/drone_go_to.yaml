@@ -13,7 +13,7 @@ env_runner:
   num_test: 50
   num_test_vis: 10
   test_start_seed: 100000
-  max_steps: 250
+  max_steps: 100
   num_obs_steps: ${num_obs_steps}
   num_action_steps: ${num_action_steps}
   num_latency_steps: ${num_latency_steps}

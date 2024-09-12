@@ -6,6 +6,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 import matplotlib
+import lie_learn.spaces.S2 as S2
 
 matplotlib.use("agg")
 import matplotlib.pyplot as plt
@@ -59,22 +60,23 @@ class SphereImplicitPolicy(BasePolicy):
         Ta = self.num_action_steps
 
         action_stats = self.get_action_stats()
-        action_dist = torch.distributions.Uniform(
-            low=action_stats["min"], high=action_stats["max"]
-        )
 
         # Optimize actions
-        redges, r = grid.grid1D(
-            action_stats["max"][0].item(),
-            self.energy_head.num_radii,
-            origin=action_stats["min"][0].item(),
+        # redges, r = grid.grid1D(
+        #    action_stats["max"][0].item(),
+        #    self.energy_head.num_radii,
+        #    origin=action_stats["min"][0].item(),
+        # )
+        r = torch.linspace(
+            action_stats["min"][0], action_stats["max"][0], self.energy_head.num_radii
         )
         r = r.view(1, -1).repeat(B, 1).to(device)
 
-        theta = torch.linspace(0, 2.0 * torch.pi, self.energy_head.sh.num_lon)
-        theta = theta.view(1, -1).repeat(B, 1).to(device)
-        phi = torch.linspace(0, torch.pi, self.energy_head.sh.num_lat)
-        phi = phi.view(1, -1).repeat(B, 1).to(device)
+        theta, phi = self.energy_head.sh.grid
+        theta = torch.from_numpy(theta[:, 0]).to(device)
+        theta = theta.view(1, -1).expand(B, self.energy_head.sh.num_theta)
+        phi = torch.from_numpy(phi[0, :]).to(device)
+        phi = phi.view(1, -1).expand(B, self.energy_head.sh.num_phi)
 
         obs_feat = self.obs_encoder(nobs)
         logits, coeffs = self.energy_head(obs_feat, return_coeffs=True)
@@ -82,8 +84,8 @@ class SphereImplicitPolicy(BasePolicy):
         action_probs = torch.softmax(logits / self.temperature, dim=-1).view(
             B,
             self.energy_head.num_radii,
-            self.energy_head.sh.num_lat,
-            self.energy_head.sh.num_lon,
+            self.energy_head.sh.num_theta,
+            self.energy_head.sh.num_phi,
         )
 
         if self.sample_actions:
@@ -109,9 +111,9 @@ class SphereImplicitPolicy(BasePolicy):
         r = self.normalizer["action"].unnormalize(nactions)[:, :, 0]
         theta = nactions[:, :, 1]
         phi = nactions[:, :, 2]
-        x = r * torch.sin(phi) * torch.cos(theta)
-        y = r * torch.sin(phi) * torch.sin(theta)
-        z = r * torch.cos(phi)
+        x = r * torch.sin(theta) * torch.cos(phi)
+        y = r * torch.sin(theta) * torch.sin(phi)
+        z = r * torch.cos(theta)
         actions = torch.concat(
             [x.view(B, 1), y.view(B, 1), z.view(B, 1)], dim=1
         ).unsqueeze(1)
@@ -121,8 +123,8 @@ class SphereImplicitPolicy(BasePolicy):
             "energy": logits.view(
                 B,
                 self.energy_head.num_radii,
-                self.energy_head.sh.num_lon,
-                self.energy_head.sh.num_lat,
+                self.energy_head.sh.num_theta,
+                self.energy_head.sh.num_phi,
             ),
             "fourier_coeffs": coeffs.cpu(),
         }
@@ -215,10 +217,13 @@ class SphereImplicitPolicy(BasePolicy):
         return repeated_stats
 
     def plot_energy_fn(self, img, energy):
+        # energy = torch.concat((energy[:, :, 20:], energy[:, :, :20]), dim=-1)
+        # energy = torch.concat((energy[:, 20:, :], energy[:, :20:, :]), dim=-1)
+
         probs = torch.softmax(energy.view(1, -1) / self.temperature, dim=-1).view(
             self.energy_head.num_radii,
-            self.energy_head.sh.num_lon,
-            self.energy_head.sh.num_lat,
+            self.energy_head.sh.num_theta,
+            self.energy_head.sh.num_phi,
         )
 
         fig = plt.figure()

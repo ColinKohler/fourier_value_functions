@@ -33,9 +33,13 @@ def convert_to_cylindrical(action):
 
 
 def convert_to_spherical(action):
-    r = np.sqrt(action[:, 0] ** 2 + action[:, 1] ** 2 + action[:, 2] ** 2)
-    theta = np.arctan2(action[:, 1], action[:, 0])
-    theta[np.where(theta < 0)] += 2 * np.pi
-    phi = np.arccos(action[:, 2] / r)
+    xy = action[:, 0] ** 2 + action[:, 1] ** 2
+    r = np.sqrt(xy + action[:, 2] ** 2)
+    theta = np.arccos(action[:, 2] / r)
+    phi = np.arctan2(action[:, 1], action[:, 0])
+    phi[np.where(phi < 0)] += 2 * np.pi
+    # theta = np.arctan2(action[:, 1], action[:, 0])
+    # theta[np.where(theta < 0)] += 2 * np.pi
+    # phi = np.arctan2(np.sqrt(xy), action[:, 2])
 
     return np.concatenate((r[:, None], theta[:, None], phi[:, None]), axis=1)

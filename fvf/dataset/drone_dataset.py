@@ -55,11 +55,11 @@ class DroneDataset(BaseDataset):
 
         obs = obs.reshape(T, 2, 3)
         # obs = obs[:, :, [1, 0, 2]]
-        obs[:, :, 1] = -obs[:, :, 1]
+        # obs[:, :, 1] = -obs[:, :, 1]
         obs = obs.reshape(T, 6)
 
         # action = action[:, [1, 0, 2]]
-        action[:, 1] = -action[:, 1]
+        # action[:, 1] = -action[:, 1]
 
         data = {
             "obs": {"keypoints": obs},
@@ -85,7 +85,7 @@ def ws_normalizer(arr, nmin=-1.0, nmax=1.0):
 def act_normalizer(arr, nmin=0.0, nmax=1.0):
     stat = {
         "min": np.array([0.0, 0.0, 0.0], dtype=np.float32),
-        "max": np.array([arr.max(0)[0], 2 * np.pi, np.pi], dtype=np.float32),
+        "max": np.array([arr.max(0)[0], np.pi, 2 * np.pi], dtype=np.float32),
         "mean": np.mean(arr, axis=0),
         "std": np.std(arr, axis=0),
     }

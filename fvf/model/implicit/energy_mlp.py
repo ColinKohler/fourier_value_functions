@@ -23,6 +23,7 @@ class EnergyMLP(nn.Module):
     def __init__(
         self,
         obs_feat_dim: int,
+        action_dim: int,
         mlp_dim: int,
         dropout: float,
         spec_norm: bool = False,
@@ -30,7 +31,7 @@ class EnergyMLP(nn.Module):
     ):
         super().__init__()
         self.energy_mlp = MLP(
-            [obs_feat_dim + 2] + [mlp_dim] * 4 + [1],
+            [obs_feat_dim + action_dim] + [mlp_dim] * 4 + [1],
             dropout=dropout,
             act_out=False,
             spec_norm=spec_norm,
@@ -110,6 +111,70 @@ class PolarEnergyMLP(nn.Module):
             out = self.ph(w, actions.view(B * N, 2)).view(B, N)
         else:
             out = self.ph(w.reshape(B, -1))
+
+        if return_coeffs:
+            return out, w
+        else:
+            return out
+
+
+class SphereEnergyMLP(nn.Module):
+    """Vanilla IBC with Spherical harmonics head."""
+
+    def __init__(
+        self,
+        obs_feat_dim: int,
+        mlp_dim: int,
+        num_layers: int,
+        dropout: float,
+        spec_norm: bool,
+        angular_freq: int,
+        num_radii: int = 100,
+        num_theta: int = 360,
+        initialize: bool = True,
+    ):
+        super().__init__()
+        self.num_radii = num_radii
+
+        self.energy_mlp = MLP(
+            [obs_feat_dim]
+            + [mlp_dim] * num_layers
+            + [num_radii * (angular_freq + 1) ** 2],
+            dropout=dropout,
+            act_out=False,
+            spec_norm=spec_norm,
+        )
+
+        self.sh = SphericalHarmonics(
+            L=angular_freq, grid_type="lie_learn", num_theta=num_theta
+        )
+
+    def forward(
+        self,
+        obs_feat: torch.Tensor,
+        actions: torch.Tensor = None,
+        return_coeffs: bool = False,
+    ):
+        """
+        Compute the energy function for all actions using Polar Fourier transform. If actions are
+        specified
+
+        Args:
+            obs_feat: Encoded observations.
+            actions: Action coordinates to evaluate the polar harmoincs at.
+        """
+        B, _ = obs_feat.shape
+
+        w = self.energy_mlp(obs_feat).view(B, 1, self.num_radii, -1)
+        if actions is not None:
+            B, N, _ = actions.shape
+            act_flat = actions.view(B * N, -1)
+            w_a = w.repeat(1, N, 1, 1).view(B * N, self.num_radii, -1)
+            w_r = w_a[torch.arange(B * N), act_flat[:, 0].int()].reshape(B * N, -1)
+            out = self.sh(w_r, act_flat[:, 1:]).view(B, N)
+        else:
+            out = self.sh(w.reshape(B * self.num_radii, -1))
+            out = out.reshape(B, self.num_radii, self.sh.num_theta, self.sh.num_phi)
 
         if return_coeffs:
             return out, w
@@ -446,10 +511,9 @@ class SO3SphereEnergyMLP(nn.Module):
             initialize=initialize,
         )
         self.sh = SphericalHarmonics(
-            angular_freq,
-            angular_freq,
-            num_theta,
-            num_theta,
+            L=angular_freq,
+            grid_type="lie_learn",
+            num_theta=num_theta,
         )
 
     def forward(
@@ -479,7 +543,7 @@ class SO3SphereEnergyMLP(nn.Module):
             out = self.sh(w_r, act_flat[:, 1:]).view(B, N)
         else:
             out = self.sh(w.reshape(B * self.num_radii, -1))
-            out = out.reshape(B, self.num_radii, self.sh.num_lon, self.sh.num_lat)
+            out = out.reshape(B, self.num_radii, self.sh.num_theta, self.sh.num_phi)
 
         if return_coeffs:
             return out, w

@@ -2,7 +2,7 @@ defaults:
   - _self_
   - task: drone_go_to 
 
-name: train_so3_spherical_fvf_lowdim_policy
+name: train_spherical_fvf_lowdim_policy
 _target_: fvf.workflow.implicit_workflow.ImplicitWorkflow
 
 obs_dim: ${task.obs_dim} 
@@ -17,12 +17,10 @@ num_action_steps: 1
 num_latency_steps: 0
 past_action_visible: False
 keypoint_visible_rate: 1.0
-z_dim: 256
-lmax: 3
+z_dim: 512
 min_radius: 0.1
-num_radii: 2
+num_radii: 100
 angular_freq: 3
-N: 8
 action_coords: "spherical"
 
 policy:
@@ -39,29 +37,24 @@ policy:
   grad_pen: False
 
 obs_encoder:
-  _target_: fvf.model.implicit.obs_encoder.SO3KeypointEncoder
-  num_keypoints: 2
+  _target_: fvf.model.implicit.obs_encoder.KeypointEncoder
   num_obs: ${num_obs_steps}
-  in_feat: ${eval:'${obs_dim} // 2'}
+  in_feat: ${obs_dim}
   z_dim: ${z_dim}
   num_layers: 4
-  lmax: ${lmax}
-  N: ${N}
   dropout: 0.1
+  spec_norm: False
 
 energy_head:
-  _target_: fvf.model.implicit.energy_mlp.SO3SphereEnergyMLP
+  _target_: fvf.model.implicit.energy_mlp.SphereEnergyMLP
   obs_feat_dim: ${z_dim}
   mlp_dim: ${z_dim}
   num_layers: 4
-  lmax: ${lmax}
+  spec_norm: False
   angular_freq: ${angular_freq}
   dropout: 0.1
-  min_radius: 0.1
-  max_radius: 1.0
   num_radii: ${num_radii}
   num_theta: 20
-  N: ${N}
 
 dataloader:
   batch_size: 256
