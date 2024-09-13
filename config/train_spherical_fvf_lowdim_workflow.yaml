@@ -32,7 +32,7 @@ policy:
   num_neg_act_samples: 256
   pred_n_samples: 1000
   optimize_negatives: False 
-  sample_actions: True 
+  sample_actions: False 
   temperature: 1.0
   grad_pen: False
 

@@ -49,7 +49,7 @@ class SphereImplicitPolicy(BasePolicy):
         self.energy_head = energy_head
         self.apply(torch_utils.init_weights)
 
-    def get_action(self, obs, device):
+    def get_action(self, obs, device, use_break=False):
         """Get the action for the observation."""
         nobs = self.normalizer.normalize(obs)
         B = list(obs.values())[0].shape[0]
@@ -70,7 +70,7 @@ class SphereImplicitPolicy(BasePolicy):
         r = torch.linspace(
             action_stats["min"][0], action_stats["max"][0], self.energy_head.num_radii
         )
-        r = r.view(1, -1).repeat(B, 1).to(device)
+        r = r.view(1, -1, 1).repeat(B, 1, 1).to(device)
 
         theta, phi = self.energy_head.sh.grid
         theta = torch.from_numpy(theta[:, 0]).to(device)
@@ -78,8 +78,10 @@ class SphereImplicitPolicy(BasePolicy):
         phi = torch.from_numpy(phi[0, :]).to(device)
         phi = phi.view(1, -1).expand(B, self.energy_head.sh.num_phi)
 
+        if use_break:
+            breakpoint()
         obs_feat = self.obs_encoder(nobs)
-        logits, coeffs = self.energy_head(obs_feat, return_coeffs=True)
+        logits, coeffs = self.energy_head(obs_feat, r, return_coeffs=True)
         logits = logits.view(B, -1)
         action_probs = torch.softmax(logits / self.temperature, dim=-1).view(
             B,
@@ -96,6 +98,7 @@ class SphereImplicitPolicy(BasePolicy):
             flat_indexes = torch.argmax(action_probs.flatten(start_dim=1), dim=-1)
 
         idxs = np.unravel_index(flat_indexes.cpu(), action_probs.shape[1:])
+        r = r.view(B, -1)
         nactions = (
             torch.vstack(
                 [
@@ -182,19 +185,21 @@ class SphereImplicitPolicy(BasePolicy):
 
         # Compute ciruclar energy function for the given obs and action magnitudes
         r = targets[:, :, 0, 0]
-        max_r = action_stats["max"][0]
-        rs = (
-            torch.linspace(action_stats["min"][0], max_r, self.energy_head.num_radii)
-            .unsqueeze(0)
-            .repeat(B * N, 1)
-            .to(r.device)
-        )
-        r_idxs = torch.argmin((r.view(-1, 1) - rs).abs(), dim=1)
+        # max_r = action_stats["max"][0]
+        # rs = (
+        #    torch.linspace(action_stats["min"][0], max_r, self.energy_head.num_radii)
+        #    .unsqueeze(0)
+        #    .repeat(B * N, 1)
+        #    .to(r.device)
+        # )
+        # r_idxs = torch.argmin((r.view(-1, 1) - rs).abs(), dim=1)
 
         theta = self.normalizer["action"].unnormalize(targets)[:, :, 0, 1]
         phi = self.normalizer["action"].unnormalize(targets)[:, :, 0, 2]
         sphere_act = torch.concatenate(
-            [r_idxs.view(B, N, 1), theta.view(B, N, 1), phi.view(B, N, 1)], axis=2
+            # [r_idxs.view(B, N, 1), theta.view(B, N, 1), phi.view(B, N, 1)], axis=2
+            [r.view(B, N, 1), theta.view(B, N, 1), phi.view(B, N, 1)],
+            axis=2,
         )
 
         obs_feat = self.obs_encoder(nobs)
@@ -219,6 +224,7 @@ class SphereImplicitPolicy(BasePolicy):
     def plot_energy_fn(self, img, energy):
         # energy = torch.concat((energy[:, :, 20:], energy[:, :, :20]), dim=-1)
         # energy = torch.concat((energy[:, 20:, :], energy[:, :20:, :]), dim=-1)
+        energy = torch.flip(energy, (1,))
 
         probs = torch.softmax(energy.view(1, -1) / self.temperature, dim=-1).view(
             self.energy_head.num_radii,
@@ -285,7 +291,3 @@ class SphereImplicitPolicy(BasePolicy):
             np.frombuffer(io_buf.getvalue(), dtype=np.uint8),
             newshape=(int(fig.bbox.bounds[3]), int(fig.bbox.bounds[2]), -1),
         )
-        io_buf.close()
-        plt.close()
-
-        return img_arr

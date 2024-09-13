@@ -171,7 +171,11 @@ class ImplicitWorkflow(BaseWorkflow):
                 self.model.eval()
 
                 if self.epoch % self.config.training.rollout_every == 0:
-                    runner_log = env_runner.run(self.model)
+                    if self.epoch > 50:
+                        self.save_checkpoint()
+                    runner_log = env_runner.run(
+                        self.model
+                    )  # , use_break=self.epoch > 50)
                     step_log.update(runner_log)
 
                 if self.epoch % self.config.training.val_every == 0:

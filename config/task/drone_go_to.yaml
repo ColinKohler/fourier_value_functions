@@ -32,4 +32,4 @@ dataset:
   seed: 0
   action_coords: ${action_coords}
   val_ratio: 0.02
-  max_train_episodes: 45
+  max_train_episodes: 90

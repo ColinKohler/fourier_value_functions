@@ -63,7 +63,10 @@ def evaluate(
     # Run evaluation
     env_runner = hydra.utils.instantiate(cfg.task.env_runner, output_dir=output_dir)
     runner_log = env_runner.run(
-        policy, plot_energy_fn=plot_energy_fn, plot_weights_basis_fns=plot_basis_fn
+        policy,
+        plot_energy_fn=plot_energy_fn,
+        plot_weights_basis_fns=plot_basis_fn,
+        use_break=False,
     )
 
     # Save logs

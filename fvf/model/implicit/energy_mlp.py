@@ -137,9 +137,9 @@ class SphereEnergyMLP(nn.Module):
         self.num_radii = num_radii
 
         self.energy_mlp = MLP(
-            [obs_feat_dim]
-            + [mlp_dim] * num_layers
-            + [num_radii * (angular_freq + 1) ** 2],
+            [obs_feat_dim + 1] + [mlp_dim] * num_layers
+            # + [num_radii * (angular_freq + 1) ** 2],
+            + [(angular_freq + 1) ** 2],
             dropout=dropout,
             act_out=False,
             spec_norm=spec_norm,
@@ -164,17 +164,24 @@ class SphereEnergyMLP(nn.Module):
             actions: Action coordinates to evaluate the polar harmoincs at.
         """
         B, _ = obs_feat.shape
+        B, N, _ = actions.shape
 
-        w = self.energy_mlp(obs_feat).view(B, 1, self.num_radii, -1)
-        if actions is not None:
+        s = obs_feat.reshape(B, 1, -1).expand(-1, N, -1)
+        s_a = torch.cat([s, actions[:, :, 0].reshape(B, N, -1)], dim=-1).reshape(
+            B * N, -1
+        )
+
+        # w = self.energy_mlp(obs_feat).view(B, 1, self.num_radii, -1)
+        w = self.energy_mlp(s_a).view(B * N, -1)
+        if actions.size(2) == 3:
             B, N, _ = actions.shape
             act_flat = actions.view(B * N, -1)
-            w_a = w.repeat(1, N, 1, 1).view(B * N, self.num_radii, -1)
-            w_r = w_a[torch.arange(B * N), act_flat[:, 0].int()].reshape(B * N, -1)
-            out = self.sh(w_r, act_flat[:, 1:]).view(B, N)
+            # w_a = w.repeat(1, N, 1, 1).view(B * N, self.num_radii, -1)
+            # w_r = w_a[torch.arange(B * N), act_flat[:, 0].int()].reshape(B * N, -1)
+            out = self.sh(w, act_flat[:, 1:]).view(B, N)
         else:
             out = self.sh(w.reshape(B * self.num_radii, -1))
-            out = out.reshape(B, self.num_radii, self.sh.num_theta, self.sh.num_phi)
+            out = out.reshape(B, N, self.sh.num_theta, self.sh.num_phi)
 
         if return_coeffs:
             return out, w
@@ -277,6 +284,55 @@ class SO2EnergyMLP(nn.Module):
         out = self.energy_mlp(s_a)
 
         return out.tensor.reshape(B, N)
+
+class SO3EnergyMLP(nn.Module):
+    """Equivariant IBC energy head which uses the continuous SO3 group."""
+
+    def __init__(
+        self,
+        obs_feat_dim: int,
+        mlp_dim: int,
+        lmax: int,
+        dropout: float,
+        N: int = 16,
+        initialize: bool = True,
+    ):
+        super().__init__()
+        self.Lmax = lmax
+
+        self.G = group.so3_group()
+        self.gspace = gspaces.no_base_space(self.G)
+        rho = self.G.spectral_regular_representation(*self.G.bl_irreps(L=lmax))
+
+        self.in_type = enn.FieldType(
+            self.gspace, obs_feat_dim * [rho] + [self.gspace.irrep(1)]
+        )
+        out_type = enn.FieldType(self.gspace, [self.G.irrep(0)])
+
+        self.energy_mlp = SO3MLP(
+            self.in_type,
+            channels=[mlp_dim] * 4,
+            lmaxs=[lmax] * 4,
+            out_type=out_type,
+            N=N,
+            dropout=dropout,
+            act_out=False,
+            initialize=initialize,
+        )
+
+    def forward(self, obs_feat: torch.Tensor, action: torch.Tensor):
+        """Compute energy for observation and action pairs."""
+        B, N, _, _ = action.shape
+        B, _ = obs_feat.shape
+
+        s = obs_feat.reshape(B, 1, -1).expand(-1, N, -1)
+        s_a = self.in_type(
+            torch.cat([s, action.reshape(B, N, -1)], dim=-1).reshape(B * N, -1)
+        )
+        out = self.energy_mlp(s_a)
+
+        return out.tensor.reshape(B, N)
+
 
 
 class SO2CircularEnergyMLP(nn.Module):
@@ -494,10 +550,12 @@ class SO3SphereEnergyMLP(nn.Module):
         self.gspace = gspaces.no_base_space(self.G)
         rho = self.G.spectral_regular_representation(*self.G.bl_irreps(L=self.lmax))
 
-        self.in_type = enn.FieldType(self.gspace, obs_feat_dim * [rho])
+        self.in_type = enn.FieldType(
+            self.gspace, obs_feat_dim * [rho] + [self.G.irrep(0)]
+        )
         out_type = enn.FieldType(
             self.gspace,
-            num_radii * [self.gspace.irrep(l) for l in range(angular_freq + 1)],
+            [self.gspace.irrep(l) for l in range(angular_freq + 1)],
         )
 
         self.energy_mlp = SO3MLP(
@@ -532,18 +590,24 @@ class SO3SphereEnergyMLP(nn.Module):
             return_coeffs: Return Fourier coefficients.
         """
         B, _ = obs_feat.shape
-        s = self.in_type(obs_feat)
-        w = self.energy_mlp(s)
-        w = w.tensor.view(B, 1, self.num_radii, -1)
-        if actions is not None:
+        B, N, _ = actions.shape
+
+        s = obs_feat.reshape(B, 1, -1).expand(-1, N, -1)
+        s_a = self.in_type(
+            torch.cat([s, actions[:, :, 0].reshape(B, N, -1)], dim=-1).reshape(
+                B * N, -1
+            )
+        )
+        w = self.energy_mlp(s_a).tensor.reshape(B * N, -1)
+        if actions.size(2) == 3:
             B, N, _ = actions.shape
             act_flat = actions.view(B * N, -1)
-            w_a = w.repeat(1, N, 1, 1).view(B * N, self.num_radii, -1)
-            w_r = w_a[torch.arange(B * N), act_flat[:, 0].int()].reshape(B * N, -1)
-            out = self.sh(w_r, act_flat[:, 1:]).view(B, N)
+            # w_a = w.repeat(1, N, 1, 1).view(B * N, self.num_radii, -1)
+            # w_r = w_a[torch.arange(B * N), act_flat[:, 0].int()].reshape(B * N, -1)
+            out = self.sh(w, act_flat[:, 1:]).view(B, N)
         else:
             out = self.sh(w.reshape(B * self.num_radii, -1))
-            out = out.reshape(B, self.num_radii, self.sh.num_theta, self.sh.num_phi)
+            out = out.reshape(B, N, self.sh.num_theta, self.sh.num_phi)
 
         if return_coeffs:
             return out, w

@@ -70,7 +70,7 @@ class DroneDataset(BaseDataset):
 
 def ws_normalizer(arr, nmin=-1.0, nmax=1.0):
     stat = {
-        "min": np.array([-1.5, -1.5, -1.5, -1.5, -1.5, -1.5], dtype=np.float32),
+        "min": np.array([-1.5, -1.5, 0.0, -1.5, -1.5, 0.0], dtype=np.float32),
         "max": np.array([1.5, 1.5, 1.5, 1.5, 1.5, 1.5], dtype=np.float32),
         "mean": np.mean(arr, axis=0),
         "std": np.std(arr, axis=0),

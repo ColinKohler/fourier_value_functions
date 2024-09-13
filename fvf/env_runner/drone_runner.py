@@ -46,6 +46,7 @@ class DroneRunner(BaseRunner):
         num_envs=None,
         action_coords="rectangular",
     ):
+        # test_start_seed = 10001
         super().__init__(output_dir)
         num_envs = num_train + num_test if num_envs is None else num_envs
         self.action_coords = action_coords
@@ -149,6 +150,7 @@ class DroneRunner(BaseRunner):
         policy: BasePolicy,
         plot_energy_fn: bool = False,
         plot_weights_basis_fns: bool = False,
+        use_break: bool = False,
     ):
         device = policy.device
         dtype = policy.dtype
@@ -214,7 +216,7 @@ class DroneRunner(BaseRunner):
                 )
 
                 with torch.no_grad():
-                    action_dict = policy.get_action(obs_dict, device)
+                    action_dict = policy.get_action(obs_dict, device, use_break)
                 # print(action_dict["action"])
 
                 if plot_energy_fn:
