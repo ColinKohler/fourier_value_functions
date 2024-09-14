@@ -8,6 +8,7 @@ import time
 import numpy as np
 from fvf.dataset.replay_buffer import ReplayBuffer
 from fvf.env.drone.go_to_target_env import GoToTargetEnv
+from fvf.env.drone.fly_through_gate_env import FlyThroughGateEnv
 
 
 @click.command()
@@ -16,7 +17,7 @@ def main(output):
     # create replay buffer in read-write mode
     replay_buffer = ReplayBuffer.create_from_path(output, mode="a")
 
-    env = GoToTargetEnv(gui=False)
+    env = FlyThroughGateEnv(gui=True)
 
     for _ in range(100):
         episode: list = []
@@ -29,7 +30,9 @@ def main(output):
         i = 0
         while not done:
             i += 1
-            action = np.clip(obs[3:] - obs[:3], -0.2, 0.2)
+            target_pos = obs[3:].reshape(2,3).mean(0)
+            target_pos[2] += 0.1
+            action = np.clip(target_pos - obs[:3], -0.1, 0.1)
             data = {
                 "obs": np.float32(obs),
                 "action": np.float32(action),
