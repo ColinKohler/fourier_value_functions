@@ -4,7 +4,7 @@ import click
 import pygame
 
 from fvf.dataset.replay_buffer import ReplayBuffer
-from fvf.env.two_path.two_path_env import TwoPathEnv
+from fvf.env.two_path.four_path_env import FourPathEnv
 
 @click.command()
 @click.option("-o", "--output", required=True)
@@ -29,7 +29,7 @@ def main(output, render_size, control_hz):
     replay_buffer = ReplayBuffer.create_from_path(output, mode="a")
 
     # create env
-    env = TwoPathEnv(
+    env = FourPathEnv(
         render_size=render_size,
         render_action=False,
         render_mode="human",
