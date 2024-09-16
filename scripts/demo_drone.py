@@ -17,20 +17,22 @@ def main(output):
     # create replay buffer in read-write mode
     replay_buffer = ReplayBuffer.create_from_path(output, mode="a")
 
-    env = FlyThroughGateEnv(gui=True)
+    env = FlyThroughGateEnv(gui=False)
 
-    for _ in range(100):
+    success = 0
+    seed = 0
+    while success < 50:
         episode: list = []
-        seed = replay_buffer.n_episodes
         print(f"starting seed {seed}")
 
         obs = env.reset(seed=seed)
         done = False
+        terminated = False
 
         i = 0
-        while not done:
+        while not done and not terminated:
             i += 1
-            target_pos = obs[3:].reshape(2,3).mean(0)
+            target_pos = obs[3:].reshape(2, 3).mean(0)
             target_pos[2] += 0.1
             action = np.clip(target_pos - obs[:3], -0.1, 0.1)
             data = {
@@ -41,11 +43,16 @@ def main(output):
 
             obs, reward, done, terminated, info = env.step(action)
 
-        data_dict = dict()
-        for key in episode[0].keys():
-            data_dict[key] = np.stack([x[key] for x in episode])
-        replay_buffer.add_episode(data_dict, compressors="disk")
-        print(f"saved seed {seed}")
+        if reward == 1:
+            data_dict = dict()
+            for key in episode[0].keys():
+                data_dict[key] = np.stack([x[key] for x in episode])
+            replay_buffer.add_episode(data_dict, compressors="disk")
+            print(f"saved seed {seed}...")
+            success += 1
+        else:
+            print(f"seed {seed} failed, not saving...")
+        seed += 1
 
     env.close()
 

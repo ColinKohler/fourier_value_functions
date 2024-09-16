@@ -46,6 +46,7 @@ obs_encoder:
 energy_head:
   _target_: fvf.model.implicit.energy_mlp.EnergyMLP
   obs_feat_dim: ${z_dim}
+  action_dim: ${action_dim}
   mlp_dim: ${z_dim}
   dropout: 0.1
   spec_norm: False

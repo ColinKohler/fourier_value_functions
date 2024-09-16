@@ -12,6 +12,7 @@ import wandb.sdk.data_types.video as wv
 import imageio
 
 from fvf.env.drone.go_to_target_env import GoToTargetEnv
+from fvf.env.drone.fly_through_gate_env import FlyThroughGateEnv
 from fvf.gym_util.async_vector_env import AsyncVectorEnv
 from fvf.gym_util.multistep_wrapper import MultiStepWrapper
 from fvf.gym_util.video_recording_wrapper import VideoRecordingWrapper, VideoRecorder
@@ -27,6 +28,7 @@ class DroneRunner(BaseRunner):
     def __init__(
         self,
         output_dir,
+        env,
         keypoint_visible_rate=1.0,
         num_train=10,
         num_train_vis=3,
@@ -54,10 +56,17 @@ class DroneRunner(BaseRunner):
         env_num_obs_steps = num_obs_steps + num_latency_steps
         env_num_action_steps = num_action_steps
 
+        if env == "go_to_target":
+            env = GoToTargetEnv
+        elif env == "fly_through_gate":
+            env = FlyThroughGateEnv
+        else:
+            raise ValueError("Invalid env...")
+
         def env_fn():
             return MultiStepWrapper(
                 VideoRecordingWrapper(
-                    GoToTargetEnv(),
+                    env(),
                     video_recoder=VideoRecorder.create_h264(
                         fps=fps,
                         codec="h264",
@@ -216,7 +225,7 @@ class DroneRunner(BaseRunner):
                 )
 
                 with torch.no_grad():
-                    action_dict = policy.get_action(obs_dict, device, use_break)
+                    action_dict = policy.get_action(obs_dict, device)  # , use_break)
                 # print(action_dict["action"])
 
                 if plot_energy_fn:

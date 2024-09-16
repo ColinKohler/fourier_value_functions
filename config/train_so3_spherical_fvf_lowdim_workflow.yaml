@@ -40,7 +40,7 @@ policy:
 
 obs_encoder:
   _target_: fvf.model.implicit.obs_encoder.SO3KeypointEncoder
-  num_keypoints: 2
+  num_keypoints: ${task.num_keypoints}
   num_obs: ${num_obs_steps}
   in_feat: ${eval:'${obs_dim} // 2'}
   z_dim: ${z_dim}

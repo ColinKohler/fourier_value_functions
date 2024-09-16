@@ -10,6 +10,7 @@ import wandb
 import tqdm
 import numpy as np
 import shutil
+from typing import Optional
 
 from fvf.utils.torch_utils import dict_apply, optimizer_to
 from fvf.workflow.base_workflow import BaseWorkflow
@@ -31,8 +32,10 @@ OmegaConf.register_new_resolver("eval", eval, replace=True)
 class DiffusionTransformerLowdimWorkflow(BaseWorkflow):
     include_keys = ["global_step", "epoch"]
 
-    def __init__(self, config: OmegaConf):
-        super().__init__(config)
+    def __init__(
+        self, config: OmegaConf, output_dir: Optional[str] = None, eval: bool = False
+    ):
+        super().__init__(config, output_dir=output_dir)
 
         # set seed
         seed = config.training.seed

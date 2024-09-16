@@ -58,10 +58,10 @@ class FlyThroughGateEnv(BaseRLAviary):
 
         """
         self.workspace = np.array([[-0.75, -0.75, 0], [0.75, 0.75, 0.75]])
-        self.starting_pos = self.workspace.mean(0).reshape(1,3)
+        self.starting_pos = self.workspace.mean(0).reshape(1, 3)
         self.EPISODE_LEN_SEC = 8
         self.SUCCESS_TH = 2e-2
-        self.num_keypoints = 3 # Drone (1) + Gate(2)
+        self.num_keypoints = 3  # Drone (1) + Gate(2)
         self.seed = None
 
         super().__init__(
@@ -102,16 +102,17 @@ class FlyThroughGateEnv(BaseRLAviary):
         self._startVideoRecording()
 
         self.GATE_POS = npr.uniform(
-            self.workspace[0] + np.array([0.1, 0.1, 0.1]), 
-            self.workspace[1] - np.array([0.1, 0.1, 0.1])
+            self.workspace[0] + np.array([0.1, 0.1, 0.1]),
+            self.workspace[1] - np.array([0.1, 0.1, 0.1]),
         )
         if abs(self.GATE_POS[0]) > abs(self.GATE_POS[1]):
-            gate_rot = pb.getQuaternionFromEuler([0,0,np.pi/2])
+            gate_rot = pb.getQuaternionFromEuler([0, 0, np.pi / 2])
         else:
             gate_rot = pb.getQuaternionFromEuler([0, 0, 0])
 
-        gate_fp = resource_filename(__name__, 'assets/gate.urdf')
-        self.gate = pb.loadURDF(gate_fp,
+        gate_fp = resource_filename(__name__, "assets/gate.urdf")
+        self.gate = pb.loadURDF(
+            gate_fp,
             self.GATE_POS,
             gate_rot,
             physicsClientId=self.CLIENT,
@@ -173,20 +174,19 @@ class FlyThroughGateEnv(BaseRLAviary):
             Whether the current episode timed out.
 
         """
-        return False
-        # state = self._getDroneStateVector(0)
-        # if (
-        #    abs(state[0]) > 1.5
-        #    or abs(state[1]) > 1.5
-        #    or state[2] > 2.0  # Truncate when the drone is too far away
-        #    or abs(state[7]) > 0.4
-        #    or abs(state[8]) > 0.4  # Truncate when the drone is too tilted
-        # ):
-        #    return True
-        # if self.step_counter / self.PYB_FREQ > self.EPISODE_LEN_SEC:
-        #    return True
-        # else:
-        #    return False
+        state = self._getDroneStateVector(0)
+        if (
+            abs(state[0]) > 1.5
+            or abs(state[1]) > 1.5
+            or state[2] > 2.0  # Truncate when the drone is too far away
+            or abs(state[7]) > 0.4
+            or abs(state[8]) > 0.4  # Truncate when the drone is too tilted
+        ):
+            return True
+        if self.step_counter / self.PYB_FREQ > self.EPISODE_LEN_SEC:
+            return True
+        else:
+            return False
 
     def _computeObs(self):
         """Returns the current observation of the environment.
