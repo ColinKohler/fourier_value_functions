@@ -41,6 +41,7 @@ class PushTImageRunner(BaseRunner):
         tqdm_interval_sec=5.0,
         num_envs=None,
         random_goal_pose=False,
+        legacy=False
     ):
         super().__init__(output_dir)
         num_envs = num_train + num_test if num_envs is None else num_envs
@@ -52,7 +53,7 @@ class PushTImageRunner(BaseRunner):
             return MultiStepWrapper(
                 VideoRecordingWrapper(
                     PushTImageEnv(
-                        legacy=False,
+                        legacy=legacy,
                         render_size=render_size,
                         random_goal_pose=random_goal_pose,
                     ),
@@ -195,7 +196,9 @@ class PushTImageRunner(BaseRunner):
                 # cropped_image = obs['image'][:,:,:,6:-6, 6:-6]
                 from torchvision.transforms.functional import resize
 
-                cropped_image = (
+                cropped_image = obs["image"]
+
+                """cropped_image = (
                     resize(
                         torch.tensor(obs["image"]).view(-1, 3, 96, 96),
                         (84, 84),
@@ -203,7 +206,7 @@ class PushTImageRunner(BaseRunner):
                     )
                     .view(-1, 2, 3, 84, 84)
                     .numpy()
-                )
+                )"""
 
                 x_pos = obs["agent_pos"][:, :, 0] - 255.0
                 y_pos = (obs["agent_pos"][:, :, 1] - 255.0) * -1
@@ -221,7 +224,7 @@ class PushTImageRunner(BaseRunner):
                 )
 
                 with torch.no_grad():
-                    action_dict = policy.get_action(obs_dict, device)
+                    action_dict = policy.get_action(obs_dict, device, mode='eval')
 
                 if plot_energy_fn:
                     for i, env_id in enumerate(range(start, end)):
@@ -240,11 +243,11 @@ class PushTImageRunner(BaseRunner):
                             )
                         )
 
-                x_act = action_dict["action"][:, :, 0]
+                """x_act = action_dict["action"][:, :, 0]
                 y_act = action_dict["action"][:, :, 1] * -1
                 action_dict["action"] = torch.concatenate((x_act, y_act), dim=-1).view(
-                    B, 1, 2
-                )
+                    B, -1, T
+                )"""
                 action_dict = dict_apply(action_dict, lambda x: x.to("cpu").numpy())
                 action = action_dict["action"][:, self.num_latency_steps :]
 

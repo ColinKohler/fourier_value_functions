@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torchvision
 
 from escnn import gspaces
 from escnn import nn as enn
@@ -173,3 +174,14 @@ class SO2ImageEncoder(nn.Module):
         out = self.conv(x)
 
         return out.tensor
+
+def get_resnet(name, weights=None, **kwargs):
+    """
+    name: resnet18, resnet34, resnet50
+    weights: "IMAGENET1K_V1", "r3m"
+    """
+
+    func = getattr(torchvision.models, name)
+    resnet = func(weights=weights, **kwargs)
+    resnet.fc = torch.nn.Identity()
+    return resnet

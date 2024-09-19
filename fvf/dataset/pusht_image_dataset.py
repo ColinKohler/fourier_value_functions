@@ -1,7 +1,9 @@
 import numpy as np
+import torch
+from typing import Dict
 
 from fvf.dataset.base_dataset import BaseDataset
-from fvf.utils import normalize_utils, data_augmentation, action_utils
+from fvf.utils import normalize_utils, data_augmentation, action_utils, torch_utils
 from fvf.model.common.normalizer import LinearNormalizer, SingleFieldLinearNormalizer
 
 class PushTImageDataset(BaseDataset):
@@ -32,7 +34,7 @@ class PushTImageDataset(BaseDataset):
         )
 
     def get_normalizer(self, mode="limits", **kwargs):
-        sample_data = self._sample_to_data(self.replay_buffer)
+        sample_data = self._sample_to_data(self.replay_buffer, rand_crop=False)
         data = {
             'action': sample_data['action'],
             'agent_pos': sample_data['obs']['agent_pos']
@@ -60,15 +62,23 @@ class PushTImageDataset(BaseDataset):
         if rand_crop:
             obs = data_augmentation.random_crop(obs, self.crop_image_size)
 
-        x_act = sample['action'][:,0]
+        """x_act = sample['action'][:,0]
         y_act = sample['action'][:,1] * -1
-        action = np.concatenate((x_act[..., np.newaxis], y_act[..., np.newaxis]), axis=-1).reshape(T, 2)
+        action = np.concatenate((x_act[..., np.newaxis], y_act[..., np.newaxis]), axis=-1).reshape(T, 2)"""
 
         data = {
             'obs' : {
                 'image': obs, # T, C, H, W
                 'agent_pos' : agent_pos # T, 2
             },
-            "action": action,  # T, D_a
+            "action": sample['action'],  # T, D_a
         }
         return data
+    
+    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+        sample = self.sampler.sample_sequence(idx)
+        data = self._sample_to_data(sample, rand_crop=False)
+        data["action"] = action_utils.convert_action_coords(data["action"], self.action_coords)
+
+        torch_data = torch_utils.dict_apply(data, torch.from_numpy)
+        return torch_data
