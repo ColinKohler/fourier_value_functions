@@ -186,7 +186,6 @@ class DiffusionUnetImagePolicy(BaseImagePolicy):
     def set_normalizer(self, normalizer: LinearNormalizer):
         self.normalizer.load_state_dict(normalizer.state_dict())
 
-    @torch.compile(mode="reduce-overhead")
     def compute_loss(self, batch):
         # normalize input
         assert 'valid_mask' not in batch
