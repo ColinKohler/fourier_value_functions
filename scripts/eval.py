@@ -66,7 +66,7 @@ def evaluate(
         policy,
         plot_energy_fn=plot_energy_fn,
         plot_weights_basis_fns=plot_basis_fn,
-        use_break=False,
+        # use_break=False,
     )
 
     # Save logs

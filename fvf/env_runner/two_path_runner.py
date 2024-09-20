@@ -10,6 +10,7 @@ import wandb.sdk.data_types.video as wv
 import imageio
 
 from fvf.env.two_path.two_path_env import TwoPathEnv
+from fvf.env.two_path.four_path_env import FourPathEnv
 from fvf.gym_util.async_vector_env import AsyncVectorEnv
 from fvf.gym_util.multistep_wrapper import MultiStepWrapper
 from fvf.gym_util.video_recording_wrapper import VideoRecordingWrapper, VideoRecorder
@@ -23,6 +24,7 @@ class TwoPathRunner(BaseRunner):
     def __init__(
         self,
         output_dir,
+        num_paths: int = 2,
         keypoint_visible_rate=1.0,
         num_train=10,
         num_train_vis=3,
@@ -48,10 +50,17 @@ class TwoPathRunner(BaseRunner):
         env_num_obs_steps = num_obs_steps + num_latency_steps
         env_num_action_steps = num_action_steps
 
+        if num_paths == 2:
+            env = TwoPathEnv
+        elif num_paths == 4:
+            env = FourPathEnv
+        else:
+            raise ValueError("Invalid number of paths specified")
+
         def env_fn():
             return MultiStepWrapper(
                 VideoRecordingWrapper(
-                    TwoPathEnv(
+                    env(
                         legacy=False,
                         render_size=render_size,
                     ),
@@ -158,8 +167,10 @@ class TwoPathRunner(BaseRunner):
 
         all_video_paths = [None] * num_inits
         all_rewards = [None] * num_inits
-        energy_fn_plots = [list() for _ in range(num_inits)]
-        basis_fn_plots = [list() for _ in range(num_inits)]
+        energy_fn_plots = [[] for _ in range(num_inits)]
+        basis_fn_plots = [[] for _ in range(num_inits)]
+
+        all_states = [[] for _ in range(num_inints)]
 
         for chunk_idx in range(num_chunks):
             start = chunk_idx * num_envs
@@ -188,6 +199,7 @@ class TwoPathRunner(BaseRunner):
                 mininterval=self.tqdm_interval_sec,
             )
 
+            first_img = None
             done = False
             while not done:
                 B, T, C, H, W = obs["image"].shape
@@ -203,6 +215,12 @@ class TwoPathRunner(BaseRunner):
                     .view(-1, 2, 3, 84, 84)
                     .numpy()
                 )
+
+                if first_image is None:
+                    first_image = obs["image"][0]
+
+                for i, env_id in enumerate(range(start, end)):
+                    all_states[env_id].append(obs["agent_pos"])
 
                 x_pos = obs["agent_pos"][:, :, 0] - 255.0
                 y_pos = (obs["agent_pos"][:, :, 1] - 255.0) * -1
@@ -259,6 +277,8 @@ class TwoPathRunner(BaseRunner):
             all_rewards[this_global_slice] = env.call("get_attr", "reward")[
                 this_local_slice
             ]
+
+        breakpoint()
 
         # Logging
         max_rewards = collections.defaultdict(list)

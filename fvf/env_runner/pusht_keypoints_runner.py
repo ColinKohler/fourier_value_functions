@@ -228,8 +228,12 @@ class PushTKeypointsRunner(BaseRunner):
                         .view(B, 2, Do)
                     )
 
+                import time
+
+                t0 = time.time()
                 with torch.no_grad():
                     action_dict = policy.get_action(obs_dict, device)
+                print(time.time() - t0)
 
                 if plot_energy_fn:
                     for i, env_id in enumerate(range(start, end)):

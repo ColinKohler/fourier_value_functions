@@ -224,8 +224,12 @@ class DroneRunner(BaseRunner):
                     obs_dict, lambda x: torch.from_numpy(x).to(device)
                 )
 
+                import time
+
+                t0 = time.time()
                 with torch.no_grad():
                     action_dict = policy.get_action(obs_dict, device)  # , use_break)
+                print(time.time() - t0)
                 # print(action_dict["action"])
 
                 if plot_energy_fn:
