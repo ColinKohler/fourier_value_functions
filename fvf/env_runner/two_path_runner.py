@@ -8,6 +8,7 @@ import dill
 import math
 import wandb.sdk.data_types.video as wv
 import imageio
+import cv2
 
 from fvf.env.two_path.two_path_env import TwoPathEnv
 from fvf.env.two_path.four_path_env import FourPathEnv
@@ -42,10 +43,11 @@ class TwoPathRunner(BaseRunner):
         past_action=False,
         tqdm_interval_sec=5.0,
         num_envs=None,
-        random_goal_pose=False,
+        action_coords="rectangular",
     ):
         super().__init__(output_dir)
         num_envs = num_train + num_test if num_envs is None else num_envs
+        self.action_coords = action_coords
 
         env_num_obs_steps = num_obs_steps + num_latency_steps
         env_num_action_steps = num_action_steps
@@ -170,7 +172,8 @@ class TwoPathRunner(BaseRunner):
         energy_fn_plots = [[] for _ in range(num_inits)]
         basis_fn_plots = [[] for _ in range(num_inits)]
 
-        all_states = [[] for _ in range(num_inints)]
+        first_image = None
+        all_states = [[] for _ in range(num_inits)]
 
         for chunk_idx in range(num_chunks):
             start = chunk_idx * num_envs
@@ -199,8 +202,8 @@ class TwoPathRunner(BaseRunner):
                 mininterval=self.tqdm_interval_sec,
             )
 
-            first_img = None
             done = False
+            env_done = [False] * num_inits
             while not done:
                 B, T, C, H, W = obs["image"].shape
                 # cropped_image = obs['image'][:,:,:,6:-6, 6:-6]
@@ -220,15 +223,28 @@ class TwoPathRunner(BaseRunner):
                     first_image = obs["image"][0]
 
                 for i, env_id in enumerate(range(start, end)):
-                    all_states[env_id].append(obs["agent_pos"])
+                    if not env_done[i]:
+                        all_states[env_id].append(obs["agent_pos"][env_id, :].tolist())
+                    elif env_done[i]:
+                        all_states[env_id].append(
+                            [obs["agent_pos"][env_id, -1].tolist()] * 2
+                        )
 
-                x_pos = obs["agent_pos"][:, :, 0] - 255.0
-                y_pos = (obs["agent_pos"][:, :, 1] - 255.0) * -1
+                if self.action_coords == "polar":
+                    x_pos = obs["agent_pos"][:, :, 0] - 255.0
+                    y_pos = (obs["agent_pos"][:, :, 1] - 255.0) * -1
+                else:
+                    x_pos = obs["agent_pos"][:, :, 0]
+                    y_pos = obs["agent_pos"][:, :, 1]
+
                 agent_pos = np.concatenate(
                     (x_pos[..., np.newaxis], y_pos[..., np.newaxis]), axis=-1
                 ).reshape(B, T, 2)
 
-                obs_dict = {"image": cropped_image, "agent_pos": agent_pos}
+                obs_dict = {
+                    "image": cropped_image[:, :],
+                    "agent_pos": agent_pos[:, :],
+                }
                 if self.past_action and (past_action is not None):
                     obs["past_action"] = past_action[
                         :, -(self.num_obs_steps - 1) :
@@ -257,17 +273,18 @@ class TwoPathRunner(BaseRunner):
                             )
                         )
 
-                x_act = action_dict["action"][:, :, 0]
-                y_act = action_dict["action"][:, :, 1] * -1
-                action_dict["action"] = torch.concatenate((x_act, y_act), dim=-1).view(
-                    B, 1, 2
-                )
+                if self.action_coords == "polar":
+                    x_act = action_dict["action"][:, :, 0]
+                    y_act = action_dict["action"][:, :, 1] * -1
+                    action_dict["action"] = torch.concatenate(
+                        (x_act, y_act), dim=-1
+                    ).view(B, 1, 2)
                 action_dict = dict_apply(action_dict, lambda x: x.to("cpu").numpy())
                 action = action_dict["action"][:, self.num_latency_steps :]
 
                 # Step env
-                obs, reward, done, timeout, info = env.step(action)
-                done = np.all(done)
+                obs, reward, env_done, timeout, info = env.step(action)
+                done = np.all(env_done)
                 past_action = action
 
                 pbar.update(action.shape[1])
@@ -278,7 +295,28 @@ class TwoPathRunner(BaseRunner):
                 this_local_slice
             ]
 
-        breakpoint()
+        img = np.transpose(first_image[0], axes=(1, 2, 0))
+        img = cv2.resize(img, (512, 512))
+        import matplotlib.pyplot as plt
+        from matplotlib.collections import LineCollection
+        from fvf.utils.plotting import colored_line
+
+        fig, ax = plt.subplots()
+        plt.axis("off")
+
+        ax.imshow(img)
+        all_paths = np.array(all_states).reshape(50, -1, 2)[:, :-1, :]
+        lines = LineCollection(all_paths, color=[0.7, 0.0, 0.0, 0.5], linewidths=1)
+        # lines = colored_line(
+        #    all_paths[:, :, 0],
+        #    all_paths[:, :, 1],
+        #    np.linspace(0, 2, all_paths.shape[-1]),
+        #    ax,
+        #    linewidth=1,
+        #    cmap="plamsa",
+        # )
+        ax.add_collection(lines)
+        plt.savefig("test.png", bbox_inches="tight")
 
         # Logging
         max_rewards = collections.defaultdict(list)

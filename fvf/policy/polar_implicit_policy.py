@@ -47,6 +47,7 @@ class PolarImplicitPolicy(BasePolicy):
         self.obs_encoder = obs_encoder
         self.energy_head = energy_head
         self.apply(torch_utils.init_weights)
+        self.i = 0
 
     def get_action(self, obs, device):
         """Get the action for the observation."""
@@ -75,6 +76,12 @@ class PolarImplicitPolicy(BasePolicy):
         obs_feat = self.obs_encoder(nobs)
         logits, coeffs = self.energy_head(obs_feat, return_coeffs=True)
         logits = logits.view(B, -1)
+        # if self.i <= 5:
+        #    self.temperature = 10
+        # else:
+        #    self.temperature = 1
+        # self.i += 1
+
         action_probs = torch.softmax(logits / self.temperature, dim=-1).view(
             B, self.energy_head.ph.num_radii, self.energy_head.ph.num_phi
         )

@@ -23,7 +23,7 @@ OmegaConf.register_new_resolver("eval", eval, replace=True)
 
 @hydra.main(
     version_base=None,
-    config_path="/home/harbor07/fourier_value_functions/config/",
+    config_path="../config/",
 )
 def main(cfg: OmegaConf):
     # resolve immediately so all the ${now:} resolvers

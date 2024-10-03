@@ -1,6 +1,6 @@
 import os
 
-#os.environ["SDL_VIDEODRIVER"] = "dummy"
+# os.environ["SDL_VIDEODRIVER"] = "dummy"
 
 import gymnasium as gym
 from gymnasium import spaces
@@ -188,19 +188,19 @@ class FourPathEnv(gym.Env):
         obs = {"image": img_obs, "agent_pos": agent_pos}
 
         # draw action
-        if self.latest_action is not None:
-            action = np.array(self.latest_action)
-            coord = (action / 512 * 96).astype(np.int32)
-            marker_size = int(8 / 96 * self.render_size)
-            thickness = int(1 / 96 * self.render_size)
-            cv2.drawMarker(
-                img,
-                coord,
-                color=(255, 0, 0),
-                markerType=cv2.MARKER_CROSS,
-                markerSize=marker_size,
-                thickness=thickness,
-            )
+        # if self.latest_action is not None:
+        #    action = np.array(self.latest_action)
+        #    coord = (action / 512 * 96).astype(np.int32)
+        #    marker_size = int(8 / 96 * self.render_size)
+        #    thickness = int(1 / 96 * self.render_size)
+        #    cv2.drawMarker(
+        #        img,
+        #        coord,
+        #        color=(255, 0, 0),
+        #        markerType=cv2.MARKER_CROSS,
+        #        markerSize=marker_size,
+        #        thickness=thickness,
+        #    )
         self.render_cache = img
 
         return obs
@@ -306,11 +306,11 @@ class FourPathEnv(gym.Env):
         # therefore will modify the geometric position
         # if not the same as CoM
         # therefore should be modified first.
-        #if self.legacy:
+        # if self.legacy:
         #    # for compatibility with legacy data
         #    self.wall.position = pos_block
         #    self.wall.angle = rot_block
-        #else:
+        # else:
         #    self.wall.angle = rot_block
         #    self.wall.position = pos_block
 

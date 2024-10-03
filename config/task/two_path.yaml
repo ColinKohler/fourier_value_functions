@@ -1,34 +1,44 @@
 name: two_path
 
-image_dim: [3, 96, 96]
+image_dim: &image_dim [3, 96, 96]
 action_dim: 2
 keypoint_dim: 2
+shape_meta: &shape_meta
+  # acceptable types: rgb, low_dim
+  obs:
+    image:
+      shape: *image_dim #[3, 96, 96]
+      type: rgb
+  action:
+    shape: [2]
+
 
 env_runner:
   _target_: fvf.env_runner.two_path_runner.TwoPathRunner
+  num_paths: 2
   num_train: 10
   num_train_vis: 2
   train_start_seed: 0
   num_test: 50
   num_test_vis: 4
   test_start_seed: 100000
-  max_steps: 500
+  max_steps: 100
   num_obs_steps: ${num_obs_steps}
   num_action_steps: ${num_action_steps}
   num_latency_steps: ${num_latency_steps}
   fps: 10
   past_action: ${past_action_visible}
-  num_envs: 30
+  num_envs: 60
   render_size: 96
-  random_goal_pose: False
+  action_coords: ${action_coords}
 
 dataset:
   _target_: fvf.dataset.pusht_image_dataset.PushTImageDataset
-  path: data/two_paths_10
+  path: data/two_paths_20
   horizon: ${horizon}
   pad_before: ${eval:'${num_obs_steps}-1+${num_latency_steps}'}
   pad_after: ${eval:'${num_action_steps}-1'}
   seed: 0
   action_coords: ${action_coords}
-  val_ratio: 0.02
-  max_train_episodes: 9
+  val_ratio: 0.00
+  max_train_episodes: 20

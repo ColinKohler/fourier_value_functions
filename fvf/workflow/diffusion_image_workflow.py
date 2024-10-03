@@ -30,9 +30,7 @@ OmegaConf.register_new_resolver("eval", eval, replace=True)
 class DiffusionImageWorkflow(BaseWorkflow):
     include_keys = ["global_step", "epoch"]
 
-    def __init__(
-        self, config: OmegaConf, output_dir=None
-    ):
+    def __init__(self, config: OmegaConf, output_dir=None, eval=False):
         super().__init__(config, output_dir=output_dir)
 
         # Set random seed
@@ -56,7 +54,7 @@ class DiffusionImageWorkflow(BaseWorkflow):
         # configure training state
         self.global_step = 0
         self.epoch = 0
-    
+
     def run(self):
         config = copy.deepcopy(self.config)
         # Resume training
@@ -86,12 +84,11 @@ class DiffusionImageWorkflow(BaseWorkflow):
             self.config.training.lr_scheduler,
             optimizer=self.optimizer,
             num_warmup_steps=self.config.training.lr_warmup_steps,
-            num_training_steps=(
-                len(train_dataloader) * self.config.training.num_epochs) \
-                    // self.config.training.gradient_accumulate_every,
+            num_training_steps=(len(train_dataloader) * self.config.training.num_epochs)
+            // self.config.training.gradient_accumulate_every,
             # pytorch assumes stepping LRScheduler every epoch
             # however huggingface diffusers steps it every batch
-            last_epoch=self.global_step-1
+            last_epoch=self.global_step - 1,
         )
 
         # device transfer
@@ -110,7 +107,7 @@ class DiffusionImageWorkflow(BaseWorkflow):
         env_runner = hydra.utils.instantiate(
             self.config.task.env_runner, output_dir=self.output_dir
         )
-        assert isinstance(env_runner, PushTImageRunner)
+        # assert isinstance(env_runner, PushTImageRunner)
 
         # Setup logging
         wandb_run = wandb.init(
@@ -173,7 +170,11 @@ class DiffusionImageWorkflow(BaseWorkflow):
                         loss.backward()
 
                         # Optimization
-                        if self.global_step % self.config.training.gradient_accumulate_every == 0:
+                        if (
+                            self.global_step
+                            % self.config.training.gradient_accumulate_every
+                            == 0
+                        ):
                             self.optimizer.step()
                             self.optimizer.zero_grad()
                             lr_scheduler.step()
@@ -192,15 +193,16 @@ class DiffusionImageWorkflow(BaseWorkflow):
                             "lr": lr_scheduler.get_last_lr()[0],
                         }
 
-                        is_last_batch = (batch_idx == (len(train_dataloader)-1))
+                        is_last_batch = batch_idx == (len(train_dataloader) - 1)
                         if not is_last_batch:
                             # log of last step is combined with validation and rollout
                             wandb_run.log(step_log, step=self.global_step)
                             json_logger.log(step_log)
                             self.global_step += 1
 
-                        if (config.training.max_train_steps is not None) \
-                            and batch_idx >= (config.training.max_train_steps-1):
+                        if (
+                            config.training.max_train_steps is not None
+                        ) and batch_idx >= (config.training.max_train_steps - 1):
                             break
 
                 # at the end of each epoch
@@ -236,8 +238,9 @@ class DiffusionImageWorkflow(BaseWorkflow):
                                 )
                                 loss = self.model.compute_loss(batch)
                                 val_losses.append(loss)
-                                if (self.config.training.max_val_steps is not None) \
-                                    and batch_idx >= (config.training.max_val_steps-1):
+                                if (
+                                    self.config.training.max_val_steps is not None
+                                ) and batch_idx >= (config.training.max_val_steps - 1):
                                     break
                         if len(val_losses) > 0:
                             val_loss = torch.mean(torch.tensor(val_losses)).item()
@@ -248,10 +251,13 @@ class DiffusionImageWorkflow(BaseWorkflow):
                 if (self.epoch % self.config.training.sample_every) == 0:
                     with torch.no_grad():
                         # sample trajectory from training set, and evaluate difference
-                        batch = torch_utils.dict_apply(train_sampling_batch, lambda x: x.to(device, non_blocking=True))
+                        batch = torch_utils.dict_apply(
+                            train_sampling_batch,
+                            lambda x: x.to(device, non_blocking=True),
+                        )
                         obs_dict = batch["obs"]
                         gt_action = batch["action"]
-                        
+
                         result = policy.get_action(obs_dict, device)
                         pred_action = result["action_pred"]
                         mse = torch.nn.functional.mse_loss(pred_action, gt_action)
@@ -274,7 +280,7 @@ class DiffusionImageWorkflow(BaseWorkflow):
                     metric_dict = dict()
                     for k, v in step_log.items():
                         metric_dict[k.replace("/", "_")] = v
-                    
+
                     # We can't copy the last checkpoint here
                     # since save_checkpoint uses threads.
                     # therefore at this point the file might have been empty!

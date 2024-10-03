@@ -11,9 +11,9 @@ task_name: ${task.name}
 shape_meta: ${task.shape_meta}
 exp_name: "default"
 
-horizon: 16
+horizon: 4
 num_obs_steps: 2
-num_action_steps: 8
+num_action_steps: 1
 num_latency_steps: 0
 dataset_obs_steps: ${num_obs_steps}
 past_action_visible: False
@@ -44,9 +44,9 @@ policy:
       name: resnet18
       weights: null
     resize_shape: null
-    crop_shape: [84, 84]
+    crop_shape: [96, 96]
     # constant center crop
-    random_crop: True
+    random_crop: False
     use_group_norm: True
     share_rgb_model: False
     imagenet_norm: True
@@ -56,7 +56,7 @@ policy:
   horizon: ${horizon}
   num_action_steps: ${eval:'${num_action_steps}+${num_latency_steps}'}
   num_obs_steps: ${num_obs_steps}
-  num_inference_steps: 100
+  num_inference_steps: 20
   obs_as_global_cond: ${obs_as_global_cond}
   # crop_shape: null
   diffusion_step_embed_dim: 128
@@ -136,7 +136,7 @@ checkpoint:
   topk:
     monitor_key: test_mean_score
     mode: max
-    k: 5
+    k: 2
     format_str: 'epoch={epoch:04d}-test_mean_score={test_mean_score:.3f}.ckpt'
   save_last_checkpoint: True
   save_last_snapshot: False

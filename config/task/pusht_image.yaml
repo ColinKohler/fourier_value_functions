@@ -28,6 +28,7 @@ env_runner:
   past_action: ${past_action_visible}
   num_envs: null
   legacy: False
+  action_coords: ${action_coords}
 
 dataset:
   _target_: fvf.dataset.pusht_image_dataset.PushTImageDataset

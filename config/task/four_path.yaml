@@ -1,8 +1,17 @@
 name: four_path
 
-image_dim: [3, 96, 96]
+image_dim: &image_dim [3, 96, 96]
 action_dim: 2
 keypoint_dim: 2
+shape_meta: &shape_meta
+  # acceptable types: rgb, low_dim
+  obs:
+    image:
+      shape: *image_dim #[3, 96, 96]
+      type: rgb
+  action:
+    shape: [2]
+
 
 env_runner:
   _target_: fvf.env_runner.two_path_runner.TwoPathRunner
@@ -21,7 +30,7 @@ env_runner:
   past_action: ${past_action_visible}
   num_envs: 60
   render_size: 96
-  random_goal_pose: False
+  action_coords: ${action_coords}
 
 dataset:
   _target_: fvf.dataset.pusht_image_dataset.PushTImageDataset
