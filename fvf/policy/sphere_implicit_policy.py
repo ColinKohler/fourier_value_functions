@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 from fvf.utils import torch_utils
 from fvf.policy.base_policy import BasePolicy
 
-from torch_harmonics import grid, plotting
+from eharmony import grid, plotting
 
 
 class SphereImplicitPolicy(BasePolicy):

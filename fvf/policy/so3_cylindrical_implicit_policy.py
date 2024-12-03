@@ -25,7 +25,7 @@ from fvf.policy.base_policy import BasePolicy
 from fvf.utils import mcmc
 from fvf.model.modules.harmonics import grid
 
-from torch_harmonics import grid, plotting
+from eharmony import grid, plotting
 
 
 class SO3CylindricalImplicitPolicy(BasePolicy):

@@ -10,11 +10,11 @@ from escnn import group
 from fvf.model.modules.layers import MLP
 from fvf.model.modules.equiv_layers import CyclicMLP, SO2MLP, SO3MLP
 
-from torch_harmonics.circular_harmonics import CircularHarmonics
-from torch_harmonics.polar_harmonics import PolarHarmonics
-from torch_harmonics.spherical_harmonics_old import SphericalHarmonics
-from torch_harmonics.cylindrical_harmonics import CylindricalHarmonics
-from torch_harmonics.so3_harmonics import SO3Harmonics
+from eharmony.circular_harmonics import CircularHarmonics
+from eharmony.polar_harmonics import PolarHarmonics
+from eharmony.spherical_harmonics_old import SphericalHarmonics
+from eharmony.cylindrical_harmonics import CylindricalHarmonics
+from eharmony.so3_harmonics import SO3Harmonics
 
 
 class EnergyMLP(nn.Module):
