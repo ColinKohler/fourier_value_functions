@@ -9,6 +9,18 @@ from torch.cuda.amp import GradScaler, autocast
 
 import utils
 
+def cartesian_to_polar(x, z):
+    """Convert Cartesian coordinates (x, z) to polar coordinates (r, theta).
+    Args:
+        x (torch.Tensor): x-coordinates.
+        z (torch.Tensor): z-coordinates.
+    Returns:
+        torch.Tensor: Polar coordinates (r, theta) where r is the radius and theta is the angle.
+    """
+    assert x.shape == z.shape, "x and z must have the same shape"
+    r = torch.sqrt(x**2 + z**2)
+    theta = torch.atan2(z, x)
+    return torch.stack([r, theta], -1)
 
 class RandomShiftsAug(nn.Module):
     def __init__(self, pad):
@@ -104,7 +116,7 @@ class Actor(nn.Module):
 
 
 class Critic(nn.Module):
-    def __init__(self, repr_dim, action_shape, feature_dim, hidden_dim):
+    def __init__(self, repr_dim, action_shape, feature_dim, hidden_dim, action_space):
         super().__init__()
 
         self.trunk = nn.Sequential(
@@ -126,10 +138,12 @@ class Critic(nn.Module):
             nn.ReLU(inplace=True),
             nn.Linear(hidden_dim, 1),
         )
-
+        self.action_space = action_space
         self.apply(utils.weight_init)
 
     def forward(self, obs, action):
+        if self.action_space == "polar":
+            action = cartesian_to_polar(action[:, 0], action[:, 1])
         h = self.trunk(obs)
         h_action = torch.cat([h, action], dim=-1)
         q1 = self.Q1(h_action)
@@ -156,6 +170,7 @@ class DrQV2Agent:
         encoder_hidden_dim,
         encoder_out_dim,
         mixed_precision,
+        action_space,
     ):
         self.device = device
         self.critic_target_tau = critic_target_tau
@@ -174,10 +189,10 @@ class DrQV2Agent:
         ).to(device)
 
         self.critic = Critic(
-            self.encoder.repr_dim, action_shape, feature_dim, hidden_dim
+            self.encoder.repr_dim, action_shape, feature_dim, hidden_dim, action_space
         ).to(device)
         self.critic_target = Critic(
-            self.encoder.repr_dim, action_shape, feature_dim, hidden_dim
+            self.encoder.repr_dim, action_shape, feature_dim, hidden_dim, action_space
         ).to(device)
         self.critic_target.load_state_dict(self.critic.state_dict())
 

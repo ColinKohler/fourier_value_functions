@@ -32,7 +32,10 @@ torch.backends.cudnn.benchmark = True
 
 def make_agent(obs_spec, action_spec, task, cfg):
     cfg.obs_shape = obs_spec.shape
-    cfg.action_shape = action_spec.shape
+    if cfg.action_space=="polar":
+        cfg.action_shape = [2]
+    else:
+        cfg.action_shape = action_spec.shape
     if "Equi" in cfg._target_:
         if "reacher" in task:
             gspace = gspaces.flipRot2dOnR2(N=2)
@@ -257,9 +260,9 @@ def main(cfg):
     root_dir = Path.cwd()
     workspace = W(cfg)
     snapshot = root_dir / "snapshot.pt"
-    if snapshot.exists():
+    '''if snapshot.exists():
         print(f"resuming: {snapshot}")
-        workspace.load_snapshot()
+        workspace.load_snapshot()'''
     workspace.train()
 
 
