@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - task@_global_: quadruped_walk
+  - task@_global_: cup_catch
   - override hydra/launcher: submitit_local
 
 # task settings
@@ -49,6 +49,7 @@ agent:
   encoder_hidden_dim: 32
   encoder_out_dim: 32
   mixed_precision: ${mixed_precision}
+  action_space: polar
 
 hydra:
   run:
