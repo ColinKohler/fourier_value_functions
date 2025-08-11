@@ -2,6 +2,9 @@ data/
 notebooks/plots/
 notebooks/*.gif
 
+config/*.yaml
+config/train_so2_implicit_lowdim_workflow.yaml
+*.yaml
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
