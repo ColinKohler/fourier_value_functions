@@ -84,11 +84,11 @@ optimizer:
   weight_decay: 1e-6
 
 training:
-  device: 'cuda:0'
+  device: 'mps:0'
   seed: 0
   resume: True
   lr_warmup_steps: 500
-  num_epochs: 500
+  num_epochs: 200
   checkpoint_every: 10
   rollout_every: 10
   val_every: 1

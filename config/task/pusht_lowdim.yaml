@@ -20,7 +20,7 @@ env_runner:
   fps: 10
   agent_keypoints: False
   past_action: ${past_action_visible}
-  num_envs: 30
+  num_envs: 1
   random_goal_pose: False
   action_coords: ${action_coords}
 

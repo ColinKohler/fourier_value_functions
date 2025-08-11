@@ -77,7 +77,7 @@ optimizer:
   weight_decay: 1e-6
 
 training:
-  device: 'cuda:0'
+  device: 'mps:0'
   seed: 0
   resume: True
   lr_warmup_steps: 500

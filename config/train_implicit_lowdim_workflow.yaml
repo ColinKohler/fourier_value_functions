@@ -73,7 +73,7 @@ optimizer:
   weight_decay: 1e-6
 
 training:
-  device: 'cuda:0'
+  device: 'mps:0'
   seed: 0
   resume: True
   lr_warmup_steps: 500
@@ -84,7 +84,7 @@ training:
   tqdm_interval_sec: 1.0
 
 logging:
-  project: ${task_name}
+  project: ${task_name}_implicit
   resume: True
   mode: online
   name: ${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}
