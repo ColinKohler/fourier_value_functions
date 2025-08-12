@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.cuda.amp import GradScaler, autocast
 
+from fvf.model.implicit import energy_mlp
 import utils
 
 def cartesian_to_polar(x, z):
@@ -19,7 +20,7 @@ def cartesian_to_polar(x, z):
     """
     assert x.shape == z.shape, "x and z must have the same shape"
     r = torch.sqrt(x**2 + z**2)
-    theta = torch.atan2(z, x)
+    theta = torch.atan2(z, x) + torch.pi  # Shift to [0, 2*pi]
     return torch.stack([r, theta], -1)
 
 class RandomShiftsAug(nn.Module):
@@ -151,6 +152,46 @@ class Critic(nn.Module):
 
         return q1, q2
 
+class PolarHarmonicsCritic(nn.Module):
+    def __init__(self, repr_dim, action_shape, feature_dim, hidden_dim, action_space):
+        super().__init__()
+        self.n_act_dims = action_shape[0]
+        self.trunk = nn.Sequential(
+            nn.Linear(repr_dim, feature_dim), nn.LayerNorm(feature_dim), nn.Tanh()
+        )
+        self.Q1 = energy_mlp.PolarEnergyMLP(
+            feature_dim,
+            hidden_dim,
+            num_layers=2,
+            dropout=0,
+            spec_norm=False,
+            radial_freq=1,
+            angular_freq=1,
+            min_radius=0.1,
+            max_radius=1.0,
+        )
+        self.Q2 = energy_mlp.PolarEnergyMLP(
+            feature_dim,
+            hidden_dim,
+            num_layers=2,
+            dropout=0,
+            spec_norm=False,
+            radial_freq=1,
+            angular_freq=1,
+            min_radius=0.1,
+            max_radius=1.0,
+        )
+        self.action_space = action_space
+        self.apply(utils.weight_init)
+
+    def forward(self, obs, action, bin=False):
+        action = cartesian_to_polar(action[:, 0], action[:, 1])
+        h = self.trunk(obs)
+        q1 = self.Q1(h, action.view(-1, 1, 2), bin=bin)
+        q2 = self.Q2(h, action.view(-1, 1, 2), bin=bin)
+
+        return q1, q2
+
 
 class DrQV2Agent:
     def __init__(
@@ -171,6 +212,7 @@ class DrQV2Agent:
         encoder_out_dim,
         mixed_precision,
         action_space,
+        critic_type,
     ):
         self.device = device
         self.critic_target_tau = critic_target_tau
@@ -179,6 +221,7 @@ class DrQV2Agent:
         self.num_expl_steps = num_expl_steps
         self.stddev_schedule = stddev_schedule
         self.stddev_clip = stddev_clip
+        self.ph = critic_type == 'polar_harmonics'
 
         # models
         self.encoder = Encoder(obs_shape, encoder_hidden_dim, encoder_out_dim).to(
@@ -188,12 +231,20 @@ class DrQV2Agent:
             self.encoder.repr_dim, action_shape, feature_dim, hidden_dim
         ).to(device)
 
-        self.critic = Critic(
-            self.encoder.repr_dim, action_shape, feature_dim, hidden_dim, action_space
-        ).to(device)
-        self.critic_target = Critic(
-            self.encoder.repr_dim, action_shape, feature_dim, hidden_dim, action_space
-        ).to(device)
+        if self.ph:
+            self.critic = PolarHarmonicsCritic(
+                self.encoder.repr_dim, action_shape, feature_dim, hidden_dim, action_space
+            ).to(device)
+            self.critic_target = PolarHarmonicsCritic(
+                self.encoder.repr_dim, action_shape, feature_dim, hidden_dim, action_space
+            ).to(device)
+        else:
+            self.critic = Critic(
+                self.encoder.repr_dim, action_shape, feature_dim, hidden_dim, action_space
+            ).to(device)
+            self.critic_target = Critic(
+                self.encoder.repr_dim, action_shape, feature_dim, hidden_dim, action_space
+            ).to(device)
         self.critic_target.load_state_dict(self.critic.state_dict())
 
         # optimizers
@@ -279,7 +330,10 @@ class DrQV2Agent:
         dist = self.actor(obs, stddev)
         action = dist.sample(clip=self.stddev_clip)
         log_prob = dist.log_prob(action).sum(-1, keepdim=True)
-        Q1, Q2 = self.critic(obs, action)
+        if self.ph:
+            Q1, Q2 = self.critic(obs, action, bin=True)
+        else:
+            Q1, Q2 = self.critic(obs, action)
         Q = torch.min(Q1, Q2)
 
         actor_loss = -Q.mean()

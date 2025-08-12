@@ -10,11 +10,11 @@ from escnn import group
 from fvf.model.modules.layers import MLP
 from fvf.model.modules.equiv_layers import CyclicMLP, SO2MLP, SO3MLP
 
-from eharmony.circular_harmonics import CircularHarmonics
-from eharmony.polar_harmonics import PolarHarmonics
-from eharmony.spherical_harmonics_old import SphericalHarmonics
-from eharmony.cylindrical_harmonics import CylindricalHarmonics
-from eharmony.so3_harmonics import SO3Harmonics
+from EquiHarmony.eharmony.circular_harmonics import CircularHarmonics
+from EquiHarmony.eharmony.polar_harmonics import PolarHarmonics
+from EquiHarmony.eharmony.spherical_harmonics import SphericalHarmonics
+from EquiHarmony.eharmony.cylindrical_harmonics import CylindricalHarmonics
+from EquiHarmony.eharmony.so3_harmonics import SO3Harmonics
 
 
 class EnergyMLP(nn.Module):
@@ -93,6 +93,7 @@ class PolarEnergyMLP(nn.Module):
         obs_feat: torch.Tensor,
         actions: torch.Tensor = None,
         return_coeffs: bool = False,
+        bin: bool = False,
     ):
         """
         Compute the energy function for all actions using Polar Fourier transform. If actions are
@@ -108,7 +109,7 @@ class PolarEnergyMLP(nn.Module):
         if actions is not None:
             B, N, _ = actions.shape
             w = w.repeat(1, N, 1).reshape(B * N, -1)
-            out = self.ph(w, actions.view(B * N, 2)).view(B, N)
+            out = self.ph(w, actions.view(B * N, 2), bin=bin).view(B, N)
         else:
             out = self.ph(w.reshape(B, -1))
 
