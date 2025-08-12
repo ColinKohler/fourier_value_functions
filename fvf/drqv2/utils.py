@@ -100,7 +100,18 @@ class Timer:
     def total_time(self):
         return time.time() - self._start_time
 
+class Categorical(pyd.RelaxedOneHotCategorical):
+    def __init__(self, logits):
+        super().__init__(logits=logits, temperature=0.5)
+        self.n_classes = 36000
+    
+    def sample(self):
+        sample = super().rsample()
+        return sample
 
+    def mode(self):
+        mode = self.probs.argmax(dim=-1)
+        return mode
 class TruncatedNormal(pyd.Normal):
     def __init__(self, loc, scale, low=-1.0, high=1.0, eps=1e-6):
         super().__init__(loc, scale, validate_args=False)
