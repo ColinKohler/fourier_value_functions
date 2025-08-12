@@ -3,9 +3,9 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 import warnings
-
+import matplotlib.pyplot as plt
 from torch.autograd.grad_mode import enable_grad
-
+from drqv2 import cartesian_to_polar
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 import os
@@ -134,10 +134,57 @@ class Workspace:
             self._replay_iter = iter(self.replay_loader)
         return self._replay_iter
 
+    def plot_rollout(self, qs, actions, rewards, episode):
+        """
+        Plots 4 line plots (qs, actions, rewards, steps) in the same figure.
+
+        Args:
+            qs (list): List of Q-values.
+            actions (list): List of actions.
+            rewards (list): List of rewards.
+            steps (list): List of steps or any other metric.
+        """
+        fig, axs = plt.subplots(5, 1, sharex=True)
+
+        # Plot Q-values
+        axs[0].plot(qs, label="Q-values")
+        axs[0].set_ylabel("Q-values")
+        axs[0].grid(True)
+
+        # Plot Actions
+        axs[1].plot(actions, label="Cartesion")
+        axs[1].set_ylabel("Cartesion")
+        axs[1].grid(True)
+
+        polar_actions = cartesian_to_polar(torch.tensor(actions)[:,0], torch.tensor(actions)[:,1])
+        # Plot Actions
+        axs[2].plot(polar_actions, label="Polar")
+        axs[2].set_ylabel("Polar")
+        axs[2].grid(True)
+
+        bins = torch.stack([self.agent.critic.Q1.ph.r2d, self.agent.critic.Q1.ph.p2d], -1).to(polar_actions.device)
+        def subtract(x, y):
+            return x - y
+        batched_subtract = torch.vmap(subtract, (None, 0))
+        indices = batched_subtract(bins, polar_actions).abs().mean(-1).view(500,-1).argmin(-1)
+        binned_actions = bins.view(-1,2)[indices.cpu()]
+        axs[3].plot((binned_actions - polar_actions).abs(), label="Binned")
+        axs[3].set_ylabel("Binned")
+        axs[3].grid(True)
+        # Plot Rewards
+        axs[4].plot(rewards, label="Rewards")
+        axs[4].set_ylabel("Rewards")
+        axs[4].grid(True)
+
+        plt.tight_layout()
+        plt.savefig(f"rollout_{self._global_step}_{episode}.png")
+
     def eval(self):
         step, episode, total_reward = 0, 0, 0
         eval_until_episode = utils.Until(self.cfg.num_eval_episodes)
-
+        qs = []
+        actions = []
+        rewards = []
         while eval_until_episode(episode):
             time_step = self.eval_env.reset()
             self.video_recorder.init(self.eval_env, enabled=(episode == 0))
@@ -146,11 +193,20 @@ class Workspace:
                     action = self.agent.act(
                         time_step.observation, self.global_step, eval_mode=True
                     )
+                e = self.agent.encoder(torch.as_tensor(time_step.observation, device=self.device).unsqueeze(0))
+                q1, q2 = self.agent.critic(e, torch.as_tensor(action, device=self.device).unsqueeze(0))
+                q = torch.min(q1, q2)
+                actions.append(action)
+                qs.append(q[0].item())
+                rewards.append(time_step.reward)
                 time_step = self.eval_env.step(action)
                 self.video_recorder.record(self.eval_env)
                 total_reward += time_step.reward
                 step += 1
-
+            self.plot_rollout(qs, actions, rewards, episode)
+            qs = []
+            actions = []
+            rewards = []
             episode += 1
             self.video_recorder.save(f"{self.global_frame}.mp4")
 
