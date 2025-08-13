@@ -101,9 +101,8 @@ class Timer:
         return time.time() - self._start_time
 
 class Categorical(pyd.RelaxedOneHotCategorical):
-    def __init__(self, logits):
-        super().__init__(logits=logits, temperature=0.5)
-        self.n_classes = 36000
+    def __init__(self, logits, temprature=0.5):
+        super().__init__(logits=logits, temperature=temprature)
     
     def sample(self):
         sample = super().rsample()
