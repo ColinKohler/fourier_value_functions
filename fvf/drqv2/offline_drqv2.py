@@ -23,7 +23,7 @@ class OfflineAgent(DrQV2Agent):
         self.actor.eval()
         self.critic.eval()
 
-    def update_critic(self, obs, action, reward, discount, next_obs, step):
+    def update_critic(self, obs, action, reward, discount, next_obs, step, returns):
         metrics = dict()
 
         with torch.no_grad():
@@ -42,7 +42,9 @@ class OfflineAgent(DrQV2Agent):
             metrics["critic_target_q"] = target_Q.mean().item()
             metrics["critic_q1"] = Q1.mean().item()
             metrics["critic_q2"] = Q2.mean().item()
+            metrics["returns"] = returns.mean().item()
             metrics["critic_loss"] = critic_loss.item()
+            metrics['returns_error'] = F.mse_loss(torch.min(Q1,Q2), returns)
 
         # optimize encoder and critic
         self.encoder_opt.zero_grad(set_to_none=True)
@@ -65,7 +67,7 @@ class OfflineAgent(DrQV2Agent):
             return metrics
 
         batch = next(replay_iter)
-        obs, action, reward, discount, next_obs = utils.to_torch(batch, self.device)
+        obs, action, reward, discount, next_obs, returns = utils.to_torch(batch, self.device)
 
         # augment
         obs = self.aug(obs.float())
@@ -80,7 +82,7 @@ class OfflineAgent(DrQV2Agent):
 
         # update critic
         metrics.update(
-            self.update_critic(obs, action, reward, discount, next_obs, step)
+            self.update_critic(obs, action, reward, discount, next_obs, step, returns)
         )
 
         # update critic target
