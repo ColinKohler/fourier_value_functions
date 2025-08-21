@@ -4,8 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 import warnings
 import matplotlib.pyplot as plt
-from torch.autograd.grad_mode import enable_grad
-from drqv2 import cartesian_to_polar
+from ph_drq import cartesian_to_polar
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 import os
