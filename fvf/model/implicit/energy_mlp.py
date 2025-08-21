@@ -104,9 +104,9 @@ class PolarEnergyMLP(nn.Module):
             actions: Action coordinates to evaluate the polar harmoincs at.
         """
         B, _ = obs_feat.shape
-        d = actions.shape[-1]
         w = self.energy_mlp(obs_feat).view(B, 1, -1)
         if actions is not None:
+            d = actions.shape[-1]
             B, N, _ = actions.shape
             w = w.repeat(1, N, 1).reshape(B * N, -1)
             out = self.ph(w, actions.view(B * N, d), bin=bin).view(B, N)
