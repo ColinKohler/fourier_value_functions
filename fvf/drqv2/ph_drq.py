@@ -236,11 +236,13 @@ class PolarHarmonicsCritic(nn.Module):
         self.action_space = action_space
         self.apply(utils.weight_init)
 
-    def forward(self, obs, action, bin=False):
+    def forward(self, obs, action=None, bin=False):
         h = self.trunk(obs)
-        d = action.shape[-1]
-        q1 = self.Q1(h, action.view(-1, 1, d), bin=bin)
-        q2 = self.Q2(h, action.view(-1, 1, d), bin=bin)
+        if action is not None:
+            d = action.shape[-1]
+            action = action.view(-1, 1, d)
+        q1 = self.Q1(h, action, bin=bin)
+        q2 = self.Q2(h, action, bin=bin)
 
         return q1, q2
 
@@ -406,7 +408,7 @@ class DrQV2Agent:
             return metrics
 
         batch = next(replay_iter)
-        obs, action, reward, discount, next_obs = utils.to_torch(batch, self.device)
+        obs, action, reward, discount, next_obs, _ = utils.to_torch(batch, self.device)
 
         # augment
         obs = self.aug(obs.float())
