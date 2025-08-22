@@ -145,9 +145,9 @@ class Workspace:
         """
         fig, axs = plt.subplots(5, 1, sharex=True)
 
-        # Plot Q-values
-        axs[0].plot(qs, label="Q-values")
-        axs[0].set_ylabel("Q-values")
+        # Plot Rewards
+        axs[0].plot(rewards, label="Rewards")
+        axs[0].set_ylabel("Rewards")
         axs[0].grid(True)
 
         # Plot Actions
@@ -161,18 +161,21 @@ class Workspace:
         axs[2].set_ylabel("Polar")
         axs[2].grid(True)
 
-        bins = torch.stack([self.agent.critic.Q1.ph.r2d, self.agent.critic.Q1.ph.p2d], -1).to(polar_actions.device)
-        def subtract(x, y):
-            return x - y
-        batched_subtract = torch.vmap(subtract, (None, 0))
-        indices = batched_subtract(bins, polar_actions).abs().mean(-1).view(500,-1).argmin(-1)
-        binned_actions = bins.view(-1,2)[indices.cpu()]
-        axs[3].plot((binned_actions - polar_actions).abs(), label="Binned")
-        axs[3].set_ylabel("Binned")
+        # Plot Q-values
+        axs[3].plot(qs, label="Q-values")
+        axs[3].set_ylabel("Q-values")
         axs[3].grid(True)
-        # Plot Rewards
-        axs[4].plot(rewards, label="Rewards")
-        axs[4].set_ylabel("Rewards")
+        
+        returns = 0
+        returns_list = []
+        new_discount = 1.0
+        for i in range((len(rewards))-1, -1, -1):
+            returns += new_discount * rewards[i]
+            new_discount *= self.cfg.discount            
+            returns_list.append(returns)
+        returns_list.reverse()
+        axs[4].plot(returns_list, label="Returns")
+        axs[4].set_ylabel("Returns")
         axs[4].grid(True)
 
         plt.tight_layout()
