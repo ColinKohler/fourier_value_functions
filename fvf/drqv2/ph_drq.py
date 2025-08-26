@@ -110,7 +110,7 @@ class Encoder(nn.Module):
 
 class PolarHarmonicsCritic(nn.Module):
     def __init__(self, repr_dim, action_shape, feature_dim, hidden_dim, action_space, 
-                 num_radii=30, num_phi=90):
+                 num_radii=30, num_phi=90, radial_freq=1, angular_freq=1):
         super().__init__()
         self.n_act_dims = action_shape[0]
         self.trunk = nn.Sequential(
@@ -122,8 +122,8 @@ class PolarHarmonicsCritic(nn.Module):
             num_layers=2,
             dropout=0,
             spec_norm=False,
-            radial_freq=1,
-            angular_freq=1,
+            radial_freq=radial_freq,
+            angular_freq=angular_freq,
             min_radius=0.1,
             max_radius=1.0,
             num_radii=num_radii,
@@ -135,8 +135,8 @@ class PolarHarmonicsCritic(nn.Module):
             num_layers=2,
             dropout=0,
             spec_norm=False,
-            radial_freq=1,
-            angular_freq=1,
+            radial_freq=radial_freq,
+            angular_freq=angular_freq,
             min_radius=0.1,
             max_radius=1.0,
             num_radii=num_radii,
@@ -177,6 +177,8 @@ class DrQV2Agent:
         action_space,
         num_radii=30,
         num_phi=90,
+        radial_freq=1,
+        angular_freq=1,
     ):
         self.device = device
         self.critic_target_tau = critic_target_tau
@@ -192,10 +194,12 @@ class DrQV2Agent:
         )
 
         self.critic = PolarHarmonicsCritic(
-            self.encoder.repr_dim, action_shape, feature_dim, hidden_dim, action_space, num_radii=num_radii, num_phi=num_phi
+            self.encoder.repr_dim, action_shape, feature_dim, hidden_dim, action_space, num_radii=num_radii, 
+            num_phi=num_phi, radial_freq=radial_freq, angular_freq=angular_freq
         ).to(device)
         self.critic_target = PolarHarmonicsCritic(
-            self.encoder.repr_dim, action_shape, feature_dim, hidden_dim, action_space, num_radii=num_radii, num_phi=num_phi
+            self.encoder.repr_dim, action_shape, feature_dim, hidden_dim, action_space, num_radii=num_radii,
+            num_phi=num_phi, radial_freq=radial_freq, angular_freq=angular_freq
         ).to(device)
         self.critic_target.load_state_dict(self.critic.state_dict())
 
