@@ -5,7 +5,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.cuda.amp import GradScaler, autocast
+from torch.cuda.amp import GradScaler
 import random
 from fvf.model.implicit import energy_mlp
 import utils
@@ -108,97 +108,6 @@ class Encoder(nn.Module):
         h = h.view(h.shape[0], -1)
         return h
 
-
-class Actor(nn.Module):
-    def __init__(self, repr_dim, action_shape, feature_dim, hidden_dim):
-        super().__init__()
-
-        self.trunk = nn.Sequential(
-            nn.Linear(repr_dim, feature_dim), nn.LayerNorm(feature_dim), nn.Tanh()
-        )
-
-        self.policy = nn.Sequential(
-            nn.Linear(feature_dim, hidden_dim),
-            nn.ReLU(inplace=True),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(inplace=True),
-            nn.Linear(hidden_dim, action_shape[0]),
-        )
-
-        self.apply(utils.weight_init)
-
-    def forward(self, obs, std):
-        h = self.trunk(obs)
-
-        mu = self.policy(h)
-        mu = torch.tanh(mu)
-        std = torch.ones_like(mu) * std
-
-        dist = utils.TruncatedNormal(mu, std)
-        return dist
-
-class CategoricalActor(nn.Module):
-    def __init__(self, repr_dim, feature_dim, hidden_dim, num_radii=30, num_phi=90):
-        super().__init__()
-
-        self.trunk = nn.Sequential(
-            nn.Linear(repr_dim, feature_dim), nn.LayerNorm(feature_dim), nn.Tanh()
-        )
-        self.num_radii = num_radii
-        self.num_phi = num_phi
-        self.policy = nn.Sequential(
-            nn.Linear(feature_dim, hidden_dim),
-            nn.ReLU(inplace=True),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(inplace=True),
-            nn.Linear(hidden_dim, self.num_radii * self.num_phi),
-        )
-
-        self.apply(utils.weight_init)
-
-    def forward(self, obs):
-        h = self.trunk(obs)
-
-        logits = self.policy(h)
-        dist = utils.Categorical(logits=logits)
-        return dist
-
-class Critic(nn.Module):
-    def __init__(self, repr_dim, action_shape, feature_dim, hidden_dim, action_space):
-        super().__init__()
-
-        self.trunk = nn.Sequential(
-            nn.Linear(repr_dim, feature_dim), nn.LayerNorm(feature_dim), nn.Tanh()
-        )
-
-        self.Q1 = nn.Sequential(
-            nn.Linear(feature_dim + action_shape[0], hidden_dim),
-            nn.ReLU(inplace=True),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(inplace=True),
-            nn.Linear(hidden_dim, 1),
-        )
-
-        self.Q2 = nn.Sequential(
-            nn.Linear(feature_dim + action_shape[0], hidden_dim),
-            nn.ReLU(inplace=True),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(inplace=True),
-            nn.Linear(hidden_dim, 1),
-        )
-        self.action_space = action_space
-        self.apply(utils.weight_init)
-
-    def forward(self, obs, action):
-        if self.action_space == "polar":
-            action = cartesian_to_polar(action[:, 0], action[:, 1])
-        h = self.trunk(obs)
-        h_action = torch.cat([h, action], dim=-1)
-        q1 = self.Q1(h_action)
-        q2 = self.Q2(h_action)
-
-        return q1, q2
-
 class PolarHarmonicsCritic(nn.Module):
     def __init__(self, repr_dim, action_shape, feature_dim, hidden_dim, action_space, 
                  num_radii=30, num_phi=90):
@@ -281,9 +190,6 @@ class DrQV2Agent:
         self.encoder = Encoder(obs_shape, encoder_hidden_dim, encoder_out_dim).to(
             device
         )
-        self.actor = CategoricalActor(
-            self.encoder.repr_dim, feature_dim, hidden_dim, num_radii=num_radii, num_phi=num_phi
-        ).to(device)
 
         self.critic = PolarHarmonicsCritic(
             self.encoder.repr_dim, action_shape, feature_dim, hidden_dim, action_space, num_radii=num_radii, num_phi=num_phi
@@ -295,7 +201,6 @@ class DrQV2Agent:
 
         # optimizers
         self.encoder_opt = torch.optim.Adam(self.encoder.parameters(), lr=lr)
-        self.actor_opt = torch.optim.Adam(self.actor.parameters(), lr=lr)
         self.critic_opt = torch.optim.Adam(self.critic.parameters(), lr=lr)
 
         # scaler for mixed precision
@@ -313,48 +218,53 @@ class DrQV2Agent:
     def train(self, training=True):
         self.training = training
         self.encoder.train(training)
-        self.actor.train(training)
         self.critic.train(training)
 
     def eval(self):
         self.training = False
         self.encoder.eval()
-        self.actor.eval()
         self.critic.eval()
+
+    def get_mode(self, obs):
+        Q1, Q2 = self.critic(obs)
+        Q = torch.min(Q1, Q2)
+        flat_index = torch.argmax(Q)
+        _, _, cols = Q.shape
+        x_coord = flat_index // cols
+        y_coord = flat_index % cols
+        r = self.critic.Q1.ph.r2d[x_coord, y_coord]
+        theta = self.critic.Q1.ph.p2d[x_coord, y_coord]
+        action = torch.stack([r,theta],-1)
+        return action
 
     def act(self, obs, step, eval_mode):
         obs = torch.as_tensor(obs, device=self.device)
         obs = self.encoder(obs.unsqueeze(0))
         stddev = utils.schedule(self.stddev_schedule, step)
-        dist = self.actor(obs)
         if eval_mode:
-            action = dist.mode()
-            action = self.binned_actions[action]
-            action = polar_to_cartesian(action)
+            action = self.get_mode(obs)
+            action = polar_to_cartesian(action.unsqueeze(0))
         else:
             if random.random() < stddev or step < self.num_expl_steps:
                 action = torch.zeros(1,2)
                 action.uniform_(-1.0, 1.0)
             else:
-                action = dist.sample()
-                r = (action * self.binned_actions[:,0]).mean(-1)
-                theta = (action * self.binned_actions[:,1]).mean(-1)
-                action = torch.stack([r,theta],-1)
-                action = polar_to_cartesian(action)
+                action = self.get_mode(obs)
+                action = polar_to_cartesian(action.unsqueeze(0))
         return action.cpu().numpy()[0]
 
-    def update_critic(self, obs, action, reward, discount, next_obs, step):
+    def update_critic(self, obs, reward, discount, next_obs):
         metrics = dict()
 
         with torch.no_grad():
-            dist = self.actor(next_obs)
-            next_action = dist.sample()
-            target_Q1, target_Q2 = self.critic_target(next_obs, next_action, bin=True)
+            target_Q1, target_Q2 = self.critic_target(next_obs)
             target_V = torch.min(target_Q1, target_Q2)
+            target_V = target_V.max(-1).values.max(-1, keepdim=True).values
             target_Q = reward + (discount * target_V)
 
-        # with autocast(enabled=self.mixed_precision):
-        Q1, Q2 = self.critic(obs, action)
+        Q1, Q2 = self.critic(obs)
+        Q1 = Q1.max(-1).values.max(-1, keepdim=True).values
+        Q2 = Q2.max(-1).values.max(-1, keepdim=True).values
         critic_loss = F.mse_loss(Q1, target_Q) + F.mse_loss(Q2, target_Q)
 
         if self.use_tb:
@@ -370,35 +280,7 @@ class DrQV2Agent:
         critic_loss.backward()
         self.critic_opt.step()
         self.encoder_opt.step()
-
-        # self.scaler.scale(critic_loss).backward()
-        # self.scaler.step(self.critic_opt)
-        # self.scaler.step(self.encoder_opt)
-
-        return metrics
-
-    def update_actor(self, obs, step):
-        metrics = dict()
-
-        dist = self.actor(obs)
-        action = dist.sample()
-        Q1, Q2 = self.critic(obs, action, bin=True)
-        Q = torch.min(Q1, Q2)
-
-        actor_loss = -Q.mean()
-
-        # optimize actor
-        self.actor_opt.zero_grad(set_to_none=True)
-
-        actor_loss.backward()
-        self.actor_opt.step()
-
-        # self.scaler.scale(actor_loss).backward()
-        # self.scaler.step(self.actor_opt)
-
-        if self.use_tb:
-            metrics["actor_loss"] = actor_loss.item()
-
+        
         return metrics
 
     def update(self, replay_iter, step):
@@ -408,7 +290,7 @@ class DrQV2Agent:
             return metrics
 
         batch = next(replay_iter)
-        obs, action, reward, discount, next_obs, _ = utils.to_torch(batch, self.device)
+        obs, _, reward, discount, next_obs, _ = utils.to_torch(batch, self.device)
 
         # augment
         obs = self.aug(obs.float())
@@ -423,11 +305,8 @@ class DrQV2Agent:
 
         # update critic
         metrics.update(
-            self.update_critic(obs, action, reward, discount, next_obs, step)
+            self.update_critic(obs, reward, discount, next_obs)
         )
-
-        # update actor
-        metrics.update(self.update_actor(obs.detach(), step))
 
         # update critic target
         utils.soft_update_params(
@@ -445,13 +324,11 @@ class DrQV2Agent:
 
         # model
         save_dict["agent.encoder"] = self.encoder.state_dict()
-        save_dict["agent.actor"] = self.actor.state_dict()
         save_dict["agent.critic"] = self.critic.state_dict()
         save_dict["agent.critic_target"] = self.critic_target.state_dict()
 
         # optimizers
         save_dict["agent.encoder_opt"] = self.encoder_opt.state_dict()
-        save_dict["agent.actor_opt"] = self.actor_opt.state_dict()
         save_dict["agent.critic_opt"] = self.critic_opt.state_dict()
 
         self.train()
@@ -465,17 +342,14 @@ class DrQV2Agent:
 
         # model
         self.encoder.load_state_dict(state_dict["agent.encoder"])
-        self.actor.load_state_dict(state_dict["agent.actor"])
         self.critic.load_state_dict(state_dict["agent.critic"])
         self.critic_target.load_state_dict(state_dict["agent.critic_target"])
 
         # optimizers
         self.encoder_opt.load_state_dict(state_dict["agent.encoder_opt"])
-        self.actor_opt.load_state_dict(state_dict["agent.actor_opt"])
         self.critic_opt.load_state_dict(state_dict["agent.critic_opt"])
 
         self.encoder.to(self.device)
-        self.actor.to(self.device)
         self.critic.to(self.device)
         self.critic_target.to(self.device)
 
