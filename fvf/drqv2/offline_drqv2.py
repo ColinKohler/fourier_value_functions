@@ -31,7 +31,7 @@ class OfflineAgent(DrQV2Agent):
             next_action = dist.sample(clip=self.stddev_clip)
             target_Q1, target_Q2 = self.critic_target(next_obs, next_action)
             target_V = torch.min(target_Q1, target_Q2)
-            target_Q = reward + (discount * target_V)
+            target_Q = reward + (1-reward) * (discount * target_V)
 
         # with autocast(enabled=self.mixed_precision):
         Q1, Q2 = self.critic(obs, action)
@@ -136,7 +136,7 @@ class OfflinePHAgent(PHDrQV2Agent):
             target_Q1 = torch.max(target_Q1.view(obs.shape[0],-1), -1, keepdims=True)[0]
             target_Q2 = torch.max(target_Q2.view(obs.shape[0],-1), -1, keepdims=True)[0]
             target_V = torch.min(target_Q1, target_Q2)
-            target_Q = reward + (discount * target_V)
+            target_Q = reward + (1-reward) * (discount * target_V)
 
         # with autocast(enabled=self.mixed_precision):
         Q1, Q2 = self.critic(obs)
