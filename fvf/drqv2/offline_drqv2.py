@@ -22,7 +22,7 @@ class OfflineAgent(DrQV2Agent):
         self.actor.eval()
         self.critic.eval()
 
-    def update_critic(self, obs, action, reward, discount, next_obs, step, returns):
+    def update_critic(self, obs, action, reward, discount, next_obs, step, returns, test_obs, test_action, test_returns):
         metrics = dict()
 
         with torch.no_grad():
@@ -44,6 +44,11 @@ class OfflineAgent(DrQV2Agent):
             metrics["returns"] = returns.mean().item()
             metrics["critic_loss"] = critic_loss.item()
             metrics['returns_error'] = F.mse_loss(torch.min(Q1,Q2), returns)
+            with torch.no_grad():
+                Q1, Q2 = self.critic(test_obs, test_action)
+                Q1 = torch.max(Q1.view(test_obs.shape[0],-1), -1, keepdims=True)[0]
+                Q2 = torch.max(Q2.view(test_obs.shape[0],-1), -1, keepdims=True)[0]
+                metrics['test_returns_error'] = F.mse_loss(torch.min(Q1,Q2), test_returns)
 
         # optimize encoder and critic
         self.encoder_opt.zero_grad(set_to_none=True)
@@ -59,21 +64,25 @@ class OfflineAgent(DrQV2Agent):
 
         return metrics
 
-    def update(self, replay_iter, step):
+    def update(self, train_replay_iter, test_replay_iter, step):
         metrics = dict()
 
         if step % self.update_every_steps != 0:
             return metrics
 
-        batch = next(replay_iter)
+        batch = next(train_replay_iter)
+        test_batch = next(test_replay_iter)
         obs, action, reward, discount, next_obs, returns = utils.to_torch(batch, self.device)
+        test_obs, test_action, _, _, _, test_returns = utils.to_torch(test_batch, self.device)
 
         # augment
         obs = self.aug(obs.float())
+        test_obs = self.aug(test_obs.float())
         next_obs = self.aug(next_obs.float())
         # encode
         obs = self.encoder(obs)
         with torch.no_grad():
+            test_obs = self.encoder(test_obs)        
             next_obs = self.encoder(next_obs)
 
         if self.use_tb:
@@ -81,7 +90,7 @@ class OfflineAgent(DrQV2Agent):
 
         # update critic
         metrics.update(
-            self.update_critic(obs, action, reward, discount, next_obs, step, returns)
+            self.update_critic(obs, action, reward, discount, next_obs, step, returns, test_obs, test_action, test_returns)
         )
 
         # update critic target
@@ -125,10 +134,9 @@ class OfflinePHAgent(PHDrQV2Agent):
     def eval(self):
         self.training = False
         self.encoder.eval()
-        self.actor.eval()
         self.critic.eval()
 
-    def update_critic(self, obs, action, reward, discount, next_obs, step, returns):
+    def update_critic(self, obs, action, reward, discount, next_obs, step, returns, test_obs, test_action, test_returns):
         metrics = dict()
 
         with torch.no_grad():
@@ -151,6 +159,12 @@ class OfflinePHAgent(PHDrQV2Agent):
             metrics["returns"] = returns.mean().item()
             metrics["critic_loss"] = critic_loss.item()
             metrics['returns_error'] = F.mse_loss(torch.min(Q1,Q2), returns)
+            with torch.no_grad():
+                Q1, Q2 = self.critic(test_obs)
+                Q1 = torch.max(Q1.view(test_obs.shape[0],-1), -1, keepdims=True)[0]
+                Q2 = torch.max(Q2.view(test_obs.shape[0],-1), -1, keepdims=True)[0]
+                metrics['test_returns_error'] = F.mse_loss(torch.min(Q1,Q2), test_returns)
+            
 
         # optimize encoder and critic
         self.encoder_opt.zero_grad(set_to_none=True)
@@ -162,21 +176,25 @@ class OfflinePHAgent(PHDrQV2Agent):
 
         return metrics
 
-    def update(self, replay_iter, step):
+    def update(self, train_replay_iter, test_replay_iter, step):
         metrics = dict()
 
         if step % self.update_every_steps != 0:
             return metrics
 
-        batch = next(replay_iter)
+        batch = next(train_replay_iter)
+        test_batch = next(test_replay_iter)
         obs, action, reward, discount, next_obs, returns = utils.to_torch(batch, self.device)
+        test_obs, test_action, _, _, _, test_returns = utils.to_torch(test_batch, self.device)
 
         # augment
         obs = self.aug(obs.float())
+        test_obs = self.aug(test_obs.float())
         next_obs = self.aug(next_obs.float())
         # encode
         obs = self.encoder(obs)
         with torch.no_grad():
+            test_obs = self.encoder(test_obs)        
             next_obs = self.encoder(next_obs)
 
         if self.use_tb:
@@ -184,7 +202,7 @@ class OfflinePHAgent(PHDrQV2Agent):
 
         # update critic
         metrics.update(
-            self.update_critic(obs, action, reward, discount, next_obs, step, returns)
+            self.update_critic(obs, action, reward, discount, next_obs, step, returns, test_obs, test_action, test_returns)
         )
 
         # update critic target

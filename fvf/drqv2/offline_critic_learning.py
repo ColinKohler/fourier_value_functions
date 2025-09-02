@@ -66,8 +66,8 @@ class Workspace:
 
         self.replay_storage = ReplayBufferStorage(data_specs, self.work_dir / "buffer")
 
-        self.replay_loader = make_replay_loader(
-            Path("/Users/aagha/Playground/fourier_value_functions/exp_local_cartesian/buffer"),
+        self.train_replay_loader = make_replay_loader(
+            Path("/Users/aagha/Playground/fourier_value_functions/exp_local_cartesian/buffer/50_percent"),
             self.cfg.replay_buffer_size,
             self.cfg.batch_size,
             self.cfg.replay_buffer_num_workers,
@@ -75,7 +75,17 @@ class Workspace:
             self.cfg.nstep,
             self.cfg.discount,
         )
-        self._replay_iter = None
+        self.test_replay_loader = make_replay_loader(
+            Path("/Users/aagha/Playground/fourier_value_functions/exp_local_cartesian/buffer/test"),
+            self.cfg.replay_buffer_size,
+            self.cfg.batch_size,
+            self.cfg.replay_buffer_num_workers,
+            self.cfg.save_snapshot,
+            self.cfg.nstep,
+            self.cfg.discount,
+        )
+        self._train_replay_iter = None
+        self._test_replay_iter = None
 
     @property
     def global_step(self):
@@ -90,17 +100,23 @@ class Workspace:
         return self.global_step * self.cfg.action_repeat
 
     @property
-    def replay_iter(self):
-        if self._replay_iter is None:
-            self._replay_iter = iter(self.replay_loader)
-        return self._replay_iter
+    def train_replay_iter(self):
+        if self._train_replay_iter is None:
+            self._train_replay_iter = iter(self.train_replay_loader)
+        return self._train_replay_iter
+    
+    @property
+    def test_replay_iter(self):
+        if self._test_replay_iter is None:
+            self._test_replay_iter = iter(self.test_replay_loader)
+        return self._test_replay_iter
 
     def train(self):
         train_until_step = utils.Until(1e4, 1)
         metrics = None
         self._global_step = 0
         while train_until_step(self.global_step):
-            metrics = self.agent.update(self.replay_iter, self.global_step)
+            metrics = self.agent.update(self.train_replay_iter, self.test_replay_iter, self.global_step)
             self.logger.log_metrics(metrics, self.global_frame, ty="train")
             self._global_step += 1
             with self.logger.log_and_dump_ctx(
